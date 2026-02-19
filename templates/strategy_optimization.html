@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strategy Optimization</title>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+body { font-family: Arial, sans-serif; }
+.section-card {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e5e7eb;
+}
+.section-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #1e40af;
+    margin-bottom: 16px;
+}
+.metric-card {
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    border-left: 4px solid #3b82f6;
+}
+.chart-container {
+    position: relative;
+    height: 400px;
+    margin: 20px 0;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+th, td {
+    border: 1px solid #e5e7eb;
+    padding: 12px;
+    text-align: left;
+}
+th {
+    background: #f3f4f6;
+    font-weight: bold;
+}
+.positive { color: #10b981; font-weight: bold; }
+.negative { color: #ef4444; font-weight: bold; }
+.tab-button {
+    padding: 12px 24px;
+    border: none;
+    background: #e5e7eb;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    margin-right: 4px;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+.tab-button.active {
+    background: #3b82f6;
+    color: white;
+}
+</style>
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+
+<!-- NAVBAR -->
+<!-- ================= NAVBAR ================= -->
+<nav class="text-white px-6 py-4 shadow-md mb-8" style="background-color:#457b9d;">
+  <div class="max-w-7xl mx-auto flex justify-between items-center">
+    <div class="text-xl font-bold">💼 Financial Analyzer</div>
+    <div class="flex space-x-4">
+      <a href="/"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Home
+      </a>
+      <a href="/dcf"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        DCF Valuation
+      </a>
+      <a href="/financial-modelling"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Financial Modelling
+      </a>
+      <a href="/technical-analysis"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Technical Analysis
+      </a>
+      <a href="/portfolio-management"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Portfolio Management
+      </a>
+      <a href="/performance-analytics"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Performance Analytics
+      </a>
+      <a href="/strategy-optimization"
+         class="px-4 py-2 rounded-lg bg-white bg-opacity-20 font-semibold hover:bg-white hover:bg-opacity-20 transition">
+        Strategy Optimization
+      </a>
+    </div>
+  </div>
+</nav>
+<!-- =============== NAVBAR END =============== -->
+
+<!-- MAIN CONTAINER -->
+<div class="max-w-7xl mx-auto px-6">
+  
+  <!-- Header -->
+  <div class="text-center mb-8">
+    <h1 class="text-4xl font-bold text-gray-800 mb-2">🎯 Strategy Optimization</h1>
+    <p class="text-gray-600">Institutional-grade strategy backtesting and optimization</p>
+  </div>
+
+  <!-- Strategy Configuration -->
+  <div class="section-card">
+    <div class="section-title">1️⃣ Strategy Configuration</div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Left Column -->
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Stock Symbol</label>
+          <input type="text" id="symbol" placeholder="RELIANCE" 
+            class="w-full border border-gray-300 rounded px-4 py-2 uppercase">
+        </div>
+        
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Strategy Type</label>
+          <select id="strategyType" onchange="updateStrategyParams()" 
+            class="w-full border border-gray-300 rounded px-4 py-2">
+            <option value="EMA">EMA Crossover</option>
+            <option value="RSI">RSI Mean Reversion</option>
+          </select>
+        </div>
+        
+        <!-- EMA Parameters -->
+        <div id="emaParams" class="space-y-3">
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Fast EMA Period</label>
+            <input type="number" id="emaFast" value="12" min="5" max="50"
+              class="w-full border border-gray-300 rounded px-4 py-2">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Slow EMA Period</label>
+            <input type="number" id="emaSlow" value="26" min="10" max="200"
+              class="w-full border border-gray-300 rounded px-4 py-2">
+          </div>
+        </div>
+        
+        <!-- RSI Parameters -->
+        <div id="rsiParams" class="space-y-3 hidden">
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">RSI Period</label>
+            <input type="number" id="rsiPeriod" value="14" min="5" max="30"
+              class="w-full border border-gray-300 rounded px-4 py-2">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Oversold Level</label>
+            <input type="number" id="rsiOversold" value="30" min="10" max="40"
+              class="w-full border border-gray-300 rounded px-4 py-2">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Overbought Level</label>
+            <input type="number" id="rsiOverbought" value="70" min="60" max="90"
+              class="w-full border border-gray-300 rounded px-4 py-2">
+          </div>
+        </div>
+      </div>
+      
+      <!-- Right Column -->
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
+          <input type="date" id="startDate" value="2023-01-01"
+            class="w-full border border-gray-300 rounded px-4 py-2">
+        </div>
+        
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">End Date</label>
+          <input type="date" id="endDate" value="2024-12-31"
+            class="w-full border border-gray-300 rounded px-4 py-2">
+        </div>
+        
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Initial Capital (₹)</label>
+          <input type="number" id="initialCapital" value="100000" min="10000" step="10000"
+            class="w-full border border-gray-300 rounded px-4 py-2">
+        </div>
+        
+        <div class="space-y-2">
+          <label class="flex items-center">
+            <input type="checkbox" id="optimizeParams" class="mr-2">
+            <span class="text-sm font-semibold text-gray-700">Enable Parameter Optimization</span>
+          </label>
+          <label class="flex items-center">
+            <input type="checkbox" id="optimizeRisk" class="mr-2">
+            <span class="text-sm font-semibold text-gray-700">Enable Risk Optimization</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="mt-6 flex gap-4">
+      <button onclick="runCompleteOptimization()" 
+        class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition shadow-md flex-1">
+        🚀 Run Complete Optimization
+      </button>
+      <button onclick="runQuickBacktest()" 
+        class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold transition shadow-md flex-1">
+        ⚡ Quick Backtest Only
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loadingIndicator" class="hidden text-center py-8">
+    <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    <p class="text-gray-600 mt-4">Optimizing strategy... This may take a minute</p>
+  </div>
+
+  <!-- Error Display -->
+  <div id="errorContainer" class="hidden">
+    <div class="section-card bg-red-50 border-2 border-red-300">
+      <div class="flex items-start gap-3">
+        <span class="text-3xl">⚠️</span>
+        <div>
+          <h3 class="text-lg font-bold text-red-800 mb-2">Error</h3>
+          <p id="errorMessage" class="text-red-700"></p>
+          <button onclick="hideError()" class="mt-3 text-sm text-red-600 hover:underline">Dismiss</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results Container -->
+  <div id="resultsContainer" class="hidden">
+    
+    <!-- Executive Summary -->
+    <div class="section-card bg-gradient-to-r from-green-500 to-blue-600 text-white">
+      <div class="text-center">
+        <h2 class="text-2xl font-bold mb-2" id="verdictTitle">✅ Strategy Analysis Complete!</h2>
+        <p class="text-blue-100" id="verdictSubtitle">Your comprehensive optimization report is ready</p>
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="bg-white bg-opacity-20 rounded-lg p-4">
+            <div class="text-sm text-blue-100">Overall Score</div>
+            <div id="overallScore" class="text-3xl font-bold">--</div>
+          </div>
+          <div class="bg-white bg-opacity-20 rounded-lg p-4">
+            <div class="text-sm text-blue-100">CAGR</div>
+            <div id="summaryCAGR" class="text-3xl font-bold">--</div>
+          </div>
+          <div class="bg-white bg-opacity-20 rounded-lg p-4">
+            <div class="text-sm text-blue-100">Sharpe Ratio</div>
+            <div id="summarySharpe" class="text-3xl font-bold">--</div>
+          </div>
+          <div class="bg-white bg-opacity-20 rounded-lg p-4">
+            <div class="text-sm text-blue-100">Win Rate</div>
+            <div id="summaryWinRate" class="text-3xl font-bold">--</div>
+          </div>
+        </div>
+        <div class="mt-4 bg-white bg-opacity-20 rounded-lg p-4">
+          <p id="finalVerdict" class="text-lg font-semibold">--</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Backtest Results -->
+    <div class="section-card">
+      <div class="section-title">3️⃣ Backtest Results</div>
+      
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="metric-card border-l-4 border-green-500">
+          <div class="text-sm text-gray-600">CAGR</div>
+          <div id="cagr" class="text-2xl font-bold text-green-600">--</div>
+        </div>
+        <div class="metric-card border-l-4 border-blue-500">
+          <div class="text-sm text-gray-600">Win Rate</div>
+          <div id="winRate" class="text-2xl font-bold text-blue-600">--</div>
+        </div>
+        <div class="metric-card border-l-4 border-purple-500">
+          <div class="text-sm text-gray-600">Sharpe Ratio</div>
+          <div id="sharpe" class="text-2xl font-bold text-purple-600">--</div>
+        </div>
+        <div class="metric-card border-l-4 border-red-500">
+          <div class="text-sm text-gray-600">Max Drawdown</div>
+          <div id="maxDrawdown" class="text-2xl font-bold text-red-600">--</div>
+        </div>
+      </div>
+      
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="metric-card">
+          <div class="text-xs text-gray-600">Total Trades</div>
+          <div id="totalTrades" class="text-xl font-bold">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="text-xs text-gray-600">Profit Factor</div>
+          <div id="profitFactor" class="text-xl font-bold">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="text-xs text-gray-600">Expectancy</div>
+          <div id="expectancy" class="text-xl font-bold">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="text-xs text-gray-600">Avg Return</div>
+          <div id="avgReturn" class="text-xl font-bold">--</div>
+        </div>
+      </div>
+      
+      <!-- Equity Curve -->
+      <div class="mt-6">
+        <h3 class="text-lg font-semibold mb-3">Equity Curve</h3>
+        <div class="chart-container">
+          <canvas id="equityCurveChart"></canvas>
+        </div>
+      </div>
+      
+      <!-- Drawdown Curve -->
+      <div class="mt-6">
+        <h3 class="text-lg font-semibold mb-3">Drawdown Curve</h3>
+        <div class="chart-container">
+          <canvas id="drawdownChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Parameter Optimization -->
+    <div id="optimizationSection" class="section-card hidden">
+      <div class="section-title">2️⃣ Parameter Optimization Results</div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="metric-card border-l-4 border-yellow-500">
+          <div class="text-sm text-gray-600">Combinations Tested</div>
+          <div id="totalCombinations" class="text-2xl font-bold text-yellow-600">--</div>
+        </div>
+        <div class="metric-card border-l-4 border-green-500">
+          <div class="text-sm text-gray-600">Best Parameters</div>
+          <div id="bestParams" class="text-xl font-bold text-green-600">--</div>
+        </div>
+        <div class="metric-card border-l-4 border-blue-500">
+          <div class="text-sm text-gray-600">Best Sharpe</div>
+          <div id="bestSharpe" class="text-2xl font-bold text-blue-600">--</div>
+        </div>
+      </div>
+      
+      <h3 class="text-lg font-semibold mb-3">Top 10 Parameter Combinations</h3>
+      <div class="overflow-x-auto">
+        <table id="optimizationTable">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Parameters</th>
+              <th>CAGR</th>
+              <th>Sharpe</th>
+              <th>Win Rate</th>
+              <th>Max DD</th>
+            </tr>
+          </thead>
+          <tbody id="optimizationBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 4. Walk-Forward Analysis -->
+    <div id="walkForwardSection" class="section-card hidden">
+      <div class="section-title">4️⃣ Walk-Forward Analysis</div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="metric-card">
+          <div class="text-sm text-gray-600">Avg OOS CAGR</div>
+          <div id="oosCagr" class="text-2xl font-bold text-green-600">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="text-sm text-gray-600">Consistency Score</div>
+          <div id="consistencyScore" class="text-2xl font-bold text-blue-600">--</div>
+          <div class="text-xs text-gray-500">Out of 100</div>
+        </div>
+        <div class="metric-card">
+          <div class="text-sm text-gray-600">Profitable Windows</div>
+          <div id="profitableWindows" class="text-2xl font-bold text-purple-600">--</div>
+        </div>
+      </div>
+      
+      <h3 class="text-lg font-semibold mb-3">Walk-Forward Windows</h3>
+      <div class="overflow-x-auto">
+        <table id="walkForwardTable">
+          <thead>
+            <tr>
+              <th>Window</th>
+              <th>Train Period</th>
+              <th>Test Period</th>
+              <th>Test CAGR</th>
+              <th>Test Sharpe</th>
+            </tr>
+          </thead>
+          <tbody id="walkForwardBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 5. Market Regime Analysis -->
+    <div id="regimeSection" class="section-card hidden">
+      <div class="section-title">5️⃣ Market Regime Analysis</div>
+      
+      <div class="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
+        <h4 class="font-semibold text-blue-800 mb-2">💡 Regime Recommendation</h4>
+        <p id="regimeRecommendation" class="text-gray-700">--</p>
+      </div>
+      
+      <h3 class="text-lg font-semibold mb-3">Performance by Market Regime</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="regimePerformance"></div>
+      
+      <h3 class="text-lg font-semibold mt-6 mb-3">Regime Distribution</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="regimeDistribution"></div>
+    </div>
+
+    <!-- 6. Robustness Testing -->
+    <div id="robustnessSection" class="section-card hidden">
+      <div class="section-title">6️⃣ Robustness Testing</div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="metric-card border-l-4 border-green-500">
+          <div class="text-sm text-gray-600">Robustness Score</div>
+          <div id="robustnessScore" class="text-3xl font-bold text-green-600">--</div>
+          <div class="text-xs text-gray-500">Out of 100</div>
+        </div>
+        <div class="metric-card">
+          <div class="text-sm text-gray-600">Variations Tested</div>
+          <div id="variationsTested" class="text-2xl font-bold">--</div>
+          <div id="variationsProfitable" class="text-xs text-gray-500">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="text-sm text-gray-600">Monte Carlo</div>
+          <div id="monteCarloProbability" class="text-2xl font-bold text-blue-600">--</div>
+          <div class="text-xs text-gray-500">Probability of profit</div>
+        </div>
+      </div>
+      
+      <h3 class="text-lg font-semibold mb-3">Slippage Impact Analysis</h3>
+      <div class="overflow-x-auto">
+        <table id="slippageTable">
+          <thead>
+            <tr>
+              <th>Slippage %</th>
+              <th>CAGR</th>
+              <th>Impact</th>
+            </tr>
+          </thead>
+          <tbody id="slippageBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 8. Position Sizing -->
+    <div id="positionSizingSection" class="section-card hidden">
+      <div class="section-title">8️⃣ Position Sizing Optimization</div>
+      
+      <div class="mb-6">
+        <div class="metric-card border-l-4 border-yellow-500 inline-block">
+          <div class="text-sm text-gray-600">Optimal Kelly %</div>
+          <div id="kellyPct" class="text-3xl font-bold text-yellow-600">--</div>
+        </div>
+      </div>
+      
+      <h3 class="text-lg font-semibold mb-3">Position Sizing Methods Comparison</h3>
+      <div class="overflow-x-auto">
+        <table id="positionSizingTable">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>CAGR</th>
+              <th>Sharpe</th>
+              <th>Max DD</th>
+              <th>Final Capital</th>
+            </tr>
+          </thead>
+          <tbody id="positionSizingBody"></tbody>
+        </table>
+      </div>
+      
+      <div class="mt-4 p-4 bg-green-50 border-l-4 border-green-500 rounded">
+        <h4 class="font-semibold text-green-800 mb-2">✅ Recommended Method</h4>
+        <p id="recommendedSizing" class="text-gray-700">--</p>
+      </div>
+    </div>
+
+    <!-- 10. Degradation Monitoring -->
+    <div id="degradationSection" class="section-card hidden">
+      <div class="section-title">🔟 Strategy Degradation Monitoring</div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="metric-card border-l-4 border-blue-500">
+          <div class="text-sm text-gray-600">Degradation Score</div>
+          <div id="degradationScore" class="text-3xl font-bold">--</div>
+          <div class="text-xs text-gray-500">Out of 100</div>
+        </div>
+        <div class="metric-card">
+          <div class="text-sm text-gray-600">Recent Performance</div>
+          <div id="recentPerf" class="text-2xl font-bold">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="text-sm text-gray-600">Historical Average</div>
+          <div id="historicalPerf" class="text-2xl font-bold">--</div>
+        </div>
+      </div>
+      
+      <div class="p-4 rounded" id="degradationAlert">
+        <h4 class="font-semibold mb-2" id="degradationAlertTitle">--</h4>
+        <p id="degradationRecommendation" class="text-gray-700">--</p>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+let equityCurveChart = null;
+let drawdownChart = null;
+
+function updateStrategyParams() {
+    const strategyType = document.getElementById('strategyType').value;
+    
+    if (strategyType === 'EMA') {
+        document.getElementById('emaParams').classList.remove('hidden');
+        document.getElementById('rsiParams').classList.add('hidden');
+    } else {
+        document.getElementById('emaParams').classList.add('hidden');
+        document.getElementById('rsiParams').classList.remove('hidden');
+    }
+}
+
+function getStrategyConfig() {
+    const strategyType = document.getElementById('strategyType').value;
+    const config = {
+        type: strategyType,
+        optimize_params: document.getElementById('optimizeParams').checked,
+        optimize_risk: document.getElementById('optimizeRisk').checked,
+        risk_objective: 'sharpe'
+    };
+    
+    if (strategyType === 'EMA') {
+        config.fast = parseInt(document.getElementById('emaFast').value);
+        config.slow = parseInt(document.getElementById('emaSlow').value);
+        config.param_ranges = {
+            fast: [5, 7, 9, 11, 13, 15, 17, 19],
+            slow: [20, 25, 30, 35, 40, 45, 50, 55, 60]
+        };
+    } else {
+        config.period = parseInt(document.getElementById('rsiPeriod').value);
+        config.oversold = parseInt(document.getElementById('rsiOversold').value);
+        config.overbought = parseInt(document.getElementById('rsiOverbought').value);
+        config.param_ranges = {
+            period: [10, 12, 14, 16, 18, 20],
+            oversold: [20, 25, 30, 35],
+            overbought: [65, 70, 75, 80]
+        };
+    }
+    
+    return config;
+}
+
+async function runCompleteOptimization() {
+    try {
+        showLoading();
+        hideError();
+        
+        const data = {
+            symbol: document.getElementById('symbol').value.toUpperCase(),
+            strategy_config: getStrategyConfig(),
+            start_date: document.getElementById('startDate').value,
+            end_date: document.getElementById('endDate').value
+        };
+        
+        const response = await fetch('/strategy-optimization/complete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Optimization failed');
+        }
+        
+        displayResults(result);
+        hideLoading();
+        document.getElementById('resultsContainer').classList.remove('hidden');
+        
+    } catch (error) {
+        hideLoading();
+        showError(error.message);
+    }
+}
+
+async function runQuickBacktest() {
+    try {
+        showLoading();
+        hideError();
+        
+        const data = {
+            symbol: document.getElementById('symbol').value.toUpperCase(),
+            strategy_config: getStrategyConfig(),
+            start_date: document.getElementById('startDate').value,
+            end_date: document.getElementById('endDate').value,
+            initial_capital: parseInt(document.getElementById('initialCapital').value)
+        };
+        
+        const response = await fetch('/strategy-optimization/backtest', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Backtest failed');
+        }
+        
+        displayBacktestOnly(result);
+        hideLoading();
+        document.getElementById('resultsContainer').classList.remove('hidden');
+        
+    } catch (error) {
+        hideLoading();
+        showError(error.message);
+    }
+}
+
+function displayResults(data) {
+    // Executive Summary
+    if (data.summary) {
+        document.getElementById('overallScore').textContent = data.summary.overall_score || '--';
+        document.getElementById('finalVerdict').textContent = data.summary.final_verdict || '--';
+    }
+    
+    // Backtest Results
+    if (data.results.backtest && data.results.backtest.success) {
+        displayBacktest(data.results.backtest);
+    }
+    
+    // Optimization Results
+    if (data.results.optimization && data.results.optimization.success) {
+        displayOptimization(data.results.optimization);
+        document.getElementById('optimizationSection').classList.remove('hidden');
+    }
+    
+    // Walk-Forward
+    if (data.results.walk_forward && data.results.walk_forward.success) {
+        displayWalkForward(data.results.walk_forward);
+        document.getElementById('walkForwardSection').classList.remove('hidden');
+    }
+    
+    // Regime Analysis
+    if (data.results.regime_analysis && data.results.regime_analysis.success) {
+        displayRegimeAnalysis(data.results.regime_analysis);
+        document.getElementById('regimeSection').classList.remove('hidden');
+    }
+    
+    // Robustness
+    if (data.results.robustness && data.results.robustness.success) {
+        displayRobustness(data.results.robustness);
+        document.getElementById('robustnessSection').classList.remove('hidden');
+    }
+    
+    // Position Sizing
+    if (data.results.position_sizing && data.results.position_sizing.success) {
+        displayPositionSizing(data.results.position_sizing);
+        document.getElementById('positionSizingSection').classList.remove('hidden');
+    }
+    
+    // Degradation
+    if (data.results.degradation && data.results.degradation.success) {
+        displayDegradation(data.results.degradation);
+        document.getElementById('degradationSection').classList.remove('hidden');
+    }
+}
+
+function displayBacktestOnly(data) {
+    displayBacktest(data);
+    document.getElementById('verdictTitle').textContent = '⚡ Quick Backtest Complete!';
+    document.getElementById('verdictSubtitle').textContent = 'Run Complete Optimization for full analysis';
+}
+
+function displayBacktest(data) {
+    const metrics = data.metrics;
+    
+    // Summary metrics
+    document.getElementById('summaryCAGR').textContent = metrics.cagr + '%';
+    document.getElementById('summarySharpe').textContent = metrics.sharpe_ratio;
+    document.getElementById('summaryWinRate').textContent = metrics.win_rate + '%';
+    
+    // Detailed metrics
+    document.getElementById('cagr').textContent = metrics.cagr + '%';
+    document.getElementById('winRate').textContent = metrics.win_rate + '%';
+    document.getElementById('sharpe').textContent = metrics.sharpe_ratio;
+    document.getElementById('maxDrawdown').textContent = metrics.max_drawdown + '%';
+    document.getElementById('totalTrades').textContent = metrics.total_trades;
+    document.getElementById('profitFactor').textContent = metrics.profit_factor;
+    document.getElementById('expectancy').textContent = metrics.expectancy;
+    document.getElementById('avgReturn').textContent = metrics.avg_return + '%';
+    
+    // Charts
+    if (data.equity_curve) {
+        renderEquityCurve(data.equity_curve);
+    }
+    if (data.drawdown_curve) {
+        renderDrawdownCurve(data.drawdown_curve);
+    }
+}
+
+function displayOptimization(data) {
+    document.getElementById('totalCombinations').textContent = data.total_combinations;
+    
+    if (data.best_params) {
+        const params = data.best_params;
+        const paramStr = params.fast ? `EMA(${params.fast}, ${params.slow})` : `RSI(${params.period}, ${params.oversold}-${params.overbought})`;
+        document.getElementById('bestParams').textContent = paramStr;
+        document.getElementById('bestSharpe').textContent = params.sharpe_ratio;
+    }
+    
+    // Top 10 table
+    const tbody = document.getElementById('optimizationBody');
+    tbody.innerHTML = '';
+    
+    if (data.top_10) {
+        data.top_10.forEach((result, i) => {
+            const paramStr = result.fast ? `${result.fast}/${result.slow}` : `${result.period}/${result.oversold}-${result.overbought}`;
+            const row = `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td class="font-semibold">${paramStr}</td>
+                    <td class="${result.cagr >= 0 ? 'positive' : 'negative'}">${result.cagr}%</td>
+                    <td>${result.sharpe_ratio}</td>
+                    <td>${result.win_rate}%</td>
+                    <td class="negative">${result.max_drawdown}%</td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+    }
+}
+
+function displayWalkForward(data) {
+    const agg = data.aggregate;
+    document.getElementById('oosCagr').textContent = agg.avg_oos_cagr + '%';
+    document.getElementById('consistencyScore').textContent = agg.consistency_score;
+    document.getElementById('profitableWindows').textContent = `${agg.profitable_windows}/${data.total_windows}`;
+    
+    // Windows table
+    const tbody = document.getElementById('walkForwardBody');
+    tbody.innerHTML = '';
+    
+    if (data.windows) {
+        data.windows.forEach(window => {
+            const row = `
+                <tr>
+                    <td>${window.window}</td>
+                    <td class="text-xs">${window.train_start} to ${window.train_end}</td>
+                    <td class="text-xs">${window.test_start} to ${window.test_end}</td>
+                    <td class="${window.test_cagr >= 0 ? 'positive' : 'negative'}">${window.test_cagr}%</td>
+                    <td>${window.test_sharpe}</td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+    }
+}
+
+function displayRegimeAnalysis(data) {
+    document.getElementById('regimeRecommendation').textContent = data.recommendation || '--';
+    
+    // Performance by regime
+    const perfContainer = document.getElementById('regimePerformance');
+    perfContainer.innerHTML = '';
+    
+    if (data.regime_performance) {
+        Object.entries(data.regime_performance).forEach(([regime, perf]) => {
+            const html = `
+                <div class="p-4 bg-gray-50 rounded">
+                    <div class="font-semibold text-gray-800 mb-2">${regime.replace(/_/g, ' ')}</div>
+                    <div class="text-sm text-gray-600">
+                        <div>Trades: ${perf.total_trades}</div>
+                        <div>Win Rate: <span class="${perf.win_rate >= 50 ? 'positive' : 'negative'}">${perf.win_rate}%</span></div>
+                        <div>Avg Return: <span class="${perf.avg_return >= 0 ? 'positive' : 'negative'}">${perf.avg_return}%</span></div>
+                    </div>
+                </div>
+            `;
+            perfContainer.innerHTML += html;
+        });
+    }
+    
+    // Distribution
+    const distContainer = document.getElementById('regimeDistribution');
+    distContainer.innerHTML = '';
+    
+    if (data.regime_distribution) {
+        Object.entries(data.regime_distribution).forEach(([regime, pct]) => {
+            const html = `
+                <div class="metric-card">
+                    <div class="text-xs text-gray-600">${regime.replace(/_/g, ' ')}</div>
+                    <div class="text-lg font-bold">${pct}%</div>
+                </div>
+            `;
+            distContainer.innerHTML += html;
+        });
+    }
+}
+
+function displayRobustness(data) {
+    document.getElementById('robustnessScore').textContent = data.robustness_score || '--';
+    
+    if (data.parameter_variations) {
+        const pv = data.parameter_variations;
+        document.getElementById('variationsTested').textContent = pv.total_tested;
+        document.getElementById('variationsProfitable').textContent = `${pv.profitable} profitable`;
+    }
+    
+    if (data.monte_carlo) {
+        document.getElementById('monteCarloProbability').textContent = data.monte_carlo.probability_profit + '%';
+    }
+    
+    // Slippage table
+    const tbody = document.getElementById('slippageBody');
+    tbody.innerHTML = '';
+    
+    if (data.slippage_analysis) {
+        data.slippage_analysis.forEach(slip => {
+            const row = `
+                <tr>
+                    <td>${slip.slippage_pct}%</td>
+                    <td class="${slip.cagr >= 0 ? 'positive' : 'negative'}">${slip.cagr}%</td>
+                    <td class="negative">${slip.impact}%</td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+    }
+}
+
+function displayPositionSizing(data) {
+    document.getElementById('kellyPct').textContent = data.kelly_percentage + '%';
+    document.getElementById('recommendedSizing').textContent = `Recommended: ${data.recommended} - Best risk-adjusted returns`;
+    
+    // Methods table
+    const tbody = document.getElementById('positionSizingBody');
+    tbody.innerHTML = '';
+    
+    if (data.sizing_methods) {
+        Object.entries(data.sizing_methods).forEach(([method, result]) => {
+            const row = `
+                <tr ${method === data.recommended ? 'class="bg-green-50"' : ''}>
+                    <td class="font-semibold">${method} ${method === data.recommended ? '✅' : ''}</td>
+                    <td class="${result.cagr >= 0 ? 'positive' : 'negative'}">${result.cagr}%</td>
+                    <td>${result.sharpe}</td>
+                    <td class="negative">${result.max_dd}%</td>
+                    <td>₹${result.final_capital.toLocaleString()}</td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+    }
+}
+
+function displayDegradation(data) {
+    const score = data.degradation_score;
+    document.getElementById('degradationScore').textContent = score;
+    document.getElementById('recentPerf').textContent = data.recent_performance + '%';
+    document.getElementById('historicalPerf').textContent = data.historical_performance + '%';
+    
+    const alert = document.getElementById('degradationAlert');
+    const action = data.action;
+    
+    if (action === 'CONTINUE') {
+        alert.className = 'p-4 bg-green-50 border-l-4 border-green-500 rounded';
+        document.getElementById('degradationScore').className = 'text-3xl font-bold text-green-600';
+    } else if (action === 'REVIEW') {
+        alert.className = 'p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded';
+        document.getElementById('degradationScore').className = 'text-3xl font-bold text-yellow-600';
+    } else {
+        alert.className = 'p-4 bg-red-50 border-l-4 border-red-500 rounded';
+        document.getElementById('degradationScore').className = 'text-3xl font-bold text-red-600';
+    }
+    
+    document.getElementById('degradationAlertTitle').textContent = `${action === 'CONTINUE' ? '✅' : action === 'REVIEW' ? '⚠️' : '❌'} ${action}`;
+    document.getElementById('degradationRecommendation').textContent = data.recommendation;
+}
+
+function renderEquityCurve(data) {
+    const ctx = document.getElementById('equityCurveChart');
+    if (equityCurveChart) equityCurveChart.destroy();
+    
+    equityCurveChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.dates,
+            datasets: [{
+                label: 'Portfolio Value',
+                data: data.values,
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    ticks: {
+                        callback: function(value) {
+                            return '₹' + (value/1000).toFixed(0) + 'K';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderDrawdownCurve(data) {
+    const ctx = document.getElementById('drawdownChart');
+    if (drawdownChart) drawdownChart.destroy();
+    
+    drawdownChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.dates,
+            datasets: [{
+                label: 'Drawdown %',
+                data: data.values,
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function showLoading() {
+    document.getElementById('loadingIndicator').classList.remove('hidden');
+    document.getElementById('resultsContainer').classList.add('hidden');
+}
+
+function hideLoading() {
+    document.getElementById('loadingIndicator').classList.add('hidden');
+}
+
+function showError(message) {
+    document.getElementById('errorMessage').textContent = message;
+    document.getElementById('errorContainer').classList.remove('hidden');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function hideError() {
+    document.getElementById('errorContainer').classList.add('hidden');
+}
+
+// Set default end date to today
+document.getElementById('endDate').value = new Date().toISOString().split('T')[0];
+</script>
+
+</body>
+</html>

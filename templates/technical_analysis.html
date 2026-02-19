@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Technical Analysis</title>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<!-- Plotly for candlestick charts -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+    }
+
+    .section-card {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 32px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e5e7eb;
+    }
+
+    .section-title {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #1e40af;
+        margin-bottom: 16px;
+    }
+
+    .indicator-card {
+        background: #f9fafb;
+        border-radius: 8px;
+        padding: 16px;
+        border: 1px solid #e5e7eb;
+    }
+
+    .signal-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: bold;
+    }
+
+    .signal-buy {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .signal-sell {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .signal-hold {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .pattern-card {
+        background: white;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px;
+        margin: 8px 0;
+    }
+
+    .pattern-bullish {
+        border-left: 4px solid #10b981;
+    }
+
+    .pattern-bearish {
+        border-left: 4px solid #ef4444;
+    }
+
+    .pattern-neutral {
+        border-left: 4px solid #f59e0b;
+    }
+</style>
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+
+<!-- ================= NAVBAR ================= -->
+<!-- ================= NAVBAR ================= -->
+<nav class="text-white px-6 py-4 shadow-md mb-8" style="background-color:#457b9d;">
+  <div class="max-w-7xl mx-auto flex justify-between items-center">
+    <div class="text-xl font-bold">💼 Financial Analyzer</div>
+    <div class="flex space-x-4">
+      <a href="/"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Home
+      </a>
+      <a href="/dcf"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        DCF Valuation
+      </a>
+      <a href="/financial-modelling"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Financial Modelling
+      </a>
+      <a href="/technical-analysis"
+         class="px-4 py-2 rounded-lg bg-white bg-opacity-20 font-semibold hover:bg-white hover:bg-opacity-20 transition">
+        Technical Analysis
+      </a>
+      <a href="/portfolio-management"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Portfolio Management
+      </a>
+      <a href="/performance-analytics"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Performance Analytics
+      </a>
+      <a href="/strategy-optimization"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Strategy Optimization
+      </a>
+    </div>
+  </div>
+</nav>
+<!-- =============== NAVBAR END =============== -->
+
+<!-- ================= MAIN CONTAINER ================= -->
+<div class="max-w-7xl mx-auto px-6">
+  
+  <!-- Header -->
+  <div class="text-center mb-8">
+    <h1 class="text-4xl font-bold text-gray-800 mb-2">📈 Technical Analysis</h1>
+    <p class="text-gray-600">Analyze stock charts, indicators, patterns & predict next moves</p>
+  </div>
+
+  <!-- Input Section -->
+  <div class="section-card">
+    <div class="section-title">🎯 Stock Analysis</div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Stock Symbol</label>
+        <input 
+          type="text" 
+          id="symbolInput" 
+          placeholder="e.g., RELIANCE, TCS, INFY" 
+          class="w-full border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <p class="text-xs text-gray-500 mt-1">💡 Best: Use quick-select buttons below OR 5min/15min timeframe</p>
+      </div>
+      
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Timeframe</label>
+        <select 
+          id="timeframeInput" 
+          class="w-full border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onchange="updatePeriodOptions()"
+        >
+          <option value="5m" selected>5 Minutes ✅</option>
+          <option value="15m">15 Minutes ✅</option>
+        </select>
+        <p class="text-xs text-green-600 mt-1 font-semibold" id="timeframeHelp">✅ Verified working timeframes for Indian stocks</p>
+      </div>
+      
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Period</label>
+        <select 
+          id="periodInput" 
+          class="w-full border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="5d">5 Days</option>
+          <option value="1mo" selected>1 Month ✅</option>
+        </select>
+      </div>
+    </div>
+    
+    <button 
+      onclick="analyzeStock()" 
+      class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition shadow-md"
+    >
+      🔍 Analyze Stock
+    </button>
+    
+    <div class="mt-4">
+      <p class="text-sm text-gray-600 mb-2">Popular Indian Stocks:</p>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="quickAnalyze('RELIANCE')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">RELIANCE</button>
+        <button onclick="quickAnalyze('TCS')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">TCS</button>
+        <button onclick="quickAnalyze('INFY')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">INFOSYS</button>
+        <button onclick="quickAnalyze('HDFCBANK')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">HDFC BANK</button>
+        <button onclick="quickAnalyze('ICICIBANK')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">ICICI BANK</button>
+        <button onclick="quickAnalyze('SBIN')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">SBI</button>
+        <button onclick="quickAnalyze('BHARTIARTL')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">AIRTEL</button>
+        <button onclick="quickAnalyze('ITC')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">ITC</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Indicator -->
+  <div id="loadingIndicator" class="hidden text-center py-8">
+    <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    <p class="text-gray-600 mt-4">Analyzing stock data...</p>
+  </div>
+
+  <!-- Results Container -->
+  <div id="resultsContainer" class="hidden">
+    
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500">
+        <div class="text-sm text-gray-600 mb-1">Current Price</div>
+        <div id="currentPrice" class="text-2xl font-bold text-gray-800">-</div>
+      </div>
+      
+      <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500">
+        <div class="text-sm text-gray-600 mb-1">Recommendation</div>
+        <div id="recommendation" class="text-2xl font-bold">-</div>
+      </div>
+      
+      <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-purple-500">
+        <div class="text-sm text-gray-600 mb-1">Confidence</div>
+        <div id="confidence" class="text-2xl font-bold text-gray-800">-</div>
+      </div>
+      
+      <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-orange-500">
+        <div class="text-sm text-gray-600 mb-1">Predicted Direction</div>
+        <div id="predictedDirection" class="text-2xl font-bold text-gray-800">-</div>
+      </div>
+    </div>
+
+    <!-- Candlestick Chart -->
+    <div class="section-card">
+      <div class="section-title">📊 Candlestick Chart</div>
+      <div id="candlestickChart" style="width:100%; height:500px;"></div>
+    </div>
+
+    <!-- Buy/Sell Probabilities -->
+    <div class="section-card">
+      <div class="section-title">💰 Buy/Sell Probability</div>
+      <div class="grid grid-cols-2 gap-6">
+        <div class="text-center">
+          <div class="text-6xl font-bold text-green-600" id="buyProbability">-</div>
+          <div class="text-xl text-gray-600 mt-2">Buy Probability</div>
+          <div class="w-full bg-gray-200 rounded-full h-4 mt-4">
+            <div id="buyBar" class="bg-green-500 h-4 rounded-full" style="width: 0%"></div>
+          </div>
+        </div>
+        <div class="text-center">
+          <div class="text-6xl font-bold text-red-600" id="sellProbability">-</div>
+          <div class="text-xl text-gray-600 mt-2">Sell Probability</div>
+          <div class="w-full bg-gray-200 rounded-full h-4 mt-4">
+            <div id="sellBar" class="bg-red-500 h-4 rounded-full" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Next Candle Prediction -->
+    <div class="section-card">
+      <div class="section-title">🔮 Next Candle Prediction</div>
+      <div class="bg-blue-50 p-6 rounded-lg">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <div class="text-sm text-gray-600">Predicted Direction</div>
+            <div id="predDirection" class="text-2xl font-bold text-blue-600">-</div>
+          </div>
+          <div>
+            <div class="text-sm text-gray-600">Predicted Price</div>
+            <div id="predPrice" class="text-2xl font-bold text-gray-800">-</div>
+          </div>
+          <div>
+            <div class="text-sm text-gray-600">Expected Change</div>
+            <div id="predChange" class="text-2xl font-bold">-</div>
+          </div>
+          <div>
+            <div class="text-sm text-gray-600">ML Confidence</div>
+            <div id="predConfidence" class="text-2xl font-bold text-gray-800">-</div>
+          </div>
+        </div>
+        <p class="text-xs text-gray-500 mt-4">
+          ⚠️ Prediction based on Random Forest ML model. Not financial advice.
+        </p>
+      </div>
+    </div>
+
+    <!-- Technical Indicators -->
+    <div class="section-card">
+      <div class="section-title">📈 Technical Indicators</div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="indicatorsGrid"></div>
+    </div>
+
+    <!-- Trading Signals -->
+    <div class="section-card">
+      <div class="section-title">🎯 Trading Signals</div>
+      <div id="signalsList"></div>
+    </div>
+
+    <!-- Candlestick Patterns -->
+    <div class="section-card">
+      <div class="section-title">🕯️ Detected Candlestick Patterns</div>
+      <div id="patternsList"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+let analysisData = null;
+
+function updatePeriodOptions() {
+    const timeframe = document.getElementById('timeframeInput').value;
+    const periodSelect = document.getElementById('periodInput');
+    const helpText = document.getElementById('timeframeHelp');
+    
+    if (timeframe === '5m') {
+        // 5 min: Only 5d and 1mo
+        periodSelect.innerHTML = `
+            <option value="5d">5 Days</option>
+            <option value="1mo" selected>1 Month ✅</option>
+        `;
+        helpText.textContent = '✅ 5-min timeframe: 5 days or 1 month available';
+        helpText.className = 'text-xs text-green-600 mt-1 font-semibold';
+    } else if (timeframe === '15m') {
+        // 15 min: Only 1mo
+        periodSelect.innerHTML = `
+            <option value="1mo" selected>1 Month ✅</option>
+        `;
+        helpText.textContent = '✅ 15-min timeframe: 1 month available';
+        helpText.className = 'text-xs text-green-600 mt-1 font-semibold';
+    }
+}
+
+function quickAnalyze(symbol) {
+    document.getElementById('symbolInput').value = symbol;
+    analyzeStock();
+}
+
+function analyzeStock() {
+    const symbol = document.getElementById('symbolInput').value.trim();
+    const timeframe = document.getElementById('timeframeInput').value;
+    const period = document.getElementById('periodInput').value;
+    
+    if (!symbol) {
+        alert('Please enter a stock symbol');
+        return;
+    }
+    
+    // Show loading
+    document.getElementById('loadingIndicator').classList.remove('hidden');
+    document.getElementById('resultsContainer').classList.add('hidden');
+    
+    // Call API
+    fetch('/technical-analysis/analyze', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            symbol: symbol,
+            timeframe: timeframe,
+            period: period
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('loadingIndicator').classList.add('hidden');
+        
+        if (!data.success) {
+            alert('Error: ' + data.error);
+            return;
+        }
+        
+        analysisData = data;
+        displayResults(data);
+        document.getElementById('resultsContainer').classList.remove('hidden');
+    })
+    .catch(err => {
+        document.getElementById('loadingIndicator').classList.add('hidden');
+        console.error(err);
+        alert('Error analyzing stock. Please try again.');
+    });
+}
+
+function displayResults(data) {
+    const summary = data.summary;
+    const signals = data.signals;
+    const prediction = data.prediction;
+    const patterns = data.patterns;
+    
+    // Update summary cards
+    document.getElementById('currentPrice').textContent = '₹' + summary.current_price;
+    
+    const recElem = document.getElementById('recommendation');
+    recElem.textContent = summary.recommendation;
+    recElem.className = summary.recommendation === 'BUY' ? 'text-2xl font-bold text-green-600' :
+                         (summary.recommendation === 'SELL' ? 'text-2xl font-bold text-red-600' : 'text-2xl font-bold text-yellow-600');
+    
+    document.getElementById('confidence').textContent = summary.confidence + '%';
+    
+    const predDirElem = document.getElementById('predictedDirection');
+    predDirElem.textContent = summary.predicted_direction;
+    predDirElem.className = summary.predicted_direction === 'UP' ? 'text-2xl font-bold text-green-600' :
+                             (summary.predicted_direction === 'DOWN' ? 'text-2xl font-bold text-red-600' : 'text-2xl font-bold text-gray-600');
+    
+    // Update probabilities
+    document.getElementById('buyProbability').textContent = summary.buy_probability + '%';
+    document.getElementById('sellProbability').textContent = summary.sell_probability + '%';
+    document.getElementById('buyBar').style.width = summary.buy_probability + '%';
+    document.getElementById('sellBar').style.width = summary.sell_probability + '%';
+    
+    // Update prediction
+    document.getElementById('predDirection').textContent = prediction.predicted_direction || 'UNKNOWN';
+    document.getElementById('predPrice').textContent = prediction.predicted_price ? '₹' + prediction.predicted_price : '-';
+    
+    const changeElem = document.getElementById('predChange');
+    if (prediction.predicted_change) {
+        changeElem.textContent = (prediction.predicted_change > 0 ? '+' : '') + prediction.predicted_change + '%';
+        changeElem.className = prediction.predicted_change > 0 ? 'text-2xl font-bold text-green-600' : 'text-2xl font-bold text-red-600';
+    }
+    
+    document.getElementById('predConfidence').textContent = (prediction.confidence || 0) + '%';
+    
+    // Display indicators
+    displayIndicators(signals.indicators);
+    
+    // Display signals
+    displaySignals(signals.signals_list);
+    
+    // Display patterns
+    displayPatterns(patterns);
+    
+    // Render candlestick chart
+    renderCandlestickChart(data.chart_data, signals.indicators);
+}
+
+function displayIndicators(indicators) {
+    const grid = document.getElementById('indicatorsGrid');
+    grid.innerHTML = '';
+    
+    const indicatorList = [
+        { name: 'RSI', value: indicators.RSI, unit: '' },
+        { name: 'MACD', value: indicators.MACD, unit: '' },
+        { name: 'SMA 20', value: indicators.SMA_20, unit: '₹' },
+        { name: 'SMA 50', value: indicators.SMA_50, unit: '₹' },
+        { name: 'BB Upper', value: indicators.BB_Upper, unit: '₹' },
+        { name: 'BB Lower', value: indicators.BB_Lower, unit: '₹' },
+        { name: 'Volume', value: indicators.Volume ? indicators.Volume.toLocaleString() : null, unit: '' },
+        { name: 'ATR', value: indicators.ATR, unit: '' }
+    ];
+    
+    indicatorList.forEach(ind => {
+        const card = document.createElement('div');
+        card.className = 'indicator-card';
+        card.innerHTML = `
+            <div class="text-xs text-gray-600 mb-1">${ind.name}</div>
+            <div class="text-lg font-bold text-gray-800">
+                ${ind.value !== null && ind.value !== undefined ? ind.unit + ind.value : '-'}
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function displaySignals(signals) {
+    const list = document.getElementById('signalsList');
+    
+    if (!signals || signals.length === 0) {
+        list.innerHTML = '<p class="text-gray-600">No strong signals detected</p>';
+        return;
+    }
+    
+    list.innerHTML = '<ul class="space-y-2">' + 
+        signals.map(signal => `<li class="flex items-center gap-2">
+            <span class="text-blue-500">▸</span>
+            <span class="text-gray-700">${signal}</span>
+        </li>`).join('') + 
+        '</ul>';
+}
+
+function displayPatterns(patterns) {
+    const list = document.getElementById('patternsList');
+    
+    if (!patterns || patterns.length === 0) {
+        list.innerHTML = '<p class="text-gray-600">No candlestick patterns detected</p>';
+        return;
+    }
+    
+    list.innerHTML = '';
+    patterns.forEach(pattern => {
+        const card = document.createElement('div');
+        const typeClass = pattern.type.includes('Bullish') ? 'pattern-bullish' :
+                          (pattern.type.includes('Bearish') ? 'pattern-bearish' : 'pattern-neutral');
+        
+        card.className = 'pattern-card ' + typeClass;
+        card.innerHTML = `
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="font-bold text-gray-800">${pattern.pattern}</div>
+                    <div class="text-sm text-gray-600">${pattern.type}</div>
+                    <div class="text-xs text-gray-500 mt-1">${pattern.description}</div>
+                </div>
+                <span class="text-xs font-semibold px-2 py-1 rounded" style="background: #f3f4f6;">
+                    ${pattern.strength}
+                </span>
+            </div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+function renderCandlestickChart(chartData, indicators) {
+    const dates = chartData.map(d => d.Date);
+    const open = chartData.map(d => d.Open);
+    const high = chartData.map(d => d.High);
+    const low = chartData.map(d => d.Low);
+    const close = chartData.map(d => d.Close);
+    const volume = chartData.map(d => d.Volume);
+    
+    // Candlestick trace
+    const candlestick = {
+        x: dates,
+        open: open,
+        high: high,
+        low: low,
+        close: close,
+        type: 'candlestick',
+        name: 'Price',
+        increasing: { line: { color: '#10b981' } },
+        decreasing: { line: { color: '#ef4444' } }
+    };
+    
+    // SMA 20 trace
+    const sma20 = {
+        x: dates,
+        y: chartData.map(d => d.SMA_20),
+        type: 'scatter',
+        mode: 'lines',
+        name: 'SMA 20',
+        line: { color: '#3b82f6', width: 1.5 }
+    };
+    
+    // SMA 50 trace
+    const sma50 = {
+        x: dates,
+        y: chartData.map(d => d.SMA_50),
+        type: 'scatter',
+        mode: 'lines',
+        name: 'SMA 50',
+        line: { color: '#f59e0b', width: 1.5 }
+    };
+    
+    // Volume trace (on separate y-axis)
+    const volumeTrace = {
+        x: dates,
+        y: volume,
+        type: 'bar',
+        name: 'Volume',
+        marker: { color: 'rgba(100, 100, 100, 0.3)' },
+        yaxis: 'y2'
+    };
+    
+    const data = [candlestick, sma20, sma50, volumeTrace];
+    
+    const layout = {
+        title: 'Price Chart with Indicators',
+        xaxis: {
+            title: 'Date',
+            rangeslider: { visible: false }
+        },
+        yaxis: {
+            title: 'Price (₹)',
+            domain: [0.3, 1]
+        },
+        yaxis2: {
+            title: 'Volume',
+            domain: [0, 0.2],
+            overlaying: 'y',
+            side: 'right'
+        },
+        height: 500,
+        showlegend: true,
+        legend: { x: 0, y: 1 }
+    };
+    
+    Plotly.newPlot('candlestickChart', data, layout, { responsive: true });
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Management</title>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+body { font-family: Arial, sans-serif; }
+.section-card {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 32px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e5e7eb;
+}
+.section-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #1e40af;
+    margin-bottom: 16px;
+}
+.metric-card {
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+}
+.chart-container {
+    position: relative;
+    height: 300px;
+    margin: 20px 0;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+th, td {
+    border: 1px solid #e5e7eb;
+    padding: 12px;
+    text-align: left;
+}
+th {
+    background: #f3f4f6;
+    font-weight: bold;
+}
+</style>
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+
+<!-- NAVBAR -->
+<!-- ================= NAVBAR ================= -->
+<nav class="text-white px-6 py-4 shadow-md mb-8" style="background-color:#457b9d;">
+  <div class="max-w-7xl mx-auto flex justify-between items-center">
+    <div class="text-xl font-bold">💼 Financial Analyzer</div>
+    <div class="flex space-x-4">
+      <a href="/"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Home
+      </a>
+      <a href="/dcf"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        DCF Valuation
+      </a>
+      <a href="/financial-modelling"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Financial Modelling
+      </a>
+      <a href="/technical-analysis"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Technical Analysis
+      </a>
+      <a href="/portfolio-management"
+         class="px-4 py-2 rounded-lg bg-white bg-opacity-20 font-semibold hover:bg-white hover:bg-opacity-20 transition">
+        Portfolio Management
+      </a>
+      <a href="/performance-analytics"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Performance Analytics
+      </a>
+      <a href="/strategy-optimization"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Strategy Optimization
+      </a>
+    </div>
+  </div>
+</nav>
+<!-- =============== NAVBAR END =============== -->
+
+<!-- MAIN CONTAINER -->
+<div class="max-w-7xl mx-auto px-6">
+  
+  <!-- Header -->
+  <div class="text-center mb-8">
+    <h1 class="text-4xl font-bold text-gray-800 mb-2">💼 Portfolio Management</h1>
+    <p class="text-gray-600">Comprehensive portfolio analysis, risk metrics & optimization</p>
+  </div>
+
+  <!-- Portfolio Input Section -->
+  <div class="section-card">
+    <div class="section-title">📝 Add Holdings</div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Stock Symbol</label>
+        <input type="text" id="stockSymbol" placeholder="e.g., RELIANCE" 
+          class="w-full border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
+        <input type="number" id="quantity" placeholder="100" 
+          class="w-full border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Buy Price (₹)</label>
+        <input type="number" id="buyPrice" placeholder="2450.50" step="0.01"
+          class="w-full border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Buy Date</label>
+        <input type="date" id="buyDate"
+          class="w-full border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      
+      <div class="flex items-end">
+        <button onclick="addHolding()" 
+          class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-semibold transition">
+          + Add Stock
+        </button>
+      </div>
+    </div>
+
+    <!-- Holdings Table -->
+    <div class="mt-6">
+      <h3 class="text-lg font-bold text-gray-700 mb-3">Your Holdings</h3>
+      <div class="overflow-x-auto">
+        <table id="holdingsTable">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Quantity</th>
+              <th>Buy Price</th>
+              <th>Buy Date</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="holdingsBody">
+            <tr>
+              <td colspan="5" class="text-center text-gray-500">No holdings added yet. Add your first stock above.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <button onclick="analyzePortfolio()" 
+      class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition shadow-md">
+      📊 Analyze Portfolio
+    </button>
+  </div>
+
+  <!-- Loading -->
+  <div id="loadingIndicator" class="hidden text-center py-8">
+    <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    <p class="text-gray-600 mt-4">Fetching live prices &amp; analyzing portfolio...</p>
+    <p id="fetchStatus" class="text-blue-500 text-sm mt-2 font-medium min-h-5"></p>
+  </div>
+
+  <!-- Results Container -->
+  <div id="resultsContainer" class="hidden">
+    
+    <!-- Success Message -->
+    <div class="section-card bg-green-50 border-2 border-green-200">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-lg font-bold text-green-800">✅ Portfolio Analyzed Successfully!</div>
+          <div class="text-sm text-green-700 mt-1">Your portfolio data has been saved. You can now view detailed performance analytics.</div>
+        </div>
+        <a href="/performance-analytics" 
+          class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition shadow-md">
+          📊 View Performance Analytics →
+        </a>
+      </div>
+    </div>
+
+    <!-- Portfolio Summary -->
+    <div class="section-card">
+      <div class="section-title">💰 Portfolio Summary</div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="metric-card border-l-4 border-blue-500">
+          <div class="text-sm text-gray-600">Total Invested</div>
+          <div id="totalInvested" class="text-2xl font-bold text-gray-800">₹0</div>
+        </div>
+        <div class="metric-card border-l-4 border-green-500">
+          <div class="text-sm text-gray-600">Current Value</div>
+          <div id="currentValue" class="text-2xl font-bold text-gray-800">₹0</div>
+        </div>
+        <div class="metric-card border-l-4 border-purple-500">
+          <div class="text-sm text-gray-600">Total Gain/Loss</div>
+          <div id="totalGainLoss" class="text-2xl font-bold">₹0</div>
+        </div>
+        <div class="metric-card border-l-4 border-orange-500">
+          <div class="text-sm text-gray-600">Return %</div>
+          <div id="totalReturn" class="text-2xl font-bold">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Holdings Details -->
+    <div class="section-card">
+      <div class="section-title">📈 Holdings Details</div>
+      <div class="overflow-x-auto">
+        <table id="holdingsDetailsTable">
+          <thead>
+            <tr>
+              <th>Stock</th>
+              <th>Quantity</th>
+              <th>Buy Price</th>
+              <th>Current Price</th>
+              <th>Invested</th>
+              <th>Current Value</th>
+              <th>Gain/Loss</th>
+              <th>Return %</th>
+            </tr>
+          </thead>
+          <tbody id="holdingsDetailsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Asset Allocation -->
+    <div class="section-card">
+      <div class="section-title">🥧 Asset Allocation</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <div class="chart-container">
+            <canvas id="allocationChart"></canvas>
+          </div>
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold mb-4">Portfolio Weights</h3>
+          <div id="allocationDetails"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Risk Metrics -->
+    <div class="section-card">
+      <div class="section-title">📉 Risk Metrics</div>
+      <div id="riskMetricsGrid" class="grid grid-cols-1 md:grid-cols-4 gap-4"></div>
+    </div>
+
+    <!-- Diversification -->
+    <div class="section-card">
+      <div class="section-title">🎯 Diversification Analysis</div>
+      <div id="diversificationGrid" class="grid grid-cols-1 md:grid-cols-4 gap-4"></div>
+    </div>
+
+    <!-- Rebalancing Signals -->
+    <div class="section-card">
+      <div class="section-title">⚖️ Rebalancing Signals</div>
+      <div id="rebalancingSignals"></div>
+    </div>
+
+    <!-- Benchmark Comparison -->
+    <div class="section-card">
+      <div class="section-title">📊 Benchmark Comparison</div>
+      <div id="benchmarkGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let holdings = [];
+let allocationChartInstance = null;
+let lastAnalysisResult = null;
+
+// ── Page load ──────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => { loadSavedHoldings(); });
+
+function loadSavedHoldings() {
+    const saved = localStorage.getItem('portfolio_holdings');
+    if (saved) {
+        try { holdings = JSON.parse(saved); renderHoldingsTable(); } catch(e) {}
+    }
+}
+function saveHoldings() { localStorage.setItem('portfolio_holdings', JSON.stringify(holdings)); }
+
+// ── Add / Remove ───────────────────────────────────────────────────────────
+function addHolding() {
+    const symbol   = document.getElementById('stockSymbol').value.trim().toUpperCase();
+    const quantity = parseFloat(document.getElementById('quantity').value);
+    const buyPrice = parseFloat(document.getElementById('buyPrice').value);
+    const buyDate  = document.getElementById('buyDate').value;
+
+    if (!symbol || !quantity || !buyPrice) { alert('Please fill in all fields'); return; }
+
+    holdings.push({ symbol, quantity, buy_price: buyPrice,
+                    buy_date: buyDate || new Date().toISOString().split('T')[0] });
+    saveHoldings();
+    renderHoldingsTable();
+    ['stockSymbol','quantity','buyPrice','buyDate'].forEach(id =>
+        document.getElementById(id).value = '');
+}
+
+function removeHolding(index) {
+    holdings.splice(index, 1);
+    saveHoldings();
+    renderHoldingsTable();
+}
+
+function renderHoldingsTable() {
+    const tbody = document.getElementById('holdingsBody');
+    if (holdings.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-500">No holdings added yet. Add your first stock above.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = holdings.map((h, i) => `
+        <tr>
+            <td class="font-semibold">${h.symbol}</td>
+            <td>${h.quantity}</td>
+            <td>₹${h.buy_price.toFixed(2)}</td>
+            <td>${h.buy_date}</td>
+            <td>
+                <button onclick="removeHolding(${i})" class="text-red-600 hover:text-red-800 font-semibold">
+                    🗑️ Remove
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// ── Price fetch via Flask proxy (/get-price/SYMBOL) ────────────────────────
+// The browser calls YOUR Flask server — no CORS, no external DNS needed.
+// Flask then calls yfinance internally and returns the price as JSON.
+async function fetchPriceViaProxy(symbol) {
+    try {
+        const res = await fetch(`/get-price/${encodeURIComponent(symbol)}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data.price && data.price > 0) {
+            console.log(`✅ ${symbol}: ₹${data.price} [${data.source}]`);
+            return { price: data.price, source: data.source };
+        }
+    } catch(e) {
+        console.warn(`Proxy fetch failed for ${symbol}:`, e.message);
+    }
+    return null;
+}
+
+async function enrichHoldingsWithPrices(holdingsArr) {
+    const status = document.getElementById('fetchStatus');
+    const enriched = [];
+    const failed   = [];
+
+    for (let i = 0; i < holdingsArr.length; i++) {
+        const h = holdingsArr[i];
+        if (status) status.textContent = `📡 Fetching live price ${i+1}/${holdingsArr.length}: ${h.symbol}…`;
+
+        const result = await fetchPriceViaProxy(h.symbol);
+
+        if (result) {
+            enriched.push({ ...h, current_price: result.price, price_source: result.source });
+        } else {
+            failed.push(h.symbol);
+            enriched.push({ ...h, current_price: h.buy_price, price_source: 'fetch failed' });
+        }
+    }
+
+    if (status) status.textContent = '';
+
+    if (failed.length) {
+        const warn = document.createElement('div');
+        warn.className = 'bg-yellow-50 border border-yellow-400 text-yellow-800 rounded-lg p-3 mb-4 text-sm';
+        warn.innerHTML = `⚠️ Could not fetch live price for: <strong>${failed.join(', ')}</strong>.<br>
+            Make sure you are using the correct NSE ticker symbol (e.g. <code>TATAMOTORS</code>, <code>INFY</code>, <code>TCS</code>).<br>
+            Showing buy price as fallback for those stocks.`;
+        const container = document.getElementById('resultsContainer');
+        const old = container.querySelector('.price-warn');
+        if (old) old.remove();
+        warn.classList.add('price-warn');
+        container.prepend(warn);
+    }
+
+    return enriched;
+}
+
+// ── Main analyze ───────────────────────────────────────────────────────────
+async function analyzePortfolio() {
+    if (holdings.length === 0) { alert('Please add at least one stock'); return; }
+
+    document.getElementById('loadingIndicator').classList.remove('hidden');
+    document.getElementById('resultsContainer').classList.add('hidden');
+
+    try {
+        // STEP 1 — fetch live prices through Flask proxy
+        const enriched = await enrichHoldingsWithPrices(holdings);
+
+        // STEP 2 — send enriched holdings (already have current_price) to backend
+        const res  = await fetch('/portfolio-management/analyze', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ holdings: enriched })
+        });
+        const data = await res.json();
+
+        document.getElementById('loadingIndicator').classList.add('hidden');
+        if (!data.success) { alert('Error: ' + data.error); return; }
+
+        lastAnalysisResult = data;
+        localStorage.setItem('portfolio_analysis', JSON.stringify({
+            holdings: enriched, result: data,
+            timestamp: new Date().toISOString()
+        }));
+
+        displayResults(data);
+        document.getElementById('resultsContainer').classList.remove('hidden');
+        document.getElementById('resultsContainer').scrollIntoView({ behavior: 'smooth' });
+
+    } catch(err) {
+        document.getElementById('loadingIndicator').classList.add('hidden');
+        alert('Error analyzing portfolio: ' + err.message);
+    }
+}
+
+function displayResults(data) {
+    displaySummary(data.summary);
+    displayHoldingsDetails(data.holdings);
+    displayAllocation(data.allocation);
+    displayRiskMetrics(data.risk_metrics);
+    displayDiversification(data.diversification);
+    displayRebalancingSignals(data.rebalancing_signals);
+    displayBenchmark(data.benchmark_comparison);
+}
+
+function displaySummary(summary) {
+    document.getElementById('totalInvested').textContent = '₹' + summary.total_invested.toLocaleString();
+    document.getElementById('currentValue').textContent = '₹' + summary.total_current_value.toLocaleString();
+    
+    const gainLossElem = document.getElementById('totalGainLoss');
+    gainLossElem.textContent = '₹' + Math.abs(summary.total_gain_loss).toLocaleString();
+    gainLossElem.className = 'text-2xl font-bold ' + (summary.total_gain_loss >= 0 ? 'text-green-600' : 'text-red-600');
+    
+    const returnElem = document.getElementById('totalReturn');
+    returnElem.textContent = (summary.total_gain_loss_pct >= 0 ? '+' : '') + summary.total_gain_loss_pct + '%';
+    returnElem.className = 'text-2xl font-bold ' + (summary.total_gain_loss_pct >= 0 ? 'text-green-600' : 'text-red-600');
+}
+
+function displayHoldingsDetails(holdings) {
+    const tbody = document.getElementById('holdingsDetailsBody');
+    tbody.innerHTML = holdings.map(h => `
+        <tr>
+            <td class="font-semibold">${h.symbol}</td>
+            <td>${h.quantity}</td>
+            <td>₹${h.buy_price.toFixed(2)}</td>
+            <td>₹${h.current_price.toFixed(2)}</td>
+            <td>₹${h.invested_value.toLocaleString()}</td>
+            <td>₹${h.current_value.toLocaleString()}</td>
+            <td class="${h.gain_loss >= 0 ? 'text-green-600' : 'text-red-600'} font-semibold">
+                ₹${Math.abs(h.gain_loss).toFixed(2)}
+            </td>
+            <td class="${h.gain_loss_pct >= 0 ? 'text-green-600' : 'text-red-600'} font-semibold">
+                ${h.gain_loss_pct >= 0 ? '+' : ''}${h.gain_loss_pct.toFixed(2)}%
+            </td>
+        </tr>
+    `).join('');
+}
+
+function displayAllocation(allocation) {
+    const ctx = document.getElementById('allocationChart');
+    
+    if (allocationChartInstance) {
+        allocationChartInstance.destroy();
+    }
+
+    const labels = allocation.holdings.map(h => h.symbol);
+    const data = allocation.holdings.map(h => h.weight);
+    const colors = generateColors(labels.length);
+
+    allocationChartInstance = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+
+    const details = document.getElementById('allocationDetails');
+    details.innerHTML = allocation.holdings.map((h, i) => `
+        <div class="flex justify-between items-center py-2 border-b">
+            <div class="flex items-center gap-2">
+                <div class="w-4 h-4 rounded" style="background:${colors[i]}"></div>
+                <span class="font-semibold">${h.symbol}</span>
+            </div>
+            <span class="text-gray-600">${h.weight.toFixed(2)}%</span>
+        </div>
+    `).join('');
+}
+
+function displayRiskMetrics(metrics) {
+    const grid = document.getElementById('riskMetricsGrid');
+    const items = [
+        { label: 'Portfolio Beta', value: metrics.portfolio_beta, desc: 'vs NIFTY 50' },
+        { label: 'Volatility', value: metrics.portfolio_volatility ? metrics.portfolio_volatility + '%' : 'N/A', desc: 'Annualized' },
+        { label: 'Sharpe Ratio', value: metrics.sharpe_ratio, desc: 'Risk-adjusted return' },
+        { label: 'Max Drawdown', value: metrics.max_drawdown ? metrics.max_drawdown + '%' : 'N/A', desc: 'Peak to trough' }
+    ];
+
+    grid.innerHTML = items.map(item => `
+        <div class="metric-card">
+            <div class="text-xs text-gray-500">${item.label}</div>
+            <div class="text-2xl font-bold text-gray-800 my-1">${item.value !== null ? item.value : 'N/A'}</div>
+            <div class="text-xs text-gray-500">${item.desc}</div>
+        </div>
+    `).join('');
+}
+
+function displayDiversification(div) {
+    const grid = document.getElementById('diversificationGrid');
+    const items = [
+        { label: 'Holdings', value: div.num_holdings, desc: 'Total stocks' },
+        { label: 'Diversification Score', value: div.diversification_score.toFixed(1), desc: '0-100 scale' },
+        { label: 'Largest Position', value: div.largest_position_pct.toFixed(1) + '%', desc: 'Single stock max' },
+        { label: 'Top 5 Weight', value: div.top_5_concentration.toFixed(1) + '%', desc: 'Concentration' }
+    ];
+
+    grid.innerHTML = items.map(item => `
+        <div class="metric-card">
+            <div class="text-xs text-gray-500">${item.label}</div>
+            <div class="text-2xl font-bold text-gray-800 my-1">${item.value}</div>
+            <div class="text-xs text-gray-500">${item.desc}</div>
+        </div>
+    `).join('');
+}
+
+function displayRebalancingSignals(signals) {
+    const container = document.getElementById('rebalancingSignals');
+    
+    if (!signals || signals.length === 0) {
+        container.innerHTML = '<p class="text-gray-600">✅ No rebalancing needed - portfolio is well balanced!</p>';
+        return;
+    }
+
+    const severityColors = {
+        'HIGH': 'bg-red-50 border-red-500',
+        'MEDIUM': 'bg-yellow-50 border-yellow-500',
+        'LOW': 'bg-blue-50 border-blue-500'
+    };
+
+    container.innerHTML = signals.map(signal => `
+        <div class="p-4 rounded-lg border-l-4 mb-3 ${severityColors[signal.severity]}">
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="font-semibold text-gray-800">${signal.symbol} - ${signal.type.replace('_', ' ')}</div>
+                    <div class="text-sm text-gray-600 mt-1">${signal.recommendation}</div>
+                </div>
+                <span class="px-3 py-1 rounded text-sm font-semibold ${
+                    signal.action === 'SELL' ? 'bg-red-100 text-red-700' :
+                    signal.action === 'BUY' ? 'bg-green-100 text-green-700' :
+                    'bg-yellow-100 text-yellow-700'
+                }">${signal.action}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function displayBenchmark(benchmark) {
+    const grid = document.getElementById('benchmarkGrid');
+    const items = [
+        { label: 'Your Return', value: benchmark.portfolio_return ? benchmark.portfolio_return + '%' : 'N/A', color: 'blue' },
+        { label: 'NIFTY 50 Return', value: benchmark.benchmark_return ? benchmark.benchmark_return + '%' : 'N/A', color: 'gray' },
+        { label: 'Outperformance', value: benchmark.outperformance ? (benchmark.outperformance >= 0 ? '+' : '') + benchmark.outperformance + '%' : 'N/A', 
+          color: benchmark.outperformance >= 0 ? 'green' : 'red' }
+    ];
+
+    grid.innerHTML = items.map(item => `
+        <div class="metric-card border-l-4 border-${item.color}-500">
+            <div class="text-sm text-gray-600">${item.label}</div>
+            <div class="text-2xl font-bold text-${item.color}-600">${item.value}</div>
+        </div>
+    `).join('');
+}
+
+function generateColors(count) {
+    const colors = [
+        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+        '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'
+    ];
+    return colors.slice(0, count);
+}
+</script>
+
+</body>
+</html>

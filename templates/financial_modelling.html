@@ -1,0 +1,1799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financial Modelling</title>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        margin-top: 20px;
+    }
+
+    th, td {
+        border: 2px solid #000;
+        padding: 8px 10px;
+        font-size: 13px;
+        text-align: right;
+    }
+
+    th:first-child, td:first-child {
+        text-align: left;
+        font-weight: bold;
+    }
+
+    thead th {
+        background: #eaeaea;
+        font-weight: bold;
+    }
+
+    .section-row {
+        background: #f0f0f0;
+        font-weight: bold;
+        text-align: left;
+    }
+
+    .italic {
+        font-style: italic;
+    }
+
+    .gap-row td {
+        height: 20px;
+        border: none;
+    }
+
+    .section-card {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 32px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e5e7eb;
+    }
+
+    .section-title {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #1e40af;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+</style>
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+
+<!-- ================= NAVBAR ================= -->
+<nav class="text-white px-6 py-4 shadow-md mb-8" style="background-color:#457b9d;">
+  <div class="max-w-7xl mx-auto flex justify-between items-center">
+    <div class="text-xl font-bold">💼 Financial Analyzer</div>
+    <div class="flex space-x-4">
+      <a href="/"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Home
+      </a>
+      <a href="/dcf"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        DCF Valuation
+      </a>
+      <a href="/financial-modelling"
+         class="px-4 py-2 rounded-lg bg-white bg-opacity-20 font-semibold hover:bg-white hover:bg-opacity-20 transition">
+        Financial Modelling
+      </a>
+      <a href="/technical-analysis"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Technical Analysis
+      </a>
+      <a href="/portfolio-management"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Portfolio Management
+      </a>
+      <a href="/performance-analytics"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Performance Analytics
+      </a>
+      <a href="/strategy-optimization"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Strategy Optimization
+      </a>
+    </div>
+  </div>
+</nav>
+<!-- =============== NAVBAR END =============== -->
+
+<div class="max-w-7xl mx-auto px-6 pb-12">
+
+  <!-- Upload Section -->
+  <div class="bg-white shadow-2xl rounded-2xl p-8 mb-8">
+    <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">
+      📊 Financial Modelling
+    </h1>
+
+    <div class="border-2 border-dashed border-gray-300 p-6 rounded-lg text-center">
+      <label class="block font-semibold mb-2 text-gray-700">
+        Upload Excel File (.xlsx)
+      </label>
+      <input type="file" id="excelFile" accept=".xlsx"
+        class="mb-3 mx-auto block border border-gray-300 p-2 rounded-lg" />
+      <button onclick="uploadFile()"
+        class="bg-blue-600 text-white px-8 py-3 rounded-xl hover:bg-blue-700 transition font-semibold shadow-md mt-3">
+        🔍 Analyze Financial Model
+      </button>
+    </div>
+
+    <!-- Loading Status -->
+    <div id="loadingStatus" class="hidden mt-4 text-center">
+      <div class="text-blue-600 font-medium animate-pulse">
+        ⏳ Processing financial data...
+      </div>
+    </div>
+  </div>
+
+  <!-- Results Container -->
+  <div id="resultsContainer" class="hidden">
+    
+    <!-- Income Statement Section -->
+    <div class="section-card">
+      <div class="section-title">
+        📈 INCOME STATEMENT
+      </div>
+      <div class="overflow-x-auto">
+        <table id="incomeTable"></table>
+      </div>
+    </div>
+
+    <!-- Balance Sheet Section -->
+    <div class="section-card">
+      <div class="section-title">
+        💰 BALANCE SHEET
+      </div>
+      <div class="overflow-x-auto">
+        <table id="balanceTable"></table>
+      </div>
+    </div>
+
+    <!-- Cash Flow Statement Section -->
+    <div class="section-card">
+      <div class="section-title">
+        💵 CASH FLOW STATEMENT
+      </div>
+      <div class="overflow-x-auto">
+        <table id="cashFlowTable"></table>
+      </div>
+    </div>
+
+    <!-- Ratio Analysis Section -->
+    <div class="section-card">
+      <div class="section-title">
+        📊 RATIO ANALYSIS
+      </div>
+      <div class="overflow-x-auto">
+        <table id="ratioTable"></table>
+      </div>
+    </div>
+
+    <!-- Common Size Statement Section -->
+    <div class="section-card">
+      <div class="section-title">
+        📐 COMMON SIZE STATEMENT
+      </div>
+      
+      <!-- Common Size Income Statement -->
+      <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">Common Size Income Statement</h3>
+      <div class="overflow-x-auto">
+        <table id="commonSizeIncomeTable"></table>
+      </div>
+      
+      <!-- Common Size Balance Sheet -->
+      <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">Common Size Balance Sheet</h3>
+      <div class="overflow-x-auto">
+        <table id="commonSizeBalanceTable"></table>
+      </div>
+    </div>
+
+    <!-- Forecasting Section -->
+    <div class="section-card">
+      <div class="section-title">
+        🔮 FORECASTING
+      </div>
+      
+      <p class="text-gray-600 mb-4 text-sm">
+        5-year forecast using linear regression (Excel FORECAST function)
+      </p>
+      
+      <!-- Sales Forecast -->
+      <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">📈 Sales Forecast</h3>
+      <div class="overflow-x-auto">
+        <table id="salesForecastTable"></table>
+      </div>
+      
+      <!-- EBITDA Forecast -->
+      <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">💰 EBITDA Forecast</h3>
+      <div class="overflow-x-auto">
+        <table id="ebitdaForecastTable"></table>
+      </div>
+      
+      <!-- EPS Forecast -->
+      <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">📊 EPS Forecast</h3>
+      <div class="overflow-x-auto">
+        <table id="epsForecastTable"></table>
+      </div>
+    </div>
+
+    <!-- FCFF Section -->
+    <div class="section-card">
+      <div class="section-title">
+        💎 FCFF (Free Cash Flow to Firm)
+      </div>
+      
+      <p class="text-gray-600 mb-4 text-sm" id="fcffMethod">
+        Calculation Method: CFO-based
+      </p>
+      
+      <div class="overflow-x-auto">
+        <table id="fcffTable"></table>
+      </div>
+    </div>
+
+    <!-- WACC Section -->
+    <div class="section-card">
+      <div class="section-title">
+        📊 WACC (Weighted Average Cost of Capital)
+      </div>
+      
+      <div class="mb-4">
+        <p class="text-gray-600 text-sm mb-3" id="waccFormula">
+          Formula: WACC = (E/V × Re) + (D/V × Rd × (1 - Tax Rate))
+        </p>
+        
+        <!-- Cost of Equity Input -->
+        <div class="flex items-center gap-4 mb-3">
+          <label for="costOfEquityInput" class="text-sm font-semibold text-gray-700">
+            Cost of Equity (Re):
+          </label>
+          <input 
+            type="number" 
+            id="costOfEquityInput" 
+            value="13" 
+            step="0.1" 
+            min="0" 
+            max="50"
+            class="border border-gray-300 rounded px-3 py-1 w-24 text-center"
+          />
+          <span class="text-sm text-gray-600">%</span>
+          <button 
+            onclick="recalculateWACC()" 
+            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded text-sm transition"
+          >
+            Calculate WACC
+          </button>
+        </div>
+        
+        <p class="text-xs text-gray-500">
+          💡 Default: 13% (Indian auto sector average). Adjust based on your risk assessment.
+        </p>
+      </div>
+      
+      <div class="bg-blue-50 p-3 rounded mb-4 hidden" id="waccSummary">
+        <div class="grid grid-cols-2 gap-2 text-sm">
+          <div>
+            <span class="font-semibold">Current WACC:</span> 
+            <span id="currentWACC" class="text-blue-700 font-bold">-</span>
+          </div>
+          <div>
+            <span class="font-semibold">Average WACC:</span> 
+            <span id="avgWACC" class="text-blue-700 font-bold">-</span>
+          </div>
+          <div>
+            <span class="font-semibold">Cost of Equity (Re):</span> 
+            <span id="reUsed" class="text-blue-700">-</span>
+          </div>
+          <div>
+            <span class="font-semibold">Avg Tax Rate:</span> 
+            <span id="avgTaxRate" class="text-blue-700">-</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="overflow-x-auto">
+        <table id="waccTable"></table>
+      </div>
+    </div>
+
+    <!-- Terminal Value & DCF Valuation Section -->
+    <div class="section-card">
+      <div class="section-title">
+        💰 TERMINAL VALUE & DCF VALUATION
+      </div>
+      
+      <div class="mb-4">
+        <p class="text-gray-600 text-sm mb-3">
+          Gordon Growth Model: TV = FCFF(n) × (1 + g) / (WACC - g)
+        </p>
+        
+        <!-- User Inputs -->
+        <div class="bg-gray-50 p-4 rounded mb-4">
+          <h4 class="font-semibold text-gray-700 mb-3">Valuation Parameters:</h4>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="flex items-center gap-4">
+              <label for="growthRateInput" class="text-sm font-semibold text-gray-700">
+                Perpetual Growth Rate (g):
+              </label>
+              <input 
+                type="number" 
+                id="growthRateInput" 
+                value="4" 
+                step="0.1" 
+                min="0" 
+                max="10"
+                class="border border-gray-300 rounded px-3 py-1 w-24 text-center"
+              />
+              <span class="text-sm text-gray-600">%</span>
+            </div>
+            
+            <div class="flex items-center gap-4">
+              <label for="forecastPeriodInput" class="text-sm font-semibold text-gray-700">
+                Forecast Period:
+              </label>
+              <input 
+                type="number" 
+                id="forecastPeriodInput" 
+                value="5" 
+                step="1" 
+                min="3" 
+                max="10"
+                class="border border-gray-300 rounded px-3 py-1 w-24 text-center"
+              />
+              <span class="text-sm text-gray-600">years</span>
+            </div>
+          </div>
+          
+          <button 
+            onclick="recalculateTerminalValue()" 
+            class="mt-4 bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded transition"
+          >
+            Calculate DCF Valuation
+          </button>
+          
+          <p class="text-xs text-gray-500 mt-2">
+            💡 Default: 4% growth (conservative). Must be less than WACC. Typical range: 2-7%
+          </p>
+        </div>
+        
+        <!-- Valuation Summary -->
+        <div class="bg-green-50 p-4 rounded mb-4 hidden" id="valuationSummaryBox">
+          <h4 class="font-semibold text-gray-700 mb-3">📈 Valuation Summary:</h4>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div>
+              <span class="text-gray-600">Enterprise Value:</span>
+              <div id="enterpriseValue" class="text-lg font-bold text-green-700">-</div>
+            </div>
+            <div>
+              <span class="text-gray-600">Equity Value:</span>
+              <div id="equityValue" class="text-lg font-bold text-green-700">-</div>
+            </div>
+            <div>
+              <span class="text-gray-600">Value per Share:</span>
+              <div id="valuePerShare" class="text-lg font-bold text-green-700">-</div>
+            </div>
+            <div>
+              <span class="text-gray-600">Upside/Downside:</span>
+              <div id="upsideDownside" class="text-lg font-bold">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- FCFF Forecast Table -->
+      <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">FCFF Forecast & Present Value</h3>
+      <div class="overflow-x-auto">
+        <table id="fcffForecastTable"></table>
+      </div>
+      
+      <!-- Terminal Value Breakdown -->
+      <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">Terminal Value Calculation</h3>
+      <div class="overflow-x-auto">
+        <table id="terminalValueTable"></table>
+      </div>
+      
+      <!-- DCF Valuation Summary -->
+      <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">DCF Valuation Breakdown</h3>
+      <div class="overflow-x-auto">
+        <table id="dcfValuationTable"></table>
+      </div>
+      
+      <!-- Sensitivity Analysis -->
+      <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">Sensitivity Analysis (Growth Rate)</h3>
+      <div class="overflow-x-auto">
+        <table id="sensitivityTable"></table>
+      </div>
+    </div>
+
+    <!-- Scenario Analysis Section -->
+    <div class="section-card">
+      <div class="section-title">
+        🎯 SCENARIO ANALYSIS (Bull/Base/Bear)
+      </div>
+      
+      <p class="text-gray-600 mb-4 text-sm">
+        Compare valuations under different economic scenarios to understand risk/reward profile
+      </p>
+      
+      <button 
+        onclick="calculateScenarioAnalysis()" 
+        class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded transition mb-4"
+      >
+        Calculate All Scenarios
+      </button>
+      
+      <!-- Scenario Results -->
+      <div id="scenarioResults" class="hidden">
+        
+        <!-- Investment Recommendation -->
+        <div class="bg-blue-50 p-4 rounded mb-4">
+          <h4 class="font-semibold text-gray-700 mb-2">📊 Investment Recommendation:</h4>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <span class="text-sm text-gray-600">Overall:</span>
+              <div id="overallRecommendation" class="text-2xl font-bold"></div>
+            </div>
+            <div>
+              <span class="text-sm text-gray-600">Expected Value:</span>
+              <div id="expectedValue" class="text-xl font-bold text-blue-700"></div>
+              <div id="expectedVsMarket" class="text-sm"></div>
+            </div>
+          </div>
+          <p id="recommendationRationale" class="text-sm text-gray-600 mt-2"></p>
+        </div>
+        
+        <!-- Scenario Comparison Table -->
+        <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">Scenario Comparison</h3>
+        <div class="overflow-x-auto">
+          <table id="scenarioComparisonTable"></table>
+        </div>
+        
+        <!-- Valuation Range -->
+        <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">Valuation Range</h3>
+        <div class="bg-gray-50 p-4 rounded">
+          <div class="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <div class="text-sm text-gray-600">Minimum (Bear)</div>
+              <div id="rangeMin" class="text-xl font-bold text-red-600"></div>
+            </div>
+            <div>
+              <div class="text-sm text-gray-600">Expected (Weighted)</div>
+              <div id="rangeExpected" class="text-xl font-bold text-blue-600"></div>
+            </div>
+            <div>
+              <div class="text-sm text-gray-600">Maximum (Bull)</div>
+              <div id="rangeMax" class="text-xl font-bold text-green-600"></div>
+            </div>
+          </div>
+          <div class="mt-3 text-center">
+            <span class="text-sm text-gray-600">Current Market Price: </span>
+            <span id="currentMarketPrice" class="text-lg font-bold"></span>
+          </div>
+        </div>
+        
+        <!-- Risk/Reward Analysis -->
+        <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">Risk/Reward Analysis</h3>
+        <div class="overflow-x-auto">
+          <table id="riskRewardTable"></table>
+        </div>
+        
+      </div>
+    </div>
+
+    <!-- Altman Z-Score Section -->
+    <div class="section-card">
+      <div class="section-title">
+        ⚠️ ALTMAN Z-SCORE (Bankruptcy Risk Assessment)
+      </div>
+      
+      <p class="text-gray-600 mb-4 text-sm">
+        Predict bankruptcy risk using the Altman Z-Score model (Manufacturing Companies)
+      </p>
+      
+      <button 
+        onclick="calculateAltmanZScore()" 
+        class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded transition mb-4"
+      >
+        Calculate Z-Score
+      </button>
+      
+      <!-- Z-Score Results -->
+      <div id="zscoreResults" class="hidden">
+        
+        <!-- Summary Card -->
+        <div class="bg-gradient-to-r from-red-50 to-orange-50 p-6 rounded-lg mb-4 border-2 border-red-200">
+          <h4 class="font-semibold text-gray-700 mb-3">📊 Latest Z-Score Analysis:</h4>
+          <div class="grid grid-cols-3 gap-4">
+            <div class="text-center">
+              <div class="text-sm text-gray-600">Year</div>
+              <div id="latestYear" class="text-xl font-bold text-gray-800"></div>
+            </div>
+            <div class="text-center">
+              <div class="text-sm text-gray-600">Z-Score</div>
+              <div id="latestZScore" class="text-3xl font-bold"></div>
+            </div>
+            <div class="text-center">
+              <div class="text-sm text-gray-600">Risk Status</div>
+              <div id="latestRiskStatus" class="text-lg font-bold"></div>
+            </div>
+          </div>
+          
+          <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span class="text-gray-600">Average Z-Score:</span> 
+              <span id="avgZScore" class="font-bold text-gray-800"></span>
+            </div>
+            <div>
+              <span class="text-gray-600">Trend:</span> 
+              <span id="trendDirection" class="font-bold"></span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Risk Zones Reference -->
+        <div class="bg-gray-50 p-4 rounded mb-4">
+          <h5 class="font-semibold text-gray-700 mb-2">📈 Z-Score Interpretation Guide:</h5>
+          <div class="grid grid-cols-3 gap-3 text-sm">
+            <div class="bg-green-100 p-3 rounded border-l-4 border-green-500">
+              <div class="font-bold text-green-700">Safe Zone</div>
+              <div class="text-gray-600">Z > 2.99</div>
+              <div class="text-xs text-gray-500 mt-1">Low bankruptcy risk</div>
+            </div>
+            <div class="bg-yellow-100 p-3 rounded border-l-4 border-yellow-500">
+              <div class="font-bold text-yellow-700">Grey Zone</div>
+              <div class="text-gray-600">1.81 - 2.99</div>
+              <div class="text-xs text-gray-500 mt-1">Moderate risk</div>
+            </div>
+            <div class="bg-red-100 p-3 rounded border-l-4 border-red-500">
+              <div class="font-bold text-red-700">Distress Zone</div>
+              <div class="text-gray-600">Z < 1.81</div>
+              <div class="text-xs text-gray-500 mt-1">High risk</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Z-Score Trend Table -->
+        <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">Historical Z-Scores</h3>
+        <div class="overflow-x-auto">
+          <table id="zscoreTable"></table>
+        </div>
+        
+        <!-- Component Breakdown -->
+        <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">Z-Score Components (Latest Year)</h3>
+        <div class="overflow-x-auto">
+          <table id="zscoreComponentsTable"></table>
+        </div>
+        
+        <!-- Interpretation & Recommendations -->
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-blue-50 p-4 rounded">
+            <h5 class="font-semibold text-blue-700 mb-2">💡 Interpretation:</h5>
+            <ul id="interpretationList" class="text-sm text-gray-700 space-y-1"></ul>
+          </div>
+          <div class="bg-orange-50 p-4 rounded">
+            <h5 class="font-semibold text-orange-700 mb-2">📋 Recommendations:</h5>
+            <ul id="recommendationsList" class="text-sm text-gray-700 space-y-1"></ul>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+function uploadFile() {
+    const file = document.getElementById("excelFile").files[0];
+    const loadingStatus = document.getElementById("loadingStatus");
+    const resultsContainer = document.getElementById("resultsContainer");
+
+    if (!file) {
+        alert("Please upload Excel file");
+        return;
+    }
+
+    // Show loading
+    loadingStatus.classList.remove("hidden");
+    resultsContainer.classList.add("hidden");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // Fetch Historical FS
+    fetch("/financial-modelling/upload", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+            loadingStatus.classList.add("hidden");
+            return;
+        }
+        renderTable("incomeTable", data.years, data.income_statement);
+        renderTable("balanceTable", data.years, data.balance_sheet);
+        renderTable("cashFlowTable", data.years, data.cash_flow);
+        
+        // Show results
+        resultsContainer.classList.remove("hidden");
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error while processing Historical FS");
+        loadingStatus.classList.add("hidden");
+    });
+
+    // Fetch Ratio Analysis
+    const formData2 = new FormData();
+    formData2.append("file", file);
+    
+    fetch("/financial-modelling/ratio-analysis/upload", {
+        method: "POST",
+        body: formData2
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+            return;
+        }
+        renderRatioTable("ratioTable", data.years, data.ratio_analysis);
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error while processing Ratio Analysis");
+    });
+
+    // Fetch Common Size Statement
+    const formData3 = new FormData();
+    formData3.append("file", file);
+    
+    fetch("/financial-modelling/common-size/upload", {
+        method: "POST",
+        body: formData3
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+            return;
+        }
+        renderCommonSizeTable("commonSizeIncomeTable", data.years, data.common_size_income);
+        renderCommonSizeTable("commonSizeBalanceTable", data.years, data.common_size_balance);
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error while processing Common Size Statement");
+    });
+
+    // Fetch Forecasting
+    const formData4 = new FormData();
+    formData4.append("file", file);
+    formData4.append("forecast_years", 5);  // 5 years forecast
+    
+    fetch("/financial-modelling/forecasting/upload", {
+        method: "POST",
+        body: formData4
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+            return;
+        }
+        renderForecastTable("salesForecastTable", data.years, data.sales, data.historical_years_count);
+        renderForecastTable("ebitdaForecastTable", data.years, data.ebitda, data.historical_years_count);
+        renderForecastTable("epsForecastTable", data.years, data.eps, data.historical_years_count);
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error while processing Forecasting");
+    });
+
+    // Fetch FCFF
+    const formData5 = new FormData();
+    formData5.append("file", file);
+    
+    fetch("/financial-modelling/fcff/upload", {
+        method: "POST",
+        body: formData5
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+            return;
+        }
+        document.getElementById("fcffMethod").textContent = 
+            `${data.method} | Average Tax Rate: ${data.avg_tax_rate}%`;
+        renderFCFFTable("fcffTable", data.years, data.fcff_data);
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error while processing FCFF");
+    });
+
+    // Fetch WACC (initial calculation with default Re = 13%)
+    fetchWACC(file, 13.0);
+    
+    // Fetch Terminal Value & DCF (initial calculation)
+    fetchTerminalValue(file, 13.0, 4.0, 5);
+    
+    // Store file for scenario analysis
+    uploadedFile = file;
+}
+
+// Global variable to store the uploaded file for WACC recalculation
+let uploadedFile = null;
+
+function calculateScenarioAnalysis() {
+    if (!uploadedFile) {
+        alert("Please upload a file first!");
+        return;
+    }
+    
+    const loadingStatus = document.getElementById("loadingStatus");
+    loadingStatus.classList.remove("hidden");
+    
+    const forecastPeriod = parseInt(document.getElementById("forecastPeriodInput").value) || 5;
+    
+    const formData = new FormData();
+    formData.append("file", uploadedFile);
+    formData.append("forecast_years", forecastPeriod);
+    
+    fetch("/financial-modelling/scenario-analysis/upload", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+            return;
+        }
+        
+        // Display scenario results
+        displayScenarioResults(data);
+        
+        loadingStatus.classList.add("hidden");
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error while processing Scenario Analysis");
+        loadingStatus.classList.add("hidden");
+    });
+}
+
+function displayScenarioResults(data) {
+    // Show results section
+    document.getElementById("scenarioResults").classList.remove("hidden");
+    
+    // Update recommendation
+    const rec = data.overall_recommendation;
+    const recElem = document.getElementById("overallRecommendation");
+    recElem.textContent = rec;
+    recElem.className = rec === "BUY" ? "text-2xl font-bold text-green-600" : 
+                         (rec === "HOLD" ? "text-2xl font-bold text-yellow-600" : "text-2xl font-bold text-red-600");
+    
+    document.getElementById("recommendationRationale").textContent = data.overall_rationale;
+    document.getElementById("expectedValue").textContent = `₹${data.expected_value.toFixed(2)}`;
+    document.getElementById("expectedVsMarket").textContent = `(${data.expected_vs_market > 0 ? '+' : ''}${data.expected_vs_market.toFixed(2)}% vs market)`;
+    
+    // Update valuation range
+    document.getElementById("rangeMin").textContent = `₹${data.valuation_range.min.toFixed(2)}`;
+    document.getElementById("rangeExpected").textContent = `₹${data.expected_value.toFixed(2)}`;
+    document.getElementById("rangeMax").textContent = `₹${data.valuation_range.max.toFixed(2)}`;
+    document.getElementById("currentMarketPrice").textContent = `₹${data.current_market_price.toFixed(2)}`;
+    
+    // Render tables
+    renderScenarioComparisonTable(data);
+    renderRiskRewardTable(data.risk_reward);
+}
+
+function renderScenarioComparisonTable(data) {
+    const table = document.getElementById("scenarioComparisonTable");
+    table.innerHTML = "";
+    
+    const scenarios = data.scenarios;
+    
+    let thead = `<thead><tr><th>Parameter</th>
+                 <th style="background:#d4edda;">🐂 Bull Case</th>
+                 <th style="background:#fff3cd;">📊 Base Case</th>
+                 <th style="background:#f8d7da;">🐻 Bear Case</th></tr></thead>`;
+    
+    let tbody = "<tbody>";
+    
+    // Assumptions section
+    tbody += `<tr style="background:#f0f0f0; font-weight:bold;"><td colspan="4">ASSUMPTIONS</td></tr>`;
+    tbody += `<tr><td>Description</td>
+              <td style="font-size:0.85em;">${scenarios.bull.description}</td>
+              <td style="font-size:0.85em;">${scenarios.base.description}</td>
+              <td style="font-size:0.85em;">${scenarios.bear.description}</td></tr>`;
+    tbody += `<tr><td>Cost of Equity (Re)</td>
+              <td>${scenarios.bull.assumptions.cost_of_equity}%</td>
+              <td>${scenarios.base.assumptions.cost_of_equity}%</td>
+              <td>${scenarios.bear.assumptions.cost_of_equity}%</td></tr>`;
+    tbody += `<tr><td>WACC</td>
+              <td>${scenarios.bull.assumptions.wacc}%</td>
+              <td>${scenarios.base.assumptions.wacc}%</td>
+              <td>${scenarios.bear.assumptions.wacc}%</td></tr>`;
+    tbody += `<tr><td>Terminal Growth (g)</td>
+              <td>${scenarios.bull.assumptions.terminal_growth}%</td>
+              <td>${scenarios.base.assumptions.terminal_growth}%</td>
+              <td>${scenarios.bear.assumptions.terminal_growth}%</td></tr>`;
+    
+    // Valuation section
+    tbody += `<tr class="gap-row"><td colspan="4"></td></tr>`;
+    tbody += `<tr style="background:#f0f0f0; font-weight:bold;"><td colspan="4">VALUATION RESULTS</td></tr>`;
+    tbody += `<tr><td>Enterprise Value</td>
+              <td>₹${scenarios.bull.enterprise_value.toFixed(2)} Cr</td>
+              <td>₹${scenarios.base.enterprise_value.toFixed(2)} Cr</td>
+              <td>₹${scenarios.bear.enterprise_value.toFixed(2)} Cr</td></tr>`;
+    tbody += `<tr><td>Equity Value</td>
+              <td>₹${scenarios.bull.equity_value.toFixed(2)} Cr</td>
+              <td>₹${scenarios.base.equity_value.toFixed(2)} Cr</td>
+              <td>₹${scenarios.bear.equity_value.toFixed(2)} Cr</td></tr>`;
+    tbody += `<tr style="font-weight:bold; font-size:1.1em;"><td>Value per Share</td>
+              <td style="background:#d4edda;">₹${scenarios.bull.value_per_share.toFixed(2)}</td>
+              <td style="background:#fff3cd;">₹${scenarios.base.value_per_share.toFixed(2)}</td>
+              <td style="background:#f8d7da;">₹${scenarios.bear.value_per_share.toFixed(2)}</td></tr>`;
+    
+    // vs Market section
+    tbody += `<tr class="gap-row"><td colspan="4"></td></tr>`;
+    tbody += `<tr style="background:#f0f0f0; font-weight:bold;"><td colspan="4">vs MARKET PRICE (₹${data.current_market_price.toFixed(2)})</td></tr>`;
+    tbody += `<tr><td>Upside / (Downside)</td>
+              <td class="text-green-600 font-bold">${scenarios.bull.upside_downside > 0 ? '+' : ''}${scenarios.bull.upside_downside.toFixed(2)}%</td>
+              <td class="${scenarios.base.upside_downside >= 0 ? 'text-green-600' : 'text-red-600'} font-bold">${scenarios.base.upside_downside > 0 ? '+' : ''}${scenarios.base.upside_downside.toFixed(2)}%</td>
+              <td class="text-red-600 font-bold">${scenarios.bear.upside_downside > 0 ? '+' : ''}${scenarios.bear.upside_downside.toFixed(2)}%</td></tr>`;
+    tbody += `<tr><td>Recommendation</td>
+              <td class="text-green-600 font-bold">${data.comparison_summary.bull.recommendation}</td>
+              <td class="${data.comparison_summary.base.recommendation === 'BUY' ? 'text-green-600' : (data.comparison_summary.base.recommendation === 'HOLD' ? 'text-yellow-600' : 'text-red-600')} font-bold">${data.comparison_summary.base.recommendation}</td>
+              <td class="text-red-600 font-bold">${data.comparison_summary.bear.recommendation}</td></tr>`;
+    
+    // Probability section
+    tbody += `<tr class="gap-row"><td colspan="4"></td></tr>`;
+    tbody += `<tr style="background:#f0f0f0; font-weight:bold;"><td colspan="4">PROBABILITY WEIGHTING</td></tr>`;
+    tbody += `<tr><td>Probability</td>
+              <td>${(data.probabilities.bull * 100).toFixed(0)}%</td>
+              <td>${(data.probabilities.base * 100).toFixed(0)}%</td>
+              <td>${(data.probabilities.bear * 100).toFixed(0)}%</td></tr>`;
+    tbody += `<tr><td>Weighted Value</td>
+              <td>₹${(scenarios.bull.value_per_share * data.probabilities.bull).toFixed(2)}</td>
+              <td>₹${(scenarios.base.value_per_share * data.probabilities.base).toFixed(2)}</td>
+              <td>₹${(scenarios.bear.value_per_share * data.probabilities.bear).toFixed(2)}</td></tr>`;
+    tbody += `<tr style="background:#e3f2fd; font-weight:bold;"><td colspan="3">Expected Value (Probability-Weighted)</td>
+              <td style="font-size:1.2em;">₹${data.expected_value.toFixed(2)}</td></tr>`;
+    
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function renderRiskRewardTable(rr) {
+    const table = document.getElementById("riskRewardTable");
+    table.innerHTML = "";
+    
+    let thead = "<thead><tr><th>Metric</th><th>Value</th></tr></thead>";
+    let tbody = "<tbody>";
+    
+    tbody += `<tr><td>Upside Potential (Bull Case)</td><td class="text-green-600 font-bold">+${rr.upside_potential.toFixed(2)}%</td></tr>`;
+    tbody += `<tr><td>Downside Risk (Bear Case)</td><td class="text-red-600 font-bold">-${rr.downside_risk.toFixed(2)}%</td></tr>`;
+    tbody += `<tr style="background:#f0f0f0; font-weight:bold;"><td>Risk/Reward Ratio</td><td>${rr.risk_reward_ratio.toFixed(2)}:1</td></tr>`;
+    tbody += `<tr style="background:#${rr.interpretation === 'Favorable' ? 'd4edda' : 'f8d7da'}; font-weight:bold;">
+              <td>Assessment</td><td>${rr.interpretation}</td></tr>`;
+    
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function fetchWACC(file, costOfEquity) {
+    uploadedFile = file; // Store for recalculation
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("cost_of_equity", costOfEquity);
+    
+    fetch("/financial-modelling/wacc/upload", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+            return;
+        }
+        
+        // Update summary
+        document.getElementById("currentWACC").textContent = data.current_wacc + "%";
+        document.getElementById("avgWACC").textContent = data.avg_wacc + "%";
+        document.getElementById("reUsed").textContent = data.cost_of_equity_used + "%";
+        document.getElementById("avgTaxRate").textContent = data.avg_tax_rate + "%";
+        document.getElementById("waccSummary").classList.remove("hidden");
+        
+        // Render table
+        renderWACCTable("waccTable", data.years, data.wacc_data);
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error while processing WACC");
+    });
+}
+
+function fetchTerminalValue(file, costOfEquity, growthRate, forecastYears) {
+    uploadedFile = file; // Store for recalculation
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("cost_of_equity", costOfEquity);
+    formData.append("growth_rate", growthRate);
+    formData.append("forecast_years", forecastYears);
+    
+    fetch("/financial-modelling/terminal-value/upload", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+            return;
+        }
+        
+        // Update valuation summary
+        const vs = data.valuation_summary;
+        document.getElementById("enterpriseValue").textContent = `₹${vs.enterprise_value.toFixed(2)} Cr`;
+        document.getElementById("equityValue").textContent = `₹${vs.equity_value.toFixed(2)} Cr`;
+        document.getElementById("valuePerShare").textContent = `₹${vs.value_per_share.toFixed(2)}`;
+        
+        const updownElem = document.getElementById("upsideDownside");
+        updownElem.textContent = `${vs.upside_downside.toFixed(2)}%`;
+        updownElem.className = vs.upside_downside >= 0 ? "text-lg font-bold text-green-700" : "text-lg font-bold text-red-700";
+        
+        document.getElementById("valuationSummaryBox").classList.remove("hidden");
+        
+        // Render tables
+        renderFCFFForecastTable("fcffForecastTable", data.fcff_forecast_table);
+        renderTerminalValueTable("terminalValueTable", data.terminal_value_breakdown);
+        renderDCFValuationTable("dcfValuationTable", data.valuation_summary);
+        renderSensitivityTable("sensitivityTable", data.sensitivity_analysis);
+        
+        loadingStatus.classList.add("hidden");
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error while processing Terminal Value & DCF");
+        loadingStatus.classList.add("hidden");
+    });
+}
+
+function recalculateWACC() {
+    if (!uploadedFile) {
+        alert("Please upload a file first!");
+        return;
+    }
+    
+    const costOfEquity = parseFloat(document.getElementById("costOfEquityInput").value);
+    
+    if (isNaN(costOfEquity) || costOfEquity < 0 || costOfEquity > 50) {
+        alert("Please enter a valid Cost of Equity between 0% and 50%");
+        return;
+    }
+    
+    // Show loading
+    const loadingStatus = document.getElementById("loadingStatus");
+    loadingStatus.classList.remove("hidden");
+    
+    fetchWACC(uploadedFile, costOfEquity);
+}
+
+function recalculateTerminalValue() {
+    if (!uploadedFile) {
+        alert("Please upload a file first!");
+        return;
+    }
+    
+    const costOfEquity = parseFloat(document.getElementById("costOfEquityInput").value);
+    const growthRate = parseFloat(document.getElementById("growthRateInput").value);
+    const forecastPeriod = parseInt(document.getElementById("forecastPeriodInput").value);
+    
+    if (isNaN(costOfEquity) || costOfEquity < 0 || costOfEquity > 50) {
+        alert("Please enter a valid Cost of Equity between 0% and 50%");
+        return;
+    }
+    
+    if (isNaN(growthRate) || growthRate < 0 || growthRate > 10) {
+        alert("Please enter a valid Growth Rate between 0% and 10%");
+        return;
+    }
+    
+    if (isNaN(forecastPeriod) || forecastPeriod < 3 || forecastPeriod > 10) {
+        alert("Please enter a valid Forecast Period between 3 and 10 years");
+        return;
+    }
+    
+    // Show loading
+    const loadingStatus = document.getElementById("loadingStatus");
+    loadingStatus.classList.remove("hidden");
+    
+    fetchTerminalValue(uploadedFile, costOfEquity, growthRate, forecastPeriod);
+}
+
+function renderFCFFForecastTable(tableId, data) {
+    const table = document.getElementById(tableId);
+    table.innerHTML = "";
+
+    let thead = "<thead><tr><th>Year</th><th>Forecasted FCFF</th><th>Discount Factor</th><th>Present Value</th></tr></thead>";
+    let tbody = "<tbody>";
+
+    data.forEach(row => {
+        tbody += `<tr>
+            <td style="font-weight:bold;">${row.year}</td>
+            <td>₹${row.fcff.toFixed(2)} Cr</td>
+            <td>${row.discount_factor.toFixed(4)}</td>
+            <td>₹${row.present_value.toFixed(2)} Cr</td>
+        </tr>`;
+    });
+
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function renderTerminalValueTable(tableId, data) {
+    const table = document.getElementById(tableId);
+    table.innerHTML = "";
+
+    let thead = "<thead><tr><th>Component</th><th>Value</th></tr></thead>";
+    let tbody = "<tbody>";
+
+    tbody += `
+        <tr><td>FCFF (Terminal Year)</td><td>₹${data.fcff_terminal_year.toFixed(2)} Cr</td></tr>
+        <tr><td>Perpetual Growth Rate (g)</td><td style="font-style:italic;">${data.growth_rate.toFixed(2)}%</td></tr>
+        <tr><td>WACC (Discount Rate)</td><td style="font-style:italic;">${data.wacc.toFixed(2)}%</td></tr>
+        <tr class="gap-row"><td colspan="2"></td></tr>
+        <tr style="background:#fff3cd; font-weight:bold;">
+            <td>Terminal Value</td>
+            <td>₹${data.terminal_value.toFixed(2)} Cr</td>
+        </tr>
+        <tr><td>Discount Factor (Year ${data.discount_factor})</td><td>${data.discount_factor.toFixed(4)}</td></tr>
+        <tr style="background:#d4edda; font-weight:bold;">
+            <td>Present Value of Terminal Value</td>
+            <td>₹${data.pv_terminal_value.toFixed(2)} Cr</td>
+        </tr>
+    `;
+
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function renderDCFValuationTable(tableId, data) {
+    const table = document.getElementById(tableId);
+    table.innerHTML = "";
+
+    let thead = "<thead><tr><th>Component</th><th>Value</th></tr></thead>";
+    let tbody = "<tbody>";
+
+    tbody += `
+        <tr><td>PV of Forecasted FCFFs</td><td>₹${data.pv_forecasted_fcffs.toFixed(2)} Cr</td></tr>
+        <tr><td>PV of Terminal Value</td><td>₹${data.pv_terminal_value.toFixed(2)} Cr</td></tr>
+        <tr class="gap-row"><td colspan="2"></td></tr>
+        <tr style="background:#cfe2ff; font-weight:bold;">
+            <td>Enterprise Value</td>
+            <td>₹${data.enterprise_value.toFixed(2)} Cr</td>
+        </tr>
+        <tr><td>Less: Net Debt</td><td>₹${data.less_net_debt.toFixed(2)} Cr</td></tr>
+        <tr class="gap-row"><td colspan="2"></td></tr>
+        <tr style="background:#d4edda; font-weight:bold;">
+            <td>Equity Value</td>
+            <td>₹${data.equity_value.toFixed(2)} Cr</td>
+        </tr>
+        <tr><td>Shares Outstanding</td><td>${data.shares_outstanding.toFixed(2)} Cr</td></tr>
+        <tr class="gap-row"><td colspan="2"></td></tr>
+        <tr style="background:#fff3cd; font-weight:bold; font-size:1.1em;">
+            <td>Value per Share</td>
+            <td>₹${data.value_per_share.toFixed(2)}</td>
+        </tr>
+        <tr><td>Current Market Price</td><td>₹${data.current_market_price.toFixed(2)}</td></tr>
+        <tr style="font-weight:bold;">
+            <td>Upside / (Downside)</td>
+            <td class="${data.upside_downside >= 0 ? 'text-green-600' : 'text-red-600'}">${data.upside_downside.toFixed(2)}%</td>
+        </tr>
+    `;
+
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function renderSensitivityTable(tableId, data) {
+    const table = document.getElementById(tableId);
+    table.innerHTML = "";
+
+    let thead = "<thead><tr><th>Growth Rate (g)</th><th>Terminal Value</th><th>Enterprise Value</th><th>Equity Value</th><th>Value per Share</th></tr></thead>";
+    let tbody = "<tbody>";
+
+    data.forEach(row => {
+        tbody += `<tr>
+            <td style="font-style:italic;">${row.growth_rate.toFixed(1)}%</td>
+            <td>₹${row.terminal_value.toFixed(0)} Cr</td>
+            <td>₹${row.enterprise_value.toFixed(0)} Cr</td>
+            <td>₹${row.equity_value.toFixed(0)} Cr</td>
+            <td style="font-weight:bold;">₹${row.value_per_share.toFixed(2)}</td>
+        </tr>`;
+    });
+
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function renderTable(tableId, years, rows) {
+    const table = document.getElementById(tableId);
+    table.innerHTML = "";
+
+    let thead = "<thead><tr><th>Line Item</th>";
+    years.forEach(y => thead += `<th>${y}</th>`);
+    thead += "</tr></thead>";
+
+    let tbody = "<tbody>";
+
+    rows.forEach(row => {
+        const label = row[0];
+        const values = row[1];
+
+        // Gap row
+        if (label === "") {
+            tbody += `<tr class="gap-row"><td colspan="${years.length + 1}"></td></tr>`;
+            return;
+        }
+
+        // Section headers (Cash Flow)
+        if (values.every(v => v === "")) {
+            tbody += `
+                <tr class="section-row">
+                    <td colspan="${years.length + 1}">${label}</td>
+                </tr>`;
+            return;
+        }
+
+        // Normal data row
+        tbody += `<tr><td>${label}</td>`;
+
+        values.forEach(val => {
+            let cell = "0";
+
+            if (typeof val === "number") {
+                cell = val < 0
+                    ? `(${Math.abs(val).toFixed(2)})`
+                    : val.toFixed(2);
+            } else if (val === "") {
+                cell = "";
+            } else {
+                cell = val;
+            }
+
+            let cls = label.includes("%") ? "italic" : "";
+            tbody += `<td class="${cls}">${cell}</td>`;
+        });
+
+        tbody += "</tr>";
+    });
+
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function renderRatioTable(tableId, years, rows) {
+    const table = document.getElementById(tableId);
+    table.innerHTML = "";
+
+    let thead = "<thead><tr><th>Line Item</th>";
+    years.forEach(y => thead += `<th>${y}</th>`);
+    thead += "</tr></thead>";
+
+    let tbody = "<tbody>";
+
+    // Define which ratios use which suffix
+    const percentageRatios = [
+        "Sales Growth", "EBITDA Growth", "EBT Growth", "Net Profit Growth", "Dividend Growth",
+        "Gross Margin", "EBITDA Margin", "EBIT Margin", "EBT Margin", "Net Profit Margin",
+        "SalesExpenses%Sales", "Depreciation%Sales",
+        "ROCE", "Retained Earnings%", "Return on Equity%", "Self Sustained Growth Rate",
+        "CFO/Sales", "CFO/Total Assets", "CFO/Total Debt"
+    ];
+
+    const xRatios = [
+        "Interest Coverage Ratio",
+        "Debt Turnover Ratio", "Creditor Turnover Ratio", "Inventery Turnover", 
+        "Fixed Asset Turnover", "Capital Turnover Ratio"
+    ];
+
+    const daysRatios = [
+        "Debtor Days", "Payable Days", "Inventory Days", "Cash Conversion Cycle"
+    ];
+
+    rows.forEach(row => {
+        const label = row[0];
+        const values = row[1];
+
+        // Gap row
+        if (label === "") {
+            tbody += `<tr class="gap-row"><td colspan="${years.length + 1}"></td></tr>`;
+            return;
+        }
+
+        // Normal data row
+        tbody += `<tr><td>${label}</td>`;
+
+        values.forEach(val => {
+            let cell = "";
+            let isItalic = false;
+
+            // Determine suffix and decimal places
+            if (val === "" || val === null || val === undefined) {
+                cell = "";
+            } else if (typeof val === "number" || !isNaN(val)) {
+                const numVal = typeof val === "number" ? val : parseFloat(val);
+                
+                if (percentageRatios.includes(label)) {
+                    // Percentage values: 2 decimals
+                    isItalic = true;
+                    if (numVal < 0) {
+                        cell = `(${Math.abs(numVal).toFixed(2)}%)`;
+                    } else {
+                        cell = `${numVal.toFixed(2)}%`;
+                    }
+                } else if (xRatios.includes(label)) {
+                    // x values: 1 decimal
+                    if (numVal < 0) {
+                        cell = `(${Math.abs(numVal).toFixed(1)}x)`;
+                    } else {
+                        cell = `${numVal.toFixed(1)}x`;
+                    }
+                } else if (daysRatios.includes(label)) {
+                    // days values: 1 decimal
+                    if (numVal < 0) {
+                        cell = `(${Math.abs(numVal).toFixed(1)} days)`;
+                    } else {
+                        cell = `${numVal.toFixed(1)} days`;
+                    }
+                } else {
+                    // Default: 2 decimals
+                    if (numVal < 0) {
+                        cell = `(${Math.abs(numVal).toFixed(2)})`;
+                    } else {
+                        cell = `${numVal.toFixed(2)}`;
+                    }
+                }
+            } else {
+                cell = val;
+            }
+
+            let cls = isItalic ? "italic" : "";
+            tbody += `<td class="${cls}">${cell}</td>`;
+        });
+
+        tbody += "</tr>";
+    });
+
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function renderCommonSizeTable(tableId, years, rows) {
+    const table = document.getElementById(tableId);
+    table.innerHTML = "";
+
+    let thead = "<thead><tr><th>Line Item</th>";
+    years.forEach(y => thead += `<th>${y}</th>`);
+    thead += "</tr></thead>";
+
+    let tbody = "<tbody>";
+
+    rows.forEach(row => {
+        const label = row[0];
+        const values = row[1];
+
+        // Gap row
+        if (label === "") {
+            tbody += `<tr class="gap-row"><td colspan="${years.length + 1}"></td></tr>`;
+            return;
+        }
+
+        // Normal data row
+        tbody += `<tr><td>${label}</td>`;
+
+        values.forEach(val => {
+            let cell = "";
+
+            // All common size values are percentages
+            if (val === "" || val === null || val === undefined) {
+                cell = "";
+            } else if (typeof val === "number" || !isNaN(val)) {
+                const numVal = typeof val === "number" ? val : parseFloat(val);
+                
+                // Format with % suffix and 2 decimals
+                if (numVal < 0) {
+                    cell = `(${Math.abs(numVal).toFixed(2)}%)`;
+                } else {
+                    cell = `${numVal.toFixed(2)}%`;
+                }
+            } else {
+                cell = val;
+            }
+
+            // All percentage items are italic
+            tbody += `<td class="italic">${cell}</td>`;
+        });
+
+        tbody += "</tr>";
+    });
+
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function renderForecastTable(tableId, years, dataObj, historicalCount) {
+    const table = document.getElementById(tableId);
+    table.innerHTML = "";
+
+    let thead = "<thead><tr><th>Metric</th>";
+    years.forEach((y, idx) => {
+        // Mark forecasted years with a different style
+        if (idx >= historicalCount) {
+            thead += `<th style="background:#e3f2fd;">${y} <span style="font-size:10px;">(F)</span></th>`;
+        } else {
+            thead += `<th>${y}</th>`;
+        }
+    });
+    thead += "</tr></thead>";
+
+    let tbody = "<tbody>";
+
+    // Combine historical and forecasted data
+    const historical = dataObj.historical;
+    const forecasted = dataObj.forecasted;
+    const growth = dataObj.growth || [];
+
+    // Values row
+    tbody += `<tr><td style="font-weight:bold;">Value</td>`;
+    
+    // Historical values
+    for (let i = 0; i < historicalCount; i++) {
+        const val = historical[i];
+        let cell = "";
+        
+        if (typeof val === "number" || !isNaN(val)) {
+            const numVal = typeof val === "number" ? val : parseFloat(val);
+            if (numVal < 0) {
+                cell = `(${Math.abs(numVal).toFixed(2)})`;
+            } else {
+                cell = numVal.toFixed(2);
+            }
+        } else {
+            cell = "";
+        }
+        
+        tbody += `<td>${cell}</td>`;
+    }
+    
+    // Forecasted values (highlighted)
+    for (let i = 0; i < forecasted.length; i++) {
+        const val = forecasted[i];
+        let cell = "";
+        
+        if (typeof val === "number" || !isNaN(val)) {
+            const numVal = typeof val === "number" ? val : parseFloat(val);
+            if (numVal < 0) {
+                cell = `(${Math.abs(numVal).toFixed(2)})`;
+            } else {
+                cell = numVal.toFixed(2);
+            }
+        } else {
+            cell = "";
+        }
+        
+        tbody += `<td style="background:#e3f2fd; font-weight:bold;">${cell}</td>`;
+    }
+    
+    tbody += "</tr>";
+
+    // Growth rate row (if available)
+    if (growth && growth.length > 0) {
+        tbody += `<tr><td style="font-weight:bold;">Growth %</td>`;
+        
+        // Historical growth (empty for first year)
+        for (let i = 0; i < historicalCount; i++) {
+            tbody += `<td></td>`;
+        }
+        
+        // Forecasted growth
+        for (let i = 0; i < growth.length; i++) {
+            const val = growth[i];
+            let cell = "";
+            
+            if (val !== "" && val !== null && val !== undefined) {
+                const numVal = typeof val === "number" ? val : parseFloat(val);
+                if (numVal < 0) {
+                    cell = `(${Math.abs(numVal).toFixed(2)}%)`;
+                } else {
+                    cell = `${numVal.toFixed(2)}%`;
+                }
+            }
+            
+            tbody += `<td style="background:#e3f2fd; font-style:italic;">${cell}</td>`;
+        }
+        
+        tbody += "</tr>";
+    }
+
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function renderFCFFTable(tableId, years, rows) {
+    const table = document.getElementById(tableId);
+    table.innerHTML = "";
+
+    let thead = "<thead><tr><th>Component</th>";
+    years.forEach(y => thead += `<th>${y}</th>`);
+    thead += "</tr></thead>";
+
+    let tbody = "<tbody>";
+
+    rows.forEach(row => {
+        const label = row[0];
+        const values = row[1];
+
+        // Gap row
+        if (label === "") {
+            tbody += `<tr class="gap-row"><td colspan="${years.length + 1}"></td></tr>`;
+            return;
+        }
+
+        // Special styling for FCFF row
+        const isFCFF = label.includes("FCFF (Free Cash Flow");
+        const isGrowth = label.includes("Growth");
+        const isMargin = label.includes("Margin");
+        const isTaxRate = label.includes("Tax Rate");
+        
+        const rowStyle = isFCFF ? 'style="background:#e8f5e9; font-weight:bold;"' : '';
+        
+        tbody += `<tr ${rowStyle}><td style="font-weight:bold;">${label}</td>`;
+
+        values.forEach(val => {
+            let cell = "";
+            let isItalic = false;
+
+            if (val === "" || val === null || val === undefined) {
+                cell = "";
+            } else if (typeof val === "number" || !isNaN(val)) {
+                const numVal = typeof val === "number" ? val : parseFloat(val);
+                
+                // Format based on type
+                if (isGrowth || isMargin || isTaxRate) {
+                    // Percentage values
+                    isItalic = true;
+                    if (numVal < 0) {
+                        cell = `(${Math.abs(numVal).toFixed(2)}%)`;
+                    } else {
+                        cell = `${numVal.toFixed(2)}%`;
+                    }
+                } else {
+                    // Regular values (₹ Crores)
+                    if (numVal < 0) {
+                        cell = `(${Math.abs(numVal).toFixed(2)})`;
+                    } else {
+                        cell = numVal.toFixed(2);
+                    }
+                }
+            } else {
+                cell = val;
+            }
+
+            const cellStyle = isFCFF ? 'style="background:#e8f5e9; font-weight:bold;"' : '';
+            const cls = isItalic ? "italic" : "";
+            tbody += `<td class="${cls}" ${cellStyle}>${cell}</td>`;
+        });
+
+        tbody += "</tr>";
+    });
+
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function renderWACCTable(tableId, years, rows) {
+    const table = document.getElementById(tableId);
+    table.innerHTML = "";
+
+    let thead = "<thead><tr><th>Component</th>";
+    years.forEach(y => thead += `<th>${y}</th>`);
+    thead += "</tr></thead>";
+
+    let tbody = "<tbody>";
+
+    rows.forEach(row => {
+        const label = row[0];
+        const values = row[1];
+
+        // Gap row
+        if (label === "") {
+            tbody += `<tr class="gap-row"><td colspan="${years.length + 1}"></td></tr>`;
+            return;
+        }
+
+        // Special styling for WACC row
+        const isWACC = label === "WACC";
+        const isWeight = label.includes("Weight");
+        const isPercentage = label.includes("Cost") || label.includes("Tax Rate") || label.includes("WACC") || label.includes("Weight");
+        
+        const rowStyle = isWACC ? 'style="background:#fff3cd; font-weight:bold;"' : '';
+        
+        tbody += `<tr ${rowStyle}><td style="font-weight:bold;">${label}</td>`;
+
+        values.forEach(val => {
+            let cell = "";
+            let isItalic = false;
+
+            if (val === "" || val === null || val === undefined) {
+                cell = "";
+            } else if (typeof val === "number" || !isNaN(val)) {
+                const numVal = typeof val === "number" ? val : parseFloat(val);
+                
+                // Format based on type
+                if (isPercentage) {
+                    // Percentage values
+                    isItalic = true;
+                    if (numVal < 0) {
+                        cell = `(${Math.abs(numVal).toFixed(2)}%)`;
+                    } else {
+                        cell = `${numVal.toFixed(2)}%`;
+                    }
+                } else {
+                    // Regular values (₹ Crores)
+                    if (numVal < 0) {
+                        cell = `(${Math.abs(numVal).toFixed(2)})`;
+                    } else {
+                        cell = numVal.toFixed(2);
+                    }
+                }
+            } else {
+                cell = val;
+            }
+
+            const cellStyle = isWACC ? 'style="background:#fff3cd; font-weight:bold;"' : '';
+            const cls = isItalic ? "italic" : "";
+            tbody += `<td class="${cls}" ${cellStyle}>${cell}</td>`;
+        });
+
+        tbody += "</tr>";
+    });
+
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+// ===============================
+// ALTMAN Z-SCORE CALCULATION
+// ===============================
+function calculateAltmanZScore() {
+    const file = document.getElementById("excelFile").files[0];
+    
+    if (!file) {
+        alert("Please upload Excel file first");
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    fetch("/financial-modelling/altman-zscore/upload", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+            return;
+        }
+        
+        // Display results
+        const resultsDiv = document.getElementById("zscoreResults");
+        resultsDiv.classList.remove("hidden");
+        
+        // Update summary
+        const summary = data.summary;
+        document.getElementById("latestYear").textContent = summary.latest_year;
+        document.getElementById("latestZScore").textContent = summary.latest_z_score;
+        
+        // Color code the Z-Score
+        const zScoreElement = document.getElementById("latestZScore");
+        if (summary.latest_z_score > 2.99) {
+            zScoreElement.style.color = "#16a34a"; // green
+        } else if (summary.latest_z_score > 1.81) {
+            zScoreElement.style.color = "#ca8a04"; // yellow
+        } else {
+            zScoreElement.style.color = "#dc2626"; // red
+        }
+        
+        document.getElementById("latestRiskStatus").textContent = summary.latest_risk_classification;
+        
+        // Color code the risk status
+        const riskElement = document.getElementById("latestRiskStatus");
+        if (summary.latest_risk_classification.includes("Safe")) {
+            riskElement.style.color = "#16a34a";
+        } else if (summary.latest_risk_classification.includes("Grey")) {
+            riskElement.style.color = "#ca8a04";
+        } else {
+            riskElement.style.color = "#dc2626";
+        }
+        
+        document.getElementById("avgZScore").textContent = summary.average_z_score;
+        document.getElementById("trendDirection").textContent = summary.trend_direction;
+        
+        // Color code trend
+        const trendElement = document.getElementById("trendDirection");
+        if (summary.trend_direction === "Improving") {
+            trendElement.style.color = "#16a34a";
+        } else if (summary.trend_direction === "Deteriorating") {
+            trendElement.style.color = "#dc2626";
+        } else {
+            trendElement.style.color = "#6b7280";
+        }
+        
+        // Render Z-Score table
+        renderZScoreTable(data.years, data.z_scores, data.z_score_change, data.risk_classifications);
+        
+        // Render components table (latest year)
+        renderZScoreComponentsTable(data.z_components_detail[data.z_components_detail.length - 1]);
+        
+        // Render interpretation and recommendations
+        renderInterpretationAndRecommendations(data.interpretation, data.recommendations);
+        
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error calculating Altman Z-Score");
+    });
+}
+
+function renderZScoreTable(years, zScores, zScoreChange, riskClassifications) {
+    const table = document.getElementById("zscoreTable");
+    
+    let thead = "<thead><tr>";
+    thead += "<th>Metric</th>";
+    years.forEach(year => {
+        thead += `<th>${year}</th>`;
+    });
+    thead += "</tr></thead>";
+    
+    let tbody = "<tbody>";
+    
+    // Z-Score row
+    tbody += "<tr class='section-row'><td>Z-Score</td>";
+    zScores.forEach(score => {
+        let color = "";
+        if (score > 2.99) color = "background:#d1fae5; color:#065f46;";
+        else if (score > 1.81) color = "background:#fef3c7; color:#92400e;";
+        else color = "background:#fee2e2; color:#991b1b;";
+        tbody += `<td style="${color} font-weight:bold;">${score}</td>`;
+    });
+    tbody += "</tr>";
+    
+    // Z-Score change row
+    tbody += "<tr><td>Year-over-Year Change</td>";
+    zScoreChange.forEach(change => {
+        if (change === "") {
+            tbody += "<td>-</td>";
+        } else {
+            const color = change > 0 ? "color:#16a34a;" : "color:#dc2626;";
+            const arrow = change > 0 ? "▲" : "▼";
+            tbody += `<td style="${color}">${arrow} ${Math.abs(change)}</td>`;
+        }
+    });
+    tbody += "</tr>";
+    
+    // Risk classification row
+    tbody += "<tr><td>Risk Classification</td>";
+    riskClassifications.forEach(risk => {
+        let color = "";
+        if (risk.includes("Safe")) color = "background:#d1fae5; color:#065f46;";
+        else if (risk.includes("Grey")) color = "background:#fef3c7; color:#92400e;";
+        else color = "background:#fee2e2; color:#991b1b;";
+        tbody += `<td style="${color}">${risk}</td>`;
+    });
+    tbody += "</tr>";
+    
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+}
+
+function renderZScoreComponentsTable(components) {
+    const table = document.getElementById("zscoreComponentsTable");
+    
+    let html = "<thead><tr><th>Component</th><th>Formula</th><th>Value</th></tr></thead>";
+    html += "<tbody>";
+    
+    html += `<tr>
+        <td>X1 - Working Capital Ratio</td>
+        <td>Working Capital / Total Assets</td>
+        <td>${components.X1_working_capital_ratio}</td>
+    </tr>`;
+    
+    html += `<tr>
+        <td>X2 - Retained Earnings Ratio</td>
+        <td>Retained Earnings / Total Assets</td>
+        <td>${components.X2_retained_earnings_ratio}</td>
+    </tr>`;
+    
+    html += `<tr>
+        <td>X3 - EBIT Ratio</td>
+        <td>EBIT / Total Assets</td>
+        <td>${components.X3_ebit_ratio}</td>
+    </tr>`;
+    
+    html += `<tr>
+        <td>X4 - Market Equity Ratio</td>
+        <td>Market Value of Equity / Total Liabilities</td>
+        <td>${components.X4_market_equity_ratio}</td>
+    </tr>`;
+    
+    html += `<tr>
+        <td>X5 - Asset Turnover</td>
+        <td>Sales / Total Assets</td>
+        <td>${components.X5_asset_turnover}</td>
+    </tr>`;
+    
+    html += `<tr class='section-row'>
+        <td colspan='2'><strong>ALTMAN Z-SCORE</strong></td>
+        <td><strong>${components.z_score}</strong></td>
+    </tr>`;
+    
+    html += "</tbody>";
+    table.innerHTML = html;
+}
+
+function renderInterpretationAndRecommendations(interpretations, recommendations) {
+    // Render interpretations
+    const interpList = document.getElementById("interpretationList");
+    interpList.innerHTML = "";
+    interpretations.forEach(item => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        li.style.listStyleType = "disc";
+        li.style.marginLeft = "20px";
+        interpList.appendChild(li);
+    });
+    
+    // Render recommendations
+    const recoList = document.getElementById("recommendationsList");
+    recoList.innerHTML = "";
+    recommendations.forEach(item => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        li.style.listStyleType = "disc";
+        li.style.marginLeft = "20px";
+        recoList.appendChild(li);
+    });
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: financial-analyzer
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: |
+      apt-get update
+      apt-get install -y tesseract-ocr
+      pip install -r requirements.txt
+    startCommand: gunicorn --workers 2 --timeout 1800 --bind 0.0.0.0:$PORT app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_DEBUG
+        value: false
+      - key: PORT
+        value: 10000
+```
+
+**Save this file.**
+
+---
+
+### **Step 3: Verify Your Files**
+
+Make sure these files exist in your project root:
+```
+✅ app.py                    (your main server file)
+✅ requirements.txt          (Python dependencies)
+✅ .gitignore               (just created)
+✅ render.yaml              (just created)
+✅ All your .py files       (Portfolio_Management.py, etc.)
+✅ templates/ folder        (with all HTML files including 404.html, 500.html)

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DCF Valuation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gray-100 min-h-screen p-6">
+
+<!-- ================= NAVBAR ================= -->
+<nav class="text-white px-6 py-4 shadow-md mb-8" style="background-color:#457b9d;">
+  <div class="max-w-7xl mx-auto flex justify-between items-center">
+    <div class="text-xl font-bold">💼 Financial Analyzer</div>
+    <div class="flex space-x-4">
+      <a href="/"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Home
+      </a>
+      <a href="/dcf"
+         class="px-4 py-2 rounded-lg bg-white bg-opacity-20 font-semibold hover:bg-white hover:bg-opacity-20 transition">
+        DCF Valuation
+      </a>
+      <a href="/financial-modelling"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Financial Modelling
+      </a>
+      <a href="/technical-analysis"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Technical Analysis
+      </a>
+      <a href="/portfolio-management"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Portfolio Management
+      </a>
+      <a href="/performance-analytics"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Performance Analytics
+      </a>
+      <a href="/strategy-optimization"
+         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
+        Strategy Optimization
+      </a>
+    </div>
+  </div>
+</nav>
+<!-- =============== NAVBAR END =============== -->
+
+<div class="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow-lg">
+
+  <h1 class="text-2xl font-bold text-center mb-6">
+    📊 Discounted Cash Flow (DCF) Valuation
+  </h1>
+
+  <!-- UPLOAD -->
+  <div class="border-2 border-dashed p-6 rounded-lg mb-6 text-center">
+    <input
+      type="file"
+      id="pdfFiles"
+      accept=".pdf"
+      multiple
+      class="mb-3"
+    />
+    <p class="text-sm text-gray-600">
+      Upload Annual Report PDFs (minimum 5 years) <p class="text-sm font-bold text-red-800">NOTE:- THE VALUATION TAKES TIME TO COMPLETE UPTO 30 MINUTES
+    </p></p>
+  </div>
+
+  <!-- BUTTON -->
+  <div class="text-center mb-6">
+    <button
+      onclick="runDCF()"
+      class="bg-blue-600 text-white px-8 py-2 rounded-lg hover:bg-blue-700">
+      ▶ Run DCF Valuation
+    </button>
+  </div>
+
+  <!-- STATUS -->
+  <div id="status" class="text-center font-semibold mb-4 hidden"></div>
+
+  <!-- ERROR -->
+  <div id="error" class="text-red-600 font-semibold mb-4 hidden"></div>
+
+  <!-- RESULT -->
+  <div id="result" class="hidden">
+    <h2 class="text-xl font-bold mb-4">📈 DCF Results</h2>
+    <div id="summary" class="mb-6"></div>
+    <div id="tables"></div>
+  </div>
+
+</div>
+
+<script>
+async function runDCF() {
+  const filesInput = document.getElementById("pdfFiles");
+  const statusDiv = document.getElementById("status");
+  const errorDiv = document.getElementById("error");
+  const resultDiv = document.getElementById("result");
+
+  errorDiv.classList.add("hidden");
+  resultDiv.classList.add("hidden");
+
+  if (filesInput.files.length < 1) {
+    errorDiv.textContent = "Please upload at least one Annual Report PDF.";
+    errorDiv.classList.remove("hidden");
+    return;
+  }
+
+  const formData = new FormData();
+  for (const file of filesInput.files) {
+    formData.append("files", file);
+  }
+
+  statusDiv.textContent = "⏳ Extracting financials & running DCF...";
+  statusDiv.classList.remove("hidden");
+
+  try {
+    const res = await fetch("/dcf/upload", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await res.json();
+    statusDiv.classList.add("hidden");
+
+    if (data.error) {
+      errorDiv.textContent = data.error;
+      errorDiv.classList.remove("hidden");
+      return;
+    }
+
+    renderDCF(data);
+    resultDiv.classList.remove("hidden");
+
+  } catch (err) {
+    statusDiv.classList.add("hidden");
+    errorDiv.textContent = err.message;
+    errorDiv.classList.remove("hidden");
+  }
+}
+
+function renderDCF(data) {
+  document.getElementById("summary").innerHTML = `
+    <p><b>Enterprise Value:</b> ₹ ${data["Enterprise Value (₹ Cr)"]} Cr</p>
+    <p><b>Terminal Value:</b> ₹ ${data["Terminal Value (₹ Cr)"]} Cr</p>
+    <p><b>Avg FCF Growth:</b> ${data["Average FCF Growth Rate (%)"]}%</p>
+  `;
+
+  let rows = "";
+  data["Forecast FCF (₹ Cr)"].forEach((v, i) => {
+    rows += `
+      <tr>
+        <td class="border p-2 text-center">Year ${i + 1}</td>
+        <td class="border p-2 text-center font-semibold">${v}</td>
+      </tr>`;
+  });
+
+  document.getElementById("tables").innerHTML = `
+    <table class="w-full border text-sm">
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="border p-2">Year</th>
+          <th class="border p-2">FCF (₹ Cr)</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+</script>
+
+</body>
+</html>
