@@ -14,21 +14,3 @@ services:
         generateValue: true
       - key: FLASK_DEBUG
         value: false
-      - key: PORT
-        value: 10000
-```
-
-**Save this file.**
-
----
-
-### **Step 3: Verify Your Files**
-
-Make sure these files exist in your project root:
-```
-✅ app.py                    (your main server file)
-✅ requirements.txt          (Python dependencies)
-✅ .gitignore               (just created)
-✅ render.yaml              (just created)
-✅ All your .py files       (Portfolio_Management.py, etc.)
-✅ templates/ folder        (with all HTML files including 404.html, 500.html)
