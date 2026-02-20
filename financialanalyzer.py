@@ -5,7 +5,7 @@ Full upgraded merged Income / Balance / CashFlow analyzer (console output).
 Year format assumed: Mar-YY, Mar-24, etc. (tolerant to similar headings).
 """
 
-import tkinter as tk
+# import tkinter as tk
 from tkinter import filedialog
 import fitz  # PyMuPDF
 import pytesseract
