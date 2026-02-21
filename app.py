@@ -446,6 +446,15 @@ def strategy_optimization_backtest():
         app.logger.error(f'backtest error: {e}')
         return err('Backtest failed', 500)
 
+from flask import send_from_directory
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """Serve static files like sample Excel"""
+    try:
+        return send_from_directory('static', filename)
+    except FileNotFoundError:
+        return jsonify({"error": "File not found"}), 404
 
 # =============================================================================
 # ✅ FIX 7: Production server start — debug=False, use gunicorn in real deploy
