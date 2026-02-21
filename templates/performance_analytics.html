@@ -1,76 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Performance Analytics - Production</title>
-<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Performance Analytics - Production</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-<style>
-body { font-family: Arial, sans-serif; }
-.section-card {
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    margin-bottom: 24px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    border: 1px solid #e5e7eb;
-}
-.section-title {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: #1e40af;
-    margin-bottom: 16px;
-}
-.metric-card {
-    background: #f9fafb;
-    border-radius: 8px;
-    padding: 16px;
-    text-align: center;
-    border-left: 4px solid #3b82f6;
-}
-.chart-container {
-    position: relative;
-    height: 300px;
-    margin: 20px 0;
-}
-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-th, td {
-    border: 1px solid #e5e7eb;
-    padding: 12px;
-    text-align: left;
-}
-th {
-    background: #f3f4f6;
-    font-weight: bold;
-}
-.positive { color: #10b981; font-weight: bold; }
-.negative { color: #ef4444; font-weight: bold; }
-.tab-button {
-    padding: 12px 24px;
-    border: none;
-    background: #e5e7eb;
-    cursor: pointer;
-    border-radius: 8px 8px 0 0;
-    margin-right: 4px;
-    font-weight: 600;
-    transition: all 0.3s;
-}
-.tab-button.active {
-    background: #3b82f6;
-    color: white;
-}
-.tab-content {
-    display: none;
-}
-.tab-content.active {
-    display: block;
-}
-</style>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    .section-card {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e5e7eb;
+    }
+    .section-title {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #1e40af;
+        margin-bottom: 16px;
+    }
+    .metric-card {
+        background: #f9fafb;
+        border-radius: 8px;
+        padding: 16px;
+        text-align: center;
+        border-left: 4px solid #3b82f6;
+    }
+    .chart-container {
+        position: relative;
+        height: 300px;
+        margin: 20px 0;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    th, td {
+        border: 1px solid #e5e7eb;
+        padding: 12px;
+        text-align: left;
+    }
+    th {
+        background: #f3f4f6;
+        font-weight: bold;
+    }
+    .positive { color: #10b981; font-weight: bold; }
+    .negative { color: #ef4444; font-weight: bold; }
+    .tab-button {
+        padding: 12px 24px;
+        border: none;
+        background: #e5e7eb;
+        cursor: pointer;
+        border-radius: 8px 8px 0 0;
+        margin-right: 4px;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+    .tab-button.active {
+        background: #3b82f6;
+        color: white;
+    }
+    .tab-content {
+        display: none;
+    }
+    .tab-content.active {
+        display: block;
+    }
+  </style>
 </head>
 
 <body class="bg-gray-100 min-h-screen">
@@ -78,22 +78,43 @@ th {
 <!-- NAVBAR -->
 <nav class="text-white px-6 py-4 shadow-md mb-8" style="background-color:#457b9d;">
   <div class="max-w-7xl mx-auto flex justify-between items-center">
-    <div class="flex items-center gap-3">
-      <span class="text-2xl font-bold">📊 Financial Analyzer</span>
-    </div>
-    <div class="flex gap-6">
-      <a href="/" class="hover:text-blue-200 transition">Home</a>
-      <a href="/financial-modelling" class="hover:text-blue-200 transition">Financial Modelling</a>
-      <a href="/technical-analysis" class="hover:text-blue-200 transition">Technical Analysis</a>
-      <a href="/portfolio-management" class="hover:text-blue-200 transition">Portfolio Management</a>
-      <a href="/performance-analytics" class="hover:text-blue-200 transition font-bold">Performance Analytics</a>
+    <div class="text-xl font-bold">💼 Financial Analyzer</div>
+    <div class="flex space-x-4">
+      <a href="/"
+         class="px-4 py-2 rounded-lg hover:bg-white hover:bg-opacity-20 transition">
+        Home
+      </a>
+      <a href="/dcf"
+         class="px-4 py-2 rounded-lg hover:bg-white hover:bg-opacity-20 transition">
+        DCF Valuation
+      </a>
+      <a href="/financial-modelling"
+         class="px-4 py-2 rounded-lg hover:bg-white hover:bg-opacity-20 transition">
+        Financial Modelling
+      </a>
+      <a href="/technical-analysis"
+         class="px-4 py-2 rounded-lg hover:bg-white hover:bg-opacity-20 transition">
+        Technical Analysis
+      </a>
+      <a href="/portfolio-management"
+         class="px-4 py-2 rounded-lg hover:bg-white hover:bg-opacity-20 transition">
+        Portfolio Management
+      </a>
+      <a href="/performance-analytics"
+         class="px-4 py-2 rounded-lg bg-white bg-opacity-20 font-semibold hover:bg-white hover:bg-opacity-20 transition">
+        Performance Analytics
+      </a>
+      <a href="/strategy-optimization"
+         class="px-4 py-2 rounded-lg hover:bg-white hover:bg-opacity-20 transition">
+        Strategy Optimization
+      </a>
     </div>
   </div>
 </nav>
 
 <!-- MAIN CONTAINER -->
 <div class="max-w-7xl mx-auto px-6">
-  
+
   <!-- Header -->
   <div class="text-center mb-8">
     <h1 class="text-4xl font-bold text-gray-800 mb-2">📊 Performance Analytics</h1>
@@ -104,7 +125,7 @@ th {
   <div class="section-card">
     <div class="text-center">
       <h3 class="text-lg font-bold text-gray-800 mb-4">📁 Select Data Source</h3>
-      
+
       <div class="flex justify-center gap-4 mb-6">
         <button onclick="switchTab('portfolio')" id="tabPortfolio" class="tab-button active">
           💼 From Portfolio Management
@@ -124,7 +145,7 @@ th {
           <p class="text-gray-700 mb-4">
             Automatically fetch your portfolio data from Portfolio Management page.
           </p>
-          
+
           <div class="bg-white rounded p-4 mb-4">
             <p class="text-sm text-gray-600 mb-2">Status: <span id="portfolioStatus" class="font-bold text-orange-600">Not Connected</span></p>
             <p class="text-sm text-gray-600 mb-2">Last Analysis: <span id="lastAnalysis">Never</span></p>
@@ -139,7 +160,7 @@ th {
           <button onclick="fetchFromPortfolio()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition shadow-md">
             📊 Fetch Portfolio Data & Analyze
           </button>
-          
+
           <p class="text-xs text-gray-500 mt-3">
             Note: You must have active holdings in Portfolio Management
           </p>
@@ -150,30 +171,30 @@ th {
       <div id="contentManual" class="tab-content">
         <div class="bg-green-50 border border-green-200 rounded-lg p-6">
           <h4 class="font-semibold text-green-800 mb-4">✍️ Enter Portfolio Data Manually</h4>
-          
+
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Initial Investment (₹)</label>
-              <input type="number" id="initialValue" placeholder="517050" 
-                class="w-full border border-gray-300 rounded px-4 py-2">
+              <input type="number" id="initialValue" placeholder="517050"
+                     class="w-full border border-gray-300 rounded px-4 py-2">
             </div>
-            
+
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Current Value (₹)</label>
-              <input type="number" id="currentValue" placeholder="662800" 
-                class="w-full border border-gray-300 rounded px-4 py-2">
+              <input type="number" id="currentValue" placeholder="662800"
+                     class="w-full border border-gray-300 rounded px-4 py-2">
             </div>
-            
+
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Investment Date</label>
-              <input type="date" id="investmentDate" 
-                class="w-full border border-gray-300 rounded px-4 py-2">
+              <input type="date" id="investmentDate"
+                     class="w-full border border-gray-300 rounded px-4 py-2">
             </div>
-            
+
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Number of Holdings</label>
               <input type="number" id="numHoldings" placeholder="5" min="1"
-                class="w-full border border-gray-300 rounded px-4 py-2">
+                     class="w-full border border-gray-300 rounded px-4 py-2">
             </div>
           </div>
 
@@ -182,8 +203,8 @@ th {
             <textarea id="cashFlows" rows="3" placeholder="Format: YYYY-MM-DD,Amount (one per line)
 Example:
 2024-01-15,100000
-2024-06-20,50000" 
-              class="w-full border border-gray-300 rounded px-4 py-2"></textarea>
+2024-06-20,50000"
+                      class="w-full border border-gray-300 rounded px-4 py-2"></textarea>
           </div>
 
           <button onclick="analyzeManualData()" class="mt-4 bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold transition shadow-md">
@@ -196,7 +217,7 @@ Example:
       <div id="contentUpload" class="tab-content">
         <div class="bg-purple-50 border border-purple-200 rounded-lg p-6">
           <h4 class="font-semibold text-purple-800 mb-4">📤 Upload Portfolio History CSV</h4>
-          
+
           <div class="bg-white rounded p-4 mb-4 text-left">
             <p class="text-sm font-semibold text-gray-700 mb-2">CSV Format Required:</p>
             <pre class="text-xs bg-gray-100 p-3 rounded overflow-x-auto">date,total_value
@@ -207,14 +228,14 @@ Example:
           </div>
 
           <div class="mb-4">
-            <input type="file" id="csvFile" accept=".csv" 
-              class="w-full border border-gray-300 rounded px-4 py-2">
+            <input type="file" id="csvFile" accept=".csv"
+                   class="w-full border border-gray-300 rounded px-4 py-2">
           </div>
 
           <button onclick="analyzeCSVData()" class="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-lg font-semibold transition shadow-md">
             📊 Upload & Analyze CSV
           </button>
-          
+
           <a href="#" onclick="downloadSampleCSV()" class="block mt-3 text-sm text-purple-600 hover:underline">
             📥 Download Sample CSV Template
           </a>
@@ -245,7 +266,7 @@ Example:
 
   <!-- Results Container -->
   <div id="resultsContainer" class="hidden">
-    
+
     <!-- Results Header -->
     <div class="section-card bg-gradient-to-r from-blue-500 to-purple-600 text-white">
       <div class="text-center">
@@ -258,7 +279,7 @@ Example:
     <!-- 1. OVERALL PERFORMANCE -->
     <div class="section-card">
       <div class="section-title">🧠 Overall Portfolio Performance</div>
-      
+
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div class="metric-card border-l-4 border-green-500">
           <div class="text-sm text-gray-600">Total Return</div>
@@ -312,7 +333,7 @@ Example:
     <!-- 2. RISK-ADJUSTED PERFORMANCE -->
     <div class="section-card">
       <div class="section-title">📉 Risk-Adjusted Performance</div>
-      
+
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="metric-card">
           <div class="text-xs text-gray-600">Sharpe Ratio</div>
@@ -358,7 +379,7 @@ Example:
     <!-- 3. BENCHMARK COMPARISON -->
     <div class="section-card">
       <div class="section-title">🎯 Benchmark Comparison (vs NIFTY 50)</div>
-      
+
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="metric-card border-l-4 border-green-500">
           <div class="text-sm text-gray-600">Your Return</div>
@@ -405,7 +426,7 @@ Example:
     <!-- 4. ATTRIBUTION ANALYSIS -->
     <div class="section-card">
       <div class="section-title">🔍 Attribution Analysis (Why Returns Happened)</div>
-      
+
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <div class="chart-container" style="height: 250px;">
@@ -421,7 +442,7 @@ Example:
     <!-- 5. TRADE-LEVEL PERFORMANCE -->
     <div class="section-card" id="tradeSection">
       <div class="section-title">📈 Trade-Level Performance</div>
-      
+
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="metric-card">
           <div class="text-sm text-gray-600">Win Rate</div>
@@ -449,7 +470,7 @@ Example:
     <!-- 6. DRAWDOWN ANALYSIS -->
     <div class="section-card">
       <div class="section-title">🔻 Drawdown & Recovery Analysis</div>
-      
+
       <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
         <div class="metric-card">
           <div class="text-sm text-gray-600">Max Drawdown</div>
@@ -478,7 +499,7 @@ Example:
     <!-- 7. CONSISTENCY METRICS -->
     <div class="section-card">
       <div class="section-title">⚖️ Consistency Metrics</div>
-      
+
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="metric-card">
           <div class="text-sm text-gray-600">Profitable Months</div>
@@ -506,17 +527,17 @@ Example:
     <!-- 8. CONTRIBUTION ANALYSIS -->
     <div class="section-card" id="contributionSection">
       <div class="section-title">🎯 Stock Contribution Analysis</div>
-      
+
       <div class="overflow-x-auto">
         <table id="contributionTable">
           <thead>
-            <tr>
-              <th>Stock</th>
-              <th>Weight %</th>
-              <th>Return %</th>
-              <th>Return Contribution</th>
-              <th>Risk Contribution</th>
-            </tr>
+          <tr>
+            <th>Stock</th>
+            <th>Weight %</th>
+            <th>Return %</th>
+            <th>Return Contribution</th>
+            <th>Risk Contribution</th>
+          </tr>
           </thead>
           <tbody id="contributionBody"></tbody>
         </table>
@@ -526,7 +547,7 @@ Example:
     <!-- 9. BEHAVIOURAL ANALYTICS -->
     <div class="section-card" id="behavioralSection">
       <div class="section-title">🧠 Behavioural Analytics</div>
-      
+
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="metric-card">
           <div class="text-sm text-gray-600">Discipline Score</div>
@@ -559,17 +580,17 @@ Example:
     <!-- 10. STRESS TESTING -->
     <div class="section-card">
       <div class="section-title">🧪 Stress Testing & Scenario Analysis</div>
-      
+
       <div class="overflow-x-auto">
         <table id="stressTable">
           <thead>
-            <tr>
-              <th>Scenario</th>
-              <th>Current Value</th>
-              <th>Stressed Value</th>
-              <th>Loss Amount</th>
-              <th>Loss %</th>
-            </tr>
+          <tr>
+            <th>Scenario</th>
+            <th>Current Value</th>
+            <th>Stressed Value</th>
+            <th>Loss Amount</th>
+            <th>Loss %</th>
+          </tr>
           </thead>
           <tbody id="stressBody"></tbody>
         </table>
@@ -579,7 +600,7 @@ Example:
     <!-- 11. TWR vs MWR -->
     <div class="section-card">
       <div class="section-title">⏱️ Time-Weighted vs Money-Weighted Returns</div>
-      
+
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div class="metric-card border-l-4 border-blue-500">
           <div class="text-sm text-gray-600">Time-Weighted Return (TWR)</div>
@@ -607,7 +628,7 @@ Example:
     <!-- 12. TAX-ADJUSTED PERFORMANCE -->
     <div class="section-card">
       <div class="section-title">💰 Tax-Adjusted Performance</div>
-      
+
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="metric-card border-l-4 border-green-500">
           <div class="text-sm text-gray-600">Pre-Tax Gains</div>
@@ -665,739 +686,739 @@ Example:
 </div>
 
 <script>
-let equityCurveChart = null;
-let drawdownChart = null;
-let attributionChart = null;
-let analysisData = null;
+  let equityCurveChart = null;
+  let drawdownChart = null;
+  let attributionChart = null;
+  let analysisData = null;
 
-// Tab switching
-function switchTab(tab) {
-    // Hide all tabs
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-    
-    // Show selected tab
-    document.getElementById('content' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
-    document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
-}
+  // Tab switching
+  function switchTab(tab) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
 
-// Fetch from Portfolio Management
-async function fetchFromPortfolio() {
-    try {
-        showLoading();
-        hideError();
-        
-        console.log('Fetching portfolio data from Portfolio Management...');
-        
-        const response = await fetch('/portfolio-management/get-data', {
-            method: 'GET',
-            headers: {'Content-Type': 'application/json'}
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || 'Portfolio data not found. Please add holdings in Portfolio Management first.');
-        }
-        
-        const portfolioData = await response.json();
-        console.log('Received portfolio data:', portfolioData);
-        
-        if (!portfolioData || !portfolioData.analysis_result) {
-            throw new Error('Invalid portfolio data structure. Please re-analyze your portfolio in Portfolio Management.');
-        }
-        
-        // Transform portfolio data into performance analytics format
-        const performanceData = transformPortfolioData(portfolioData);
-        console.log('Performance data ready for analysis');
-        
-        // Analyze
-        await analyzePerformance(performanceData);
-        
-        // Update status
-        document.getElementById('portfolioStatus').textContent = 'Connected ✅';
-        document.getElementById('portfolioStatus').className = 'font-bold text-green-600';
-        
-    } catch (error) {
-        hideLoading();
-        console.error('Error fetching portfolio:', error);
-        
-        // Show friendly error with link to Portfolio Management
-        const errorMsg = error.message + '<br><br>' +
-            '<a href="/portfolio-management" class="text-blue-600 hover:text-blue-800 font-semibold underline">' +
-            '→ Go to Portfolio Management to add holdings</a>';
-        
-        document.getElementById('errorMessage').innerHTML = errorMsg;
-        document.getElementById('errorContainer').classList.remove('hidden');
-        window.scrollTo({top: 0, behavior: 'smooth'});
-    }
-}
+      // Show selected tab
+      document.getElementById('content' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+      document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+  }
 
-// Analyze Manual Data
-async function analyzeManualData() {
-    try {
-        const initialVal = parseFloat(document.getElementById('initialValue').value);
-        const currentVal = parseFloat(document.getElementById('currentValue').value);
-        const investDate = document.getElementById('investmentDate').value;
-        const numHoldings = parseInt(document.getElementById('numHoldings').value);
-        
-        if (!initialVal || !currentVal || !investDate) {
-            throw new Error('Please fill in all required fields');
-        }
-        
-        showLoading();
-        hideError();
-        
-        // Parse cash flows
-        const cashFlowsText = document.getElementById('cashFlows').value;
-        const cashFlows = parseCashFlows(cashFlowsText, investDate, initialVal);
-        
-        // Generate simulated daily history
-        const holdingsHistory = generateHistoryFromManual(initialVal, currentVal, investDate);
-        
-        const data = {
-            holdings_history: holdingsHistory,
-            holdings_detail: [],
-            cash_flows: cashFlows,
-            trades: null,
-            signals: null
-        };
-        
-        await analyzePerformance(data);
-        
-    } catch (error) {
-        hideLoading();
-        showError(error.message);
-    }
-}
+  // Fetch from Portfolio Management
+  async function fetchFromPortfolio() {
+      try {
+          showLoading();
+          hideError();
 
-// Analyze CSV Data
-async function analyzeCSVData() {
-    try {
-        const fileInput = document.getElementById('csvFile');
-        
-        if (!fileInput.files || !fileInput.files[0]) {
-            throw new Error('Please select a CSV file');
-        }
-        
-        showLoading();
-        hideError();
-        
-        const file = fileInput.files[0];
-        const text = await file.text();
-        const holdingsHistory = parseCSV(text);
-        
-        const data = {
-            holdings_history: holdingsHistory,
-            holdings_detail: [],
-            cash_flows: [],
-            trades: null,
-            signals: null
-        };
-        
-        await analyzePerformance(data);
-        
-    } catch (error) {
-        hideLoading();
-        showError(error.message);
-    }
-}
+          console.log('Fetching portfolio data from Portfolio Management...');
 
-// Main analysis function
-async function analyzePerformance(data) {
-    try {
-        const response = await fetch('/performance-analytics/analyze', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Analysis failed');
-        }
-        
-        const result = await response.json();
-        
-        if (!result.success) {
-            throw new Error(result.error || 'Analysis failed');
-        }
-        
-        analysisData = result;
-        displayResults(result);
-        
-        hideLoading();
-        document.getElementById('resultsContainer').classList.remove('hidden');
-        document.getElementById('portfolioStatus').textContent = 'Connected ✅';
-        document.getElementById('portfolioStatus').className = 'font-bold text-green-600';
-        document.getElementById('lastAnalysis').textContent = new Date().toLocaleString();
-        document.getElementById('analysisDate').textContent = new Date().toLocaleString();
-        
-    } catch (error) {
-        hideLoading();
-        showError(error.message);
-    }
-}
+          const response = await fetch('/portfolio-management/get-data', {
+              method: 'GET',
+              headers: {'Content-Type': 'application/json'}
+          });
 
-// Helper Functions
-function showLoading() {
-    document.getElementById('loadingIndicator').classList.remove('hidden');
-    document.getElementById('resultsContainer').classList.add('hidden');
-}
+          if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(errorData.error || 'Portfolio data not found. Please add holdings in Portfolio Management first.');
+          }
 
-function hideLoading() {
-    document.getElementById('loadingIndicator').classList.add('hidden');
-}
+          const portfolioData = await response.json();
+          console.log('Received portfolio data:', portfolioData);
 
-function showError(message) {
-    document.getElementById('errorMessage').textContent = message;
-    document.getElementById('errorContainer').classList.remove('hidden');
-    window.scrollTo({top: 0, behavior: 'smooth'});
-}
+          if (!portfolioData || !portfolioData.analysis_result) {
+              throw new Error('Invalid portfolio data structure. Please re-analyze your portfolio in Portfolio Management.');
+          }
 
-function hideError() {
-    document.getElementById('errorContainer').classList.add('hidden');
-}
+          // Transform portfolio data into performance analytics format
+          const performanceData = transformPortfolioData(portfolioData);
+          console.log('Performance data ready for analysis');
 
-function parseCashFlows(text, initialDate, initialAmount) {
-    const flows = [{date: initialDate, amount: -initialAmount}];
-    
-    if (text.trim()) {
-        const lines = text.trim().split('\n');
-        for (let line of lines) {
-            const [date, amount] = line.split(',');
-            if (date && amount) {
-                flows.push({
-                    date: date.trim(),
-                    amount: -parseFloat(amount.trim())
-                });
-            }
-        }
-    }
-    
-    return flows;
-}
+          // Analyze
+          await analyzePerformance(performanceData);
 
-function generateHistoryFromManual(initialVal, currentVal, startDate) {
-    const history = [];
-    const start = new Date(startDate);
-    const today = new Date();
-    const days = Math.floor((today - start) / (1000 * 60 * 60 * 24));
-    
-    const totalReturn = (currentVal - initialVal) / initialVal;
-    const dailyReturn = Math.pow(1 + totalReturn, 1 / days) - 1;
-    
-    for (let i = 0; i <= days; i++) {
-        const date = new Date(start);
-        date.setDate(date.getDate() + i);
-        
-        const value = initialVal * Math.pow(1 + dailyReturn, i);
-        const randomNoise = (Math.random() - 0.5) * 0.01 * value;
-        
-        history.push({
-            date: date.toISOString().split('T')[0],
-            total_value: value + randomNoise
-        });
-    }
-    
-    // Ensure last value matches current
-    history[history.length - 1].total_value = currentVal;
-    
-    return history;
-}
+          // Update status
+          document.getElementById('portfolioStatus').textContent = 'Connected ✅';
+          document.getElementById('portfolioStatus').className = 'font-bold text-green-600';
 
-function parseCSV(text) {
-    const lines = text.trim().split('\n');
-    const headers = lines[0].split(',');
-    const history = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',');
-        if (values.length >= 2) {
-            history.push({
-                date: values[0].trim(),
-                total_value: parseFloat(values[1].trim())
-            });
-        }
-    }
-    
-    return history;
-}
+      } catch (error) {
+          hideLoading();
+          console.error('Error fetching portfolio:', error);
 
-function transformPortfolioData(portfolioData) {
-    console.log('Transforming portfolio data:', portfolioData);
-    
-    // Portfolio Management returns: {holdings, analysis_result, timestamp}
-    // Performance Analytics needs: {holdings_history, holdings_detail, cash_flows}
-    
-    const analysisResult = portfolioData.analysis_result || portfolioData;
-    const holdings = analysisResult.holdings || [];
-    const summary = analysisResult.summary || {};
-    const originalHoldings = portfolioData.holdings || [];
-    
-    // Generate historical data from current portfolio state
-    const holdingsHistory = generatePortfolioHistory(holdings, originalHoldings, summary);
-    
-    // Generate cash flows from buy transactions
-    const cashFlows = generateCashFlows(originalHoldings, holdings);
-    
-    // Create holdings detail
-    const holdingsDetail = holdings.map(h => ({
-        symbol: h.symbol,
-        quantity: h.quantity,
-        current_price: h.current_price,
-        current_value: h.current_value,
-        gain_loss_pct: h.gain_loss_pct
-    }));
-    
-    console.log('Transformed data:', {
-        holdings_history_length: holdingsHistory.length,
-        holdings_detail_length: holdingsDetail.length,
-        cash_flows_length: cashFlows.length
-    });
-    
-    return {
-        holdings_history: holdingsHistory,
-        holdings_detail: holdingsDetail,
-        cash_flows: cashFlows,
-        trades: null,
-        signals: null
-    };
-}
+          // Show friendly error with link to Portfolio Management
+          const errorMsg = error.message + '<br><br>' +
+              '<a href="/portfolio-management" class="text-blue-600 hover:text-blue-800 font-semibold underline">' +
+              '→ Go to Portfolio Management to add holdings</a>';
 
-function generatePortfolioHistory(holdings, originalHoldings, summary) {
-    // Generate simulated daily historical data based on current portfolio state
-    const history = [];
-    
-    // Find earliest buy date
-    let earliestDate = new Date();
-    for (const h of originalHoldings) {
-        if (h.buy_date && h.buy_date !== 'N/A') {
-            const buyDate = new Date(h.buy_date);
-            if (buyDate < earliestDate) {
-                earliestDate = buyDate;
-            }
-        }
-    }
-    
-    // If no valid dates, use 1 year ago
-    if (earliestDate > new Date()) {
-        earliestDate = new Date();
-        earliestDate.setFullYear(earliestDate.getFullYear() - 1);
-    }
-    
-    const today = new Date();
-    const totalDays = Math.floor((today - earliestDate) / (1000 * 60 * 60 * 24));
-    
-    // Calculate initial and current values
-    const currentValue = summary.total_current_value || 0;
-    const investedValue = summary.total_invested || currentValue;
-    
-    if (investedValue === 0 || totalDays <= 0) {
-        // Return minimal history
-        return [{
-            date: new Date().toISOString().split('T')[0],
-            total_value: currentValue
-        }];
-    }
-    
-    // Generate daily values with realistic growth
-    const totalReturn = (currentValue - investedValue) / investedValue;
-    const dailyReturn = Math.pow(1 + totalReturn, 1 / Math.max(totalDays, 1)) - 1;
-    
-    for (let i = 0; i <= totalDays; i++) {
-        const date = new Date(earliestDate);
-        date.setDate(date.getDate() + i);
-        
-        // Calculate value with some randomness
-        let value = investedValue * Math.pow(1 + dailyReturn, i);
-        
-        // Add realistic volatility (±1% random daily fluctuation)
-        const volatility = 0.01;
-        const randomFactor = 1 + (Math.random() - 0.5) * 2 * volatility;
-        value = value * randomFactor;
-        
-        history.push({
-            date: date.toISOString().split('T')[0],
-            total_value: Math.round(value * 100) / 100
-        });
-    }
-    
-    // Ensure last value matches current portfolio value
-    if (history.length > 0) {
-        history[history.length - 1].total_value = currentValue;
-    }
-    
-    return history;
-}
+          document.getElementById('errorMessage').innerHTML = errorMsg;
+          document.getElementById('errorContainer').classList.remove('hidden');
+          window.scrollTo({top: 0, behavior: 'smooth'});
+      }
+  }
 
-function generateCashFlows(originalHoldings, currentHoldings) {
-    const cashFlows = [];
-    
-    // Create cash flows from buy transactions
-    for (const h of originalHoldings) {
-        const buyDate = h.buy_date && h.buy_date !== 'N/A' ? h.buy_date : new Date().toISOString().split('T')[0];
-        const amount = h.quantity * h.buy_price;
-        
-        cashFlows.push({
-            date: buyDate,
-            amount: -amount  // Negative because it's money going out
-        });
-    }
-    
-    // Sort by date
-    cashFlows.sort((a, b) => new Date(a.date) - new Date(b.date));
-    
-    return cashFlows;
-}
+  // Analyze Manual Data
+  async function analyzeManualData() {
+      try {
+          const initialVal = parseFloat(document.getElementById('initialValue').value);
+          const currentVal = parseFloat(document.getElementById('currentValue').value);
+          const investDate = document.getElementById('investmentDate').value;
+          const numHoldings = parseInt(document.getElementById('numHoldings').value);
 
-function downloadSampleCSV() {
-    const csv = `date,total_value
-2024-01-01,517050
-2024-01-02,519200
-2024-01-03,522100
-2024-01-04,520500
-2024-01-05,525800`;
-    
-    const blob = new Blob([csv], {type: 'text/csv'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'portfolio_history_sample.csv';
-    a.click();
-}
+          if (!initialVal || !currentVal || !investDate) {
+              throw new Error('Please fill in all required fields');
+          }
 
-// Display Results Function (same as demo version)
-function displayResults(data) {
-    // 1. Overall Performance
-    if (data.overall_performance) {
-        const op = data.overall_performance;
-        document.getElementById('totalReturn').textContent = (op.total_return_pct >= 0 ? '+' : '') + op.total_return_pct + '%';
-        document.getElementById('totalReturn').className = 'text-2xl font-bold ' + (op.total_return_pct >= 0 ? 'text-green-600' : 'text-red-600');
-        document.getElementById('totalReturnAmount').textContent = '₹' + op.total_return_amount.toLocaleString();
-        document.getElementById('cagr').textContent = op.cagr + '%';
-        document.getElementById('xirr').textContent = op.xirr + '%';
-        document.getElementById('currentValueDisplay').textContent = '₹' + op.current_value.toLocaleString();
-        document.getElementById('initialValue').textContent = 'From ₹' + op.initial_value.toLocaleString();
-        
-        // Period returns
-        const periodReturns = document.getElementById('periodReturns');
-        periodReturns.innerHTML = Object.entries(op.period_returns).map(([period, value]) => `
-            <div class="metric-card">
-                <div class="text-xs text-gray-600">${period}</div>
-                <div class="text-lg font-bold ${value >= 0 ? 'text-green-600' : 'text-red-600'}">
-                    ${value >= 0 ? '+' : ''}${value}%
-                </div>
-            </div>
-        `).join('');
-        
-        // Best/Worst days
-        if (op.best_day) {
-            document.getElementById('bestDay').textContent = `${op.best_day.date}: +${op.best_day.return.toFixed(2)}%`;
-        }
-        if (op.worst_day) {
-            document.getElementById('worstDay').textContent = `${op.worst_day.date}: ${op.worst_day.return.toFixed(2)}%`;
-        }
-        
-        // Equity curve
-        if (data.equity_curve) {
-            renderEquityCurve(data.equity_curve);
-        }
-    }
-    
-    // 2. Risk-Adjusted
-    if (data.risk_adjusted) {
-        const ra = data.risk_adjusted;
-        document.getElementById('sharpeRatio').textContent = ra.sharpe_ratio || '--';
-        document.getElementById('sortinoRatio').textContent = ra.sortino_ratio || '--';
-        document.getElementById('calmarRatio').textContent = ra.calmar_ratio || '--';
-        document.getElementById('volatility').textContent = ra.volatility ? ra.volatility + '%' : '--';
-        document.getElementById('maxDrawdown').textContent = ra.max_drawdown ? ra.max_drawdown + '%' : '--';
-        document.getElementById('var95').textContent = ra.var_95 ? ra.var_95 + '%' : '--';
-        document.getElementById('cvar95').textContent = ra.cvar_95 ? ra.cvar_95 + '%' : '--';
-    }
-    
-    // 3. Benchmark
-    if (data.benchmark_comparison) {
-        const bc = data.benchmark_comparison;
-        document.getElementById('portfolioReturn').textContent = bc.portfolio_return ? '+' + bc.portfolio_return + '%' : '--';
-        document.getElementById('benchmarkReturn').textContent = bc.benchmark_return ? '+' + bc.benchmark_return + '%' : '--';
-        document.getElementById('outperformance').textContent = bc.outperformance ? (bc.outperformance >= 0 ? '+' : '') + bc.outperformance + '%' : '--';
-        document.getElementById('alpha').textContent = bc.alpha ? (bc.alpha >= 0 ? '+' : '') + bc.alpha + '%' : '--';
-        document.getElementById('beta').textContent = bc.beta || '--';
-        document.getElementById('trackingError').textContent = bc.tracking_error ? bc.tracking_error + '%' : '--';
-        document.getElementById('infoRatio').textContent = bc.information_ratio || '--';
-        document.getElementById('correlation').textContent = bc.correlation || '--';
-    }
-    
-    // 4. Attribution
-    if (data.attribution) {
-        renderAttribution(data.attribution);
-    }
-    
-    // 5. Trade Analysis (hide if no data)
-    if (data.trade_analysis) {
-        const ta = data.trade_analysis;
-        document.getElementById('winRate').textContent = ta.win_rate + '%';
-        document.getElementById('tradeCount').textContent = ta.winning_trades + '/' + ta.total_trades + ' trades';
-        document.getElementById('profitFactor').textContent = ta.profit_factor;
-        document.getElementById('payoffRatio').textContent = ta.payoff_ratio;
-        document.getElementById('expectancy').textContent = '₹' + ta.expectancy.toLocaleString();
-    } else {
-        document.getElementById('tradeSection').style.display = 'none';
-    }
-    
-    // 6. Drawdown
-    if (data.drawdown) {
-        const dd = data.drawdown;
-        document.getElementById('maxDD').textContent = dd.max_drawdown + '%';
-        document.getElementById('maxDDDate').textContent = dd.max_drawdown_date || '--';
-        document.getElementById('avgDD').textContent = dd.avg_drawdown + '%';
-        document.getElementById('currentDD').textContent = dd.current_drawdown + '%';
-        document.getElementById('currentDD').className = 'text-2xl font-bold ' + (dd.current_drawdown === 0 ? 'text-green-600' : 'text-red-600');
-        
-        if (data.equity_curve) {
-            renderDrawdownChart(data.equity_curve);
-        }
-    }
-    
-    // 7. Consistency
-    if (data.consistency) {
-        const cs = data.consistency;
-        document.getElementById('profitableMonths').textContent = cs.profitable_months + '/' + cs.total_months;
-        document.getElementById('profitableMonthsPct').textContent = cs.pct_profitable_months + '% success';
-        document.getElementById('consistencyScore').textContent = cs.consistency_score;
-        document.getElementById('monthlyStd').textContent = cs.monthly_std + '%';
-        document.getElementById('returnStability').textContent = cs.consistency_score > 75 ? 'High' : cs.consistency_score > 50 ? 'Medium' : 'Low';
-    }
-    
-    // 8. Contribution (hide if no data)
-    if (data.contribution && data.contribution.contributions && data.contribution.contributions.length > 0) {
-        const contributionBody = document.getElementById('contributionBody');
-        contributionBody.innerHTML = data.contribution.contributions.map(c => `
-            <tr>
-                <td class="font-semibold">${c.symbol}</td>
-                <td>${c.weight}%</td>
-                <td class="${c.return >= 0 ? 'positive' : 'negative'}">${c.return >= 0 ? '+' : ''}${c.return}%</td>
-                <td class="${c.return_contribution >= 0 ? 'positive' : 'negative'}">${c.return_contribution >= 0 ? '+' : ''}${c.return_contribution}%</td>
-                <td>${c.risk_contribution}%</td>
-            </tr>
-        `).join('');
-    } else {
-        document.getElementById('contributionSection').style.display = 'none';
-    }
-    
-    // 9. Behavioral (hide if no data)
-    if (data.behavioral) {
-        const bh = data.behavioral;
-        document.getElementById('disciplineScore').textContent = Math.round(bh.discipline_score);
-        document.getElementById('overtrading').textContent = '+' + bh.overtrading_pct + '%';
-        document.getElementById('earlyExits').textContent = bh.early_exits;
-        document.getElementById('earlyExitCost').textContent = '₹' + bh.early_exit_cost.toLocaleString();
-        
-        const insights = document.getElementById('behavioralInsights');
-        insights.innerHTML = `
-            <li>Discipline score: ${Math.round(bh.discipline_score)}/100 - ${bh.discipline_score > 75 ? 'Excellent!' : bh.discipline_score > 50 ? 'Good' : 'Needs improvement'}</li>
-            <li>Overtrading penalty: ${bh.overtrading_pct}%</li>
-            <li>Early exits cost: ₹${bh.early_exit_cost.toLocaleString()}</li>
-        `;
-    } else {
-        document.getElementById('behavioralSection').style.display = 'none';
-    }
-    
-    // 10. Stress Testing
-    if (data.stress_testing && data.stress_testing.scenarios) {
-        const stressBody = document.getElementById('stressBody');
-        stressBody.innerHTML = data.stress_testing.scenarios.map(s => `
-            <tr>
-                <td class="font-semibold">${s.scenario}</td>
-                <td>₹${s.current_value.toLocaleString()}</td>
-                <td>₹${s.stressed_value.toLocaleString()}</td>
-                <td class="negative">₹${Math.abs(s.loss_amount).toLocaleString()}</td>
-                <td class="negative">${s.loss_pct}%</td>
-            </tr>
-        `).join('');
-    }
-    
-    // 11. TWR vs MWR
-    if (data.twr_vs_mwr) {
-        const tm = data.twr_vs_mwr;
-        document.getElementById('twr').textContent = tm.time_weighted_return + '%';
-        document.getElementById('mwr').textContent = tm.money_weighted_return + '%';
-        document.getElementById('timingImpact').textContent = tm.timing_impact + '%';
-        document.getElementById('timingImpact').className = 'text-2xl font-bold ' + (tm.timing_impact >= 0 ? 'text-green-600' : 'text-red-600');
-        
-        const explanation = `
-            <strong>TWR (${tm.time_weighted_return}%):</strong> Your portfolio's performance (stock picking skill)<br>
-            <strong>MWR (${tm.money_weighted_return}%):</strong> Your actual return (affected by timing)<br>
-            <strong>Gap (${tm.timing_impact}%):</strong> ${tm.timing_impact >= 0 ? 'Good timing! You added money at right times' : 'Bad timing - you added money before drops'}
-        `;
-        document.getElementById('twrExplanation').innerHTML = explanation;
-    }
-    
-    // 12. Tax
-    if (data.tax_adjusted) {
-        const tx = data.tax_adjusted;
-        document.getElementById('preTaxGains').textContent = '₹' + tx.pre_tax_gains.toLocaleString();
-        document.getElementById('totalTax').textContent = '₹' + Math.round(tx.total_tax).toLocaleString();
-        document.getElementById('afterTaxGains').textContent = '₹' + Math.round(tx.after_tax_gains).toLocaleString();
-        document.getElementById('taxEfficiency').textContent = tx.tax_efficiency + '%';
-        document.getElementById('ltcgGains').textContent = '₹' + tx.ltcg_gains.toLocaleString();
-        document.getElementById('ltcgTax').textContent = 'Tax: ₹' + tx.ltcg_tax.toLocaleString();
-        document.getElementById('stcgGains').textContent = '₹' + tx.stcg_gains.toLocaleString();
-        document.getElementById('stcgTax').textContent = 'Tax: ₹' + Math.round(tx.stcg_tax).toLocaleString();
-        document.getElementById('taxBreakdown').textContent = `LTCG: ₹${tx.ltcg_tax.toLocaleString()} + STCG: ₹${Math.round(tx.stcg_tax).toLocaleString()}`;
-    }
-}
+          showLoading();
+          hideError();
 
-// Chart rendering functions (same as demo)
-function renderEquityCurve(data) {
-    const ctx = document.getElementById('equityCurveChart');
-    if (equityCurveChart) equityCurveChart.destroy();
-    
-    equityCurveChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.dates,
-            datasets: [{
-                label: 'Portfolio Value',
-                data: data.values,
-                borderColor: '#10b981',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: {
-                    ticks: {
-                        callback: function(value) {
-                            return '₹' + (value/1000).toFixed(0) + 'K';
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
+          // Parse cash flows
+          const cashFlowsText = document.getElementById('cashFlows').value;
+          const cashFlows = parseCashFlows(cashFlowsText, investDate, initialVal);
 
-function renderDrawdownChart(equityCurve) {
-    const values = equityCurve.values;
-    const drawdowns = [];
-    let runningMax = values[0];
-    
-    for (let v of values) {
-        if (v > runningMax) runningMax = v;
-        drawdowns.push(((v - runningMax) / runningMax) * 100);
-    }
-    
-    const ctx = document.getElementById('drawdownChart');
-    if (drawdownChart) drawdownChart.destroy();
-    
-    drawdownChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: equityCurve.dates,
-            datasets: [{
-                label: 'Drawdown %',
-                data: drawdowns,
-                borderColor: '#ef4444',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: {
-                    ticks: {
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
+          // Generate simulated daily history
+          const holdingsHistory = generateHistoryFromManual(initialVal, currentVal, investDate);
 
-function renderAttribution(data) {
-    const ctx = document.getElementById('attributionChart');
-    if (attributionChart) attributionChart.destroy();
-    
-    attributionChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Market Effect', 'Stock Selection', 'Timing', 'Total Return'],
-            datasets: [{
-                label: 'Return %',
-                data: [data.market_effect, data.stock_selection_effect, data.timing_effect, data.total_return],
-                backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: {
-                    ticks: {
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    }
-                }
-            }
-        }
-    });
-    
-    const details = document.getElementById('attributionDetails');
-    details.innerHTML = `
-        <div class="p-3 bg-blue-50 rounded">
-            <div class="font-semibold text-blue-800">Market Effect: +${data.market_effect}%</div>
-            <div class="text-sm text-gray-600">Return from overall market movement</div>
-        </div>
-        <div class="p-3 bg-green-50 rounded">
-            <div class="font-semibold text-green-800">Stock Selection: +${data.stock_selection_effect}%</div>
-            <div class="text-sm text-gray-600">Your skill in picking stocks</div>
-        </div>
-        <div class="p-3 bg-orange-50 rounded">
-            <div class="font-semibold text-orange-800">Timing Effect: ${data.timing_effect}%</div>
-            <div class="text-sm text-gray-600">Impact of entry/exit timing</div>
-        </div>
-        <div class="p-3 bg-purple-50 rounded border-2 border-purple-200">
-            <div class="font-semibold text-purple-800">Total Return: +${data.total_return}%</div>
-            <div class="text-sm text-gray-600">Combined effect of all factors</div>
-        </div>
-    `;
-}
+          const data = {
+              holdings_history: holdingsHistory,
+              holdings_detail: [],
+              cash_flows: cashFlows,
+              trades: null,
+              signals: null
+          };
 
-// Export functions
-function exportToPDF() {
-    alert('PDF export functionality will be implemented with a library like jsPDF');
-}
+          await analyzePerformance(data);
 
-function exportToExcel() {
-    alert('Excel export functionality will be implemented with a library like SheetJS');
-}
+      } catch (error) {
+          hideLoading();
+          showError(error.message);
+      }
+  }
 
-function shareReport() {
-    if (navigator.share) {
-        navigator.share({
-            title: 'Performance Analytics Report',
-            text: 'Check out my portfolio performance analysis!',
-            url: window.location.href
-        });
-    } else {
-        alert('Share functionality not supported on this browser');
-    }
-}
+  // Analyze CSV Data
+  async function analyzeCSVData() {
+      try {
+          const fileInput = document.getElementById('csvFile');
+
+          if (!fileInput.files || !fileInput.files[0]) {
+              throw new Error('Please select a CSV file');
+          }
+
+          showLoading();
+          hideError();
+
+          const file = fileInput.files[0];
+          const text = await file.text();
+          const holdingsHistory = parseCSV(text);
+
+          const data = {
+              holdings_history: holdingsHistory,
+              holdings_detail: [],
+              cash_flows: [],
+              trades: null,
+              signals: null
+          };
+
+          await analyzePerformance(data);
+
+      } catch (error) {
+          hideLoading();
+          showError(error.message);
+      }
+  }
+
+  // Main analysis function
+  async function analyzePerformance(data) {
+      try {
+          const response = await fetch('/performance-analytics/analyze', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(data)
+          });
+
+          if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.error || 'Analysis failed');
+          }
+
+          const result = await response.json();
+
+          if (!result.success) {
+              throw new Error(result.error || 'Analysis failed');
+          }
+
+          analysisData = result;
+          displayResults(result);
+
+          hideLoading();
+          document.getElementById('resultsContainer').classList.remove('hidden');
+          document.getElementById('portfolioStatus').textContent = 'Connected ✅';
+          document.getElementById('portfolioStatus').className = 'font-bold text-green-600';
+          document.getElementById('lastAnalysis').textContent = new Date().toLocaleString();
+          document.getElementById('analysisDate').textContent = new Date().toLocaleString();
+
+      } catch (error) {
+          hideLoading();
+          showError(error.message);
+      }
+  }
+
+  // Helper Functions
+  function showLoading() {
+      document.getElementById('loadingIndicator').classList.remove('hidden');
+      document.getElementById('resultsContainer').classList.add('hidden');
+  }
+
+  function hideLoading() {
+      document.getElementById('loadingIndicator').classList.add('hidden');
+  }
+
+  function showError(message) {
+      document.getElementById('errorMessage').textContent = message;
+      document.getElementById('errorContainer').classList.remove('hidden');
+      window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+
+  function hideError() {
+      document.getElementById('errorContainer').classList.add('hidden');
+  }
+
+  function parseCashFlows(text, initialDate, initialAmount) {
+      const flows = [{date: initialDate, amount: -initialAmount}];
+
+      if (text.trim()) {
+          const lines = text.trim().split('\n');
+          for (let line of lines) {
+              const [date, amount] = line.split(',');
+              if (date && amount) {
+                  flows.push({
+                      date: date.trim(),
+                      amount: -parseFloat(amount.trim())
+                  });
+              }
+          }
+      }
+
+      return flows;
+  }
+
+  function generateHistoryFromManual(initialVal, currentVal, startDate) {
+      const history = [];
+      const start = new Date(startDate);
+      const today = new Date();
+      const days = Math.floor((today - start) / (1000 * 60 * 60 * 24));
+
+      const totalReturn = (currentVal - initialVal) / initialVal;
+      const dailyReturn = Math.pow(1 + totalReturn, 1 / days) - 1;
+
+      for (let i = 0; i <= days; i++) {
+          const date = new Date(start);
+          date.setDate(date.getDate() + i);
+
+          const value = initialVal * Math.pow(1 + dailyReturn, i);
+          const randomNoise = (Math.random() - 0.5) * 0.01 * value;
+
+          history.push({
+              date: date.toISOString().split('T')[0],
+              total_value: value + randomNoise
+          });
+      }
+
+      // Ensure last value matches current
+      history[history.length - 1].total_value = currentVal;
+
+      return history;
+  }
+
+  function parseCSV(text) {
+      const lines = text.trim().split('\n');
+      const headers = lines[0].split(',');
+      const history = [];
+
+      for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',');
+          if (values.length >= 2) {
+              history.push({
+                  date: values[0].trim(),
+                  total_value: parseFloat(values[1].trim())
+              });
+          }
+      }
+
+      return history;
+  }
+
+  function transformPortfolioData(portfolioData) {
+      console.log('Transforming portfolio data:', portfolioData);
+
+      // Portfolio Management returns: {holdings, analysis_result, timestamp}
+      // Performance Analytics needs: {holdings_history, holdings_detail, cash_flows}
+
+      const analysisResult = portfolioData.analysis_result || portfolioData;
+      const holdings = analysisResult.holdings || [];
+      const summary = analysisResult.summary || {};
+      const originalHoldings = portfolioData.holdings || [];
+
+      // Generate historical data from current portfolio state
+      const holdingsHistory = generatePortfolioHistory(holdings, originalHoldings, summary);
+
+      // Generate cash flows from buy transactions
+      const cashFlows = generateCashFlows(originalHoldings, holdings);
+
+      // Create holdings detail
+      const holdingsDetail = holdings.map(h => ({
+          symbol: h.symbol,
+          quantity: h.quantity,
+          current_price: h.current_price,
+          current_value: h.current_value,
+          gain_loss_pct: h.gain_loss_pct
+      }));
+
+      console.log('Transformed data:', {
+          holdings_history_length: holdingsHistory.length,
+          holdings_detail_length: holdingsDetail.length,
+          cash_flows_length: cashFlows.length
+      });
+
+      return {
+          holdings_history: holdingsHistory,
+          holdings_detail: holdingsDetail,
+          cash_flows: cashFlows,
+          trades: null,
+          signals: null
+      };
+  }
+
+  function generatePortfolioHistory(holdings, originalHoldings, summary) {
+      // Generate simulated daily historical data based on current portfolio state
+      const history = [];
+
+      // Find earliest buy date
+      let earliestDate = new Date();
+      for (const h of originalHoldings) {
+          if (h.buy_date && h.buy_date !== 'N/A') {
+              const buyDate = new Date(h.buy_date);
+              if (buyDate < earliestDate) {
+                  earliestDate = buyDate;
+              }
+          }
+      }
+
+      // If no valid dates, use 1 year ago
+      if (earliestDate > new Date()) {
+          earliestDate = new Date();
+          earliestDate.setFullYear(earliestDate.getFullYear() - 1);
+      }
+
+      const today = new Date();
+      const totalDays = Math.floor((today - earliestDate) / (1000 * 60 * 60 * 24));
+
+      // Calculate initial and current values
+      const currentValue = summary.total_current_value || 0;
+      const investedValue = summary.total_invested || currentValue;
+
+      if (investedValue === 0 || totalDays <= 0) {
+          // Return minimal history
+          return [{
+              date: new Date().toISOString().split('T')[0],
+              total_value: currentValue
+          }];
+      }
+
+      // Generate daily values with realistic growth
+      const totalReturn = (currentValue - investedValue) / investedValue;
+      const dailyReturn = Math.pow(1 + totalReturn, 1 / Math.max(totalDays, 1)) - 1;
+
+      for (let i = 0; i <= totalDays; i++) {
+          const date = new Date(earliestDate);
+          date.setDate(date.getDate() + i);
+
+          // Calculate value with some randomness
+          let value = investedValue * Math.pow(1 + dailyReturn, i);
+
+          // Add realistic volatility (±1% random daily fluctuation)
+          const volatility = 0.01;
+          const randomFactor = 1 + (Math.random() - 0.5) * 2 * volatility;
+          value = value * randomFactor;
+
+          history.push({
+              date: date.toISOString().split('T')[0],
+              total_value: Math.round(value * 100) / 100
+          });
+      }
+
+      // Ensure last value matches current portfolio value
+      if (history.length > 0) {
+          history[history.length - 1].total_value = currentValue;
+      }
+
+      return history;
+  }
+
+  function generateCashFlows(originalHoldings, currentHoldings) {
+      const cashFlows = [];
+
+      // Create cash flows from buy transactions
+      for (const h of originalHoldings) {
+          const buyDate = h.buy_date && h.buy_date !== 'N/A' ? h.buy_date : new Date().toISOString().split('T')[0];
+          const amount = h.quantity * h.buy_price;
+
+          cashFlows.push({
+              date: buyDate,
+              amount: -amount  // Negative because it's money going out
+          });
+      }
+
+      // Sort by date
+      cashFlows.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      return cashFlows;
+  }
+
+  function downloadSampleCSV() {
+      const csv = `date,total_value
+  2024-01-01,517050
+  2024-01-02,519200
+  2024-01-03,522100
+  2024-01-04,520500
+  2024-01-05,525800`;
+
+      const blob = new Blob([csv], {type: 'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'portfolio_history_sample.csv';
+      a.click();
+  }
+
+  // Display Results Function (same as demo version)
+  function displayResults(data) {
+      // 1. Overall Performance
+      if (data.overall_performance) {
+          const op = data.overall_performance;
+          document.getElementById('totalReturn').textContent = (op.total_return_pct >= 0 ? '+' : '') + op.total_return_pct + '%';
+          document.getElementById('totalReturn').className = 'text-2xl font-bold ' + (op.total_return_pct >= 0 ? 'text-green-600' : 'text-red-600');
+          document.getElementById('totalReturnAmount').textContent = '₹' + op.total_return_amount.toLocaleString();
+          document.getElementById('cagr').textContent = op.cagr + '%';
+          document.getElementById('xirr').textContent = op.xirr + '%';
+          document.getElementById('currentValueDisplay').textContent = '₹' + op.current_value.toLocaleString();
+          document.getElementById('initialValue').textContent = 'From ₹' + op.initial_value.toLocaleString();
+
+          // Period returns
+          const periodReturns = document.getElementById('periodReturns');
+          periodReturns.innerHTML = Object.entries(op.period_returns).map(([period, value]) => `
+              <div class="metric-card">
+                  <div class="text-xs text-gray-600">${period}</div>
+                  <div class="text-lg font-bold ${value >= 0 ? 'text-green-600' : 'text-red-600'}">
+                      ${value >= 0 ? '+' : ''}${value}%
+                  </div>
+              </div>
+          `).join('');
+
+          // Best/Worst days
+          if (op.best_day) {
+              document.getElementById('bestDay').textContent = `${op.best_day.date}: +${op.best_day.return.toFixed(2)}%`;
+          }
+          if (op.worst_day) {
+              document.getElementById('worstDay').textContent = `${op.worst_day.date}: ${op.worst_day.return.toFixed(2)}%`;
+          }
+
+          // Equity curve
+          if (data.equity_curve) {
+              renderEquityCurve(data.equity_curve);
+          }
+      }
+
+      // 2. Risk-Adjusted
+      if (data.risk_adjusted) {
+          const ra = data.risk_adjusted;
+          document.getElementById('sharpeRatio').textContent = ra.sharpe_ratio || '--';
+          document.getElementById('sortinoRatio').textContent = ra.sortino_ratio || '--';
+          document.getElementById('calmarRatio').textContent = ra.calmar_ratio || '--';
+          document.getElementById('volatility').textContent = ra.volatility ? ra.volatility + '%' : '--';
+          document.getElementById('maxDrawdown').textContent = ra.max_drawdown ? ra.max_drawdown + '%' : '--';
+          document.getElementById('var95').textContent = ra.var_95 ? ra.var_95 + '%' : '--';
+          document.getElementById('cvar95').textContent = ra.cvar_95 ? ra.cvar_95 + '%' : '--';
+      }
+
+      // 3. Benchmark
+      if (data.benchmark_comparison) {
+          const bc = data.benchmark_comparison;
+          document.getElementById('portfolioReturn').textContent = bc.portfolio_return ? '+' + bc.portfolio_return + '%' : '--';
+          document.getElementById('benchmarkReturn').textContent = bc.benchmark_return ? '+' + bc.benchmark_return + '%' : '--';
+          document.getElementById('outperformance').textContent = bc.outperformance ? (bc.outperformance >= 0 ? '+' : '') + bc.outperformance + '%' : '--';
+          document.getElementById('alpha').textContent = bc.alpha ? (bc.alpha >= 0 ? '+' : '') + bc.alpha + '%' : '--';
+          document.getElementById('beta').textContent = bc.beta || '--';
+          document.getElementById('trackingError').textContent = bc.tracking_error ? bc.tracking_error + '%' : '--';
+          document.getElementById('infoRatio').textContent = bc.information_ratio || '--';
+          document.getElementById('correlation').textContent = bc.correlation || '--';
+      }
+
+      // 4. Attribution
+      if (data.attribution) {
+          renderAttribution(data.attribution);
+      }
+
+      // 5. Trade Analysis (hide if no data)
+      if (data.trade_analysis) {
+          const ta = data.trade_analysis;
+          document.getElementById('winRate').textContent = ta.win_rate + '%';
+          document.getElementById('tradeCount').textContent = ta.winning_trades + '/' + ta.total_trades + ' trades';
+          document.getElementById('profitFactor').textContent = ta.profit_factor;
+          document.getElementById('payoffRatio').textContent = ta.payoff_ratio;
+          document.getElementById('expectancy').textContent = '₹' + ta.expectancy.toLocaleString();
+      } else {
+          document.getElementById('tradeSection').style.display = 'none';
+      }
+
+      // 6. Drawdown
+      if (data.drawdown) {
+          const dd = data.drawdown;
+          document.getElementById('maxDD').textContent = dd.max_drawdown + '%';
+          document.getElementById('maxDDDate').textContent = dd.max_drawdown_date || '--';
+          document.getElementById('avgDD').textContent = dd.avg_drawdown + '%';
+          document.getElementById('currentDD').textContent = dd.current_drawdown + '%';
+          document.getElementById('currentDD').className = 'text-2xl font-bold ' + (dd.current_drawdown === 0 ? 'text-green-600' : 'text-red-600');
+
+          if (data.equity_curve) {
+              renderDrawdownChart(data.equity_curve);
+          }
+      }
+
+      // 7. Consistency
+      if (data.consistency) {
+          const cs = data.consistency;
+          document.getElementById('profitableMonths').textContent = cs.profitable_months + '/' + cs.total_months;
+          document.getElementById('profitableMonthsPct').textContent = cs.pct_profitable_months + '% success';
+          document.getElementById('consistencyScore').textContent = cs.consistency_score;
+          document.getElementById('monthlyStd').textContent = cs.monthly_std + '%';
+          document.getElementById('returnStability').textContent = cs.consistency_score > 75 ? 'High' : cs.consistency_score > 50 ? 'Medium' : 'Low';
+      }
+
+      // 8. Contribution (hide if no data)
+      if (data.contribution && data.contribution.contributions && data.contribution.contributions.length > 0) {
+          const contributionBody = document.getElementById('contributionBody');
+          contributionBody.innerHTML = data.contribution.contributions.map(c => `
+              <tr>
+                  <td class="font-semibold">${c.symbol}</td>
+                  <td>${c.weight}%</td>
+                  <td class="${c.return >= 0 ? 'positive' : 'negative'}">${c.return >= 0 ? '+' : ''}${c.return}%</td>
+                  <td class="${c.return_contribution >= 0 ? 'positive' : 'negative'}">${c.return_contribution >= 0 ? '+' : ''}${c.return_contribution}%</td>
+                  <td>${c.risk_contribution}%</td>
+              </tr>
+          `).join('');
+      } else {
+          document.getElementById('contributionSection').style.display = 'none';
+      }
+
+      // 9. Behavioral (hide if no data)
+      if (data.behavioral) {
+          const bh = data.behavioral;
+          document.getElementById('disciplineScore').textContent = Math.round(bh.discipline_score);
+          document.getElementById('overtrading').textContent = '+' + bh.overtrading_pct + '%';
+          document.getElementById('earlyExits').textContent = bh.early_exits;
+          document.getElementById('earlyExitCost').textContent = '₹' + bh.early_exit_cost.toLocaleString();
+
+          const insights = document.getElementById('behavioralInsights');
+          insights.innerHTML = `
+              <li>Discipline score: ${Math.round(bh.discipline_score)}/100 - ${bh.discipline_score > 75 ? 'Excellent!' : bh.discipline_score > 50 ? 'Good' : 'Needs improvement'}</li>
+              <li>Overtrading penalty: ${bh.overtrading_pct}%</li>
+              <li>Early exits cost: ₹${bh.early_exit_cost.toLocaleString()}</li>
+          `;
+      } else {
+          document.getElementById('behavioralSection').style.display = 'none';
+      }
+
+      // 10. Stress Testing
+      if (data.stress_testing && data.stress_testing.scenarios) {
+          const stressBody = document.getElementById('stressBody');
+          stressBody.innerHTML = data.stress_testing.scenarios.map(s => `
+              <tr>
+                  <td class="font-semibold">${s.scenario}</td>
+                  <td>₹${s.current_value.toLocaleString()}</td>
+                  <td>₹${s.stressed_value.toLocaleString()}</td>
+                  <td class="negative">₹${Math.abs(s.loss_amount).toLocaleString()}</td>
+                  <td class="negative">${s.loss_pct}%</td>
+              </tr>
+          `).join('');
+      }
+
+      // 11. TWR vs MWR
+      if (data.twr_vs_mwr) {
+          const tm = data.twr_vs_mwr;
+          document.getElementById('twr').textContent = tm.time_weighted_return + '%';
+          document.getElementById('mwr').textContent = tm.money_weighted_return + '%';
+          document.getElementById('timingImpact').textContent = tm.timing_impact + '%';
+          document.getElementById('timingImpact').className = 'text-2xl font-bold ' + (tm.timing_impact >= 0 ? 'text-green-600' : 'text-red-600');
+
+          const explanation = `
+              <strong>TWR (${tm.time_weighted_return}%):</strong> Your portfolio's performance (stock picking skill)<br>
+              <strong>MWR (${tm.money_weighted_return}%):</strong> Your actual return (affected by timing)<br>
+              <strong>Gap (${tm.timing_impact}%):</strong> ${tm.timing_impact >= 0 ? 'Good timing! You added money at right times' : 'Bad timing - you added money before drops'}
+          `;
+          document.getElementById('twrExplanation').innerHTML = explanation;
+      }
+
+      // 12. Tax
+      if (data.tax_adjusted) {
+          const tx = data.tax_adjusted;
+          document.getElementById('preTaxGains').textContent = '₹' + tx.pre_tax_gains.toLocaleString();
+          document.getElementById('totalTax').textContent = '₹' + Math.round(tx.total_tax).toLocaleString();
+          document.getElementById('afterTaxGains').textContent = '₹' + Math.round(tx.after_tax_gains).toLocaleString();
+          document.getElementById('taxEfficiency').textContent = tx.tax_efficiency + '%';
+          document.getElementById('ltcgGains').textContent = '₹' + tx.ltcg_gains.toLocaleString();
+          document.getElementById('ltcgTax').textContent = 'Tax: ₹' + tx.ltcg_tax.toLocaleString();
+          document.getElementById('stcgGains').textContent = '₹' + tx.stcg_gains.toLocaleString();
+          document.getElementById('stcgTax').textContent = 'Tax: ₹' + Math.round(tx.stcg_tax).toLocaleString();
+          document.getElementById('taxBreakdown').textContent = `LTCG: ₹${tx.ltcg_tax.toLocaleString()} + STCG: ₹${Math.round(tx.stcg_tax).toLocaleString()}`;
+      }
+  }
+
+  // Chart rendering functions (same as demo)
+  function renderEquityCurve(data) {
+      const ctx = document.getElementById('equityCurveChart');
+      if (equityCurveChart) equityCurveChart.destroy();
+
+      equityCurveChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+              labels: data.dates,
+              datasets: [{
+                  label: 'Portfolio Value',
+                  data: data.values,
+                  borderColor: '#10b981',
+                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                  fill: true,
+                  tension: 0.4
+              }]
+          },
+          options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                  y: {
+                      ticks: {
+                          callback: function(value) {
+                              return '₹' + (value/1000).toFixed(0) + 'K';
+                          }
+                      }
+                  }
+              }
+          }
+      });
+  }
+
+  function renderDrawdownChart(equityCurve) {
+      const values = equityCurve.values;
+      const drawdowns = [];
+      let runningMax = values[0];
+
+      for (let v of values) {
+          if (v > runningMax) runningMax = v;
+          drawdowns.push(((v - runningMax) / runningMax) * 100);
+      }
+
+      const ctx = document.getElementById('drawdownChart');
+      if (drawdownChart) drawdownChart.destroy();
+
+      drawdownChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+              labels: equityCurve.dates,
+              datasets: [{
+                  label: 'Drawdown %',
+                  data: drawdowns,
+                  borderColor: '#ef4444',
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  fill: true,
+                  tension: 0.4
+              }]
+          },
+          options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                  y: {
+                      ticks: {
+                          callback: function(value) {
+                              return value + '%';
+                          }
+                      }
+                  }
+              }
+          }
+      });
+  }
+
+  function renderAttribution(data) {
+      const ctx = document.getElementById('attributionChart');
+      if (attributionChart) attributionChart.destroy();
+
+      attributionChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+              labels: ['Market Effect', 'Stock Selection', 'Timing', 'Total Return'],
+              datasets: [{
+                  label: 'Return %',
+                  data: [data.market_effect, data.stock_selection_effect, data.timing_effect, data.total_return],
+                  backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
+              }]
+          },
+          options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                  y: {
+                      ticks: {
+                          callback: function(value) {
+                              return value + '%';
+                          }
+                      }
+                  }
+              }
+          }
+      });
+
+      const details = document.getElementById('attributionDetails');
+      details.innerHTML = `
+          <div class="p-3 bg-blue-50 rounded">
+              <div class="font-semibold text-blue-800">Market Effect: +${data.market_effect}%</div>
+              <div class="text-sm text-gray-600">Return from overall market movement</div>
+          </div>
+          <div class="p-3 bg-green-50 rounded">
+              <div class="font-semibold text-green-800">Stock Selection: +${data.stock_selection_effect}%</div>
+              <div class="text-sm text-gray-600">Your skill in picking stocks</div>
+          </div>
+          <div class="p-3 bg-orange-50 rounded">
+              <div class="font-semibold text-orange-800">Timing Effect: ${data.timing_effect}%</div>
+              <div class="text-sm text-gray-600">Impact of entry/exit timing</div>
+          </div>
+          <div class="p-3 bg-purple-50 rounded border-2 border-purple-200">
+              <div class="font-semibold text-purple-800">Total Return: +${data.total_return}%</div>
+              <div class="text-sm text-gray-600">Combined effect of all factors</div>
+          </div>
+      `;
+  }
+
+  // Export functions
+  function exportToPDF() {
+      alert('PDF export functionality will be implemented with a library like jsPDF');
+  }
+
+  function exportToExcel() {
+      alert('Excel export functionality will be implemented with a library like SheetJS');
+  }
+
+  function shareReport() {
+      if (navigator.share) {
+          navigator.share({
+              title: 'Performance Analytics Report',
+              text: 'Check out my portfolio performance analysis!',
+              url: window.location.href
+          });
+      } else {
+          alert('Share functionality not supported on this browser');
+      }
+  }
 </script>
 
 </body>
