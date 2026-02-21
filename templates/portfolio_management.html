@@ -48,48 +48,164 @@ th {
     font-weight: bold;
 }
 </style>
+
+<style>
+/* Mobile-responsive table wrapper */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure tables don't break layout on mobile */
+table {
+    min-width: 600px;
+}
+
+/* Stack cards on mobile */
+@media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr !important; }
+    .section-card { padding: 16px; }
+    .metric-card { padding: 12px; }
+    h1 { font-size: 1.75rem !important; }
+    h2 { font-size: 1.25rem !important; }
+    .section-title { font-size: 1.25rem !important; }
+}
+
+/* Touch-friendly buttons */
+button, .btn, a[class*="btn"] {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+/* Improved mobile padding */
+@media (max-width: 640px) {
+    body { padding: 0 !important; }
+    .max-w-7xl { padding-left: 1rem; padding-right: 1rem; }
+}
+</style>
+
 </head>
 
 <body class="bg-gray-100 min-h-screen">
 
 <!-- NAVBAR -->
-<!-- ================= NAVBAR ================= -->
-<nav class="text-white px-6 py-4 shadow-md mb-8" style="background-color:#457b9d;">
-  <div class="max-w-7xl mx-auto flex justify-between items-center">
-    <div class="text-xl font-bold">💼 Financial Analyzer</div>
-    <div class="flex space-x-4">
-      <a href="/"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Home
+<!-- ================= MOBILE-RESPONSIVE NAVBAR ================= -->
+<nav class="text-white shadow-md mb-8" style="background-color:#457b9d;">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between items-center h-16">
+      
+      <!-- Logo -->
+      <div class="flex-shrink-0">
+        <a href="/" class="text-xl font-bold">💼 Financial Analyzer</a>
+      </div>
+
+      <!-- Desktop Menu -->
+      <div class="hidden lg:flex space-x-2">
+        <a href="/" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Home
+        </a>
+        <a href="/dcf" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          DCF
+        </a>
+        <a href="/financial-modelling" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Modelling
+        </a>
+        <a href="/technical-analysis" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Technical
+        </a>
+        <a href="/portfolio-management" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Portfolio
+        </a>
+        <a href="/performance-analytics" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Performance
+        </a>
+        <a href="/strategy-optimization" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Strategy
+        </a>
+      </div>
+
+      <!-- Mobile menu button -->
+      <div class="lg:hidden">
+        <button id="mobile-menu-btn" type="button" 
+                class="inline-flex items-center justify-center p-2 rounded-md hover:bg-white hover:bg-opacity-20 focus:outline-none">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            <path id="close-icon" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Menu -->
+  <div id="mobile-menu" class="hidden lg:hidden">
+    <div class="px-2 pt-2 pb-3 space-y-1">
+      <a href="/" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        🏠 Home
       </a>
-      <a href="/dcf"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        DCF Valuation
+      <a href="/dcf" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📊 DCF Valuation
       </a>
-      <a href="/financial-modelling"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Financial Modelling
+      <a href="/financial-modelling" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📈 Financial Modelling
       </a>
-      <a href="/technical-analysis"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Technical Analysis
+      <a href="/technical-analysis" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📉 Technical Analysis
       </a>
-      <a href="/portfolio-management"
-         class="px-4 py-2 rounded-lg bg-white bg-opacity-20 font-semibold hover:bg-white hover:bg-opacity-20 transition">
-        Portfolio Management
+      <a href="/portfolio-management" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        💼 Portfolio Management
       </a>
-      <a href="/performance-analytics"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Performance Analytics
+      <a href="/performance-analytics" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📊 Performance Analytics
       </a>
-      <a href="/strategy-optimization"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Strategy Optimization
+      <a href="/strategy-optimization" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        🎯 Strategy Optimization
       </a>
     </div>
   </div>
 </nav>
+
+<script>
+// Mobile menu toggle
+document.addEventListener('DOMContentLoaded', function() {
+  const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+  const mobileMenu = document.getElementById('mobile-menu');
+  const menuIcon = document.getElementById('menu-icon');
+  const closeIcon = document.getElementById('close-icon');
+
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener('click', function() {
+      mobileMenu.classList.toggle('hidden');
+      menuIcon.classList.toggle('hidden');
+      closeIcon.classList.toggle('hidden');
+    });
+  }
+
+  // Highlight active page
+  const currentPath = window.location.pathname;
+  document.querySelectorAll('.nav-link, #mobile-menu a').forEach(link => {
+    if (link.getAttribute('href') === currentPath) {
+      link.classList.add('bg-white', 'bg-opacity-20', 'font-semibold');
+    }
+  });
+});
+</script>
 <!-- =============== NAVBAR END =============== -->
+
 
 <!-- MAIN CONTAINER -->
 <div class="max-w-7xl mx-auto px-6">
@@ -141,7 +257,7 @@ th {
     <div class="mt-6">
       <h3 class="text-lg font-bold text-gray-700 mb-3">Your Holdings</h3>
       <div class="overflow-x-auto">
-        <table id="holdingsTable">
+        <div class="table-responsive overflow-x-auto"><table id="holdingsTable">
           <thead>
             <tr>
               <th>Symbol</th>
@@ -156,7 +272,7 @@ th {
               <td colspan="5" class="text-center text-gray-500">No holdings added yet. Add your first stock above.</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
 
@@ -169,8 +285,7 @@ th {
   <!-- Loading -->
   <div id="loadingIndicator" class="hidden text-center py-8">
     <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-    <p class="text-gray-600 mt-4">Fetching live prices &amp; analyzing portfolio...</p>
-    <p id="fetchStatus" class="text-blue-500 text-sm mt-2 font-medium min-h-5"></p>
+    <p class="text-gray-600 mt-4">Analyzing portfolio...</p>
   </div>
 
   <!-- Results Container -->
@@ -217,7 +332,7 @@ th {
     <div class="section-card">
       <div class="section-title">📈 Holdings Details</div>
       <div class="overflow-x-auto">
-        <table id="holdingsDetailsTable">
+        <div class="table-responsive overflow-x-auto"><table id="holdingsDetailsTable">
           <thead>
             <tr>
               <th>Stock</th>
@@ -231,7 +346,7 @@ th {
             </tr>
           </thead>
           <tbody id="holdingsDetailsBody"></tbody>
-        </table>
+        </table></div>
       </div>
     </div>
 
@@ -283,46 +398,74 @@ let holdings = [];
 let allocationChartInstance = null;
 let lastAnalysisResult = null;
 
-// ── Page load ──────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => { loadSavedHoldings(); });
+// 🔹 LOAD SAVED HOLDINGS ON PAGE LOAD
+window.addEventListener('DOMContentLoaded', () => {
+    loadSavedHoldings();
+});
 
 function loadSavedHoldings() {
     const saved = localStorage.getItem('portfolio_holdings');
     if (saved) {
-        try { holdings = JSON.parse(saved); renderHoldingsTable(); } catch(e) {}
+        try {
+            holdings = JSON.parse(saved);
+            renderHoldingsTable();
+            
+            // Show notification
+            if (holdings.length > 0) {
+                console.log(`Loaded ${holdings.length} saved holdings`);
+            }
+        } catch (e) {
+            console.error('Error loading saved holdings:', e);
+        }
     }
 }
-function saveHoldings() { localStorage.setItem('portfolio_holdings', JSON.stringify(holdings)); }
 
-// ── Add / Remove ───────────────────────────────────────────────────────────
+function saveHoldings() {
+    localStorage.setItem('portfolio_holdings', JSON.stringify(holdings));
+}
+
 function addHolding() {
-    const symbol   = document.getElementById('stockSymbol').value.trim().toUpperCase();
+    const symbol = document.getElementById('stockSymbol').value.trim().toUpperCase();
     const quantity = parseFloat(document.getElementById('quantity').value);
     const buyPrice = parseFloat(document.getElementById('buyPrice').value);
-    const buyDate  = document.getElementById('buyDate').value;
+    const buyDate = document.getElementById('buyDate').value;
 
-    if (!symbol || !quantity || !buyPrice) { alert('Please fill in all fields'); return; }
+    if (!symbol || !quantity || !buyPrice) {
+        alert('Please fill in all fields');
+        return;
+    }
 
-    holdings.push({ symbol, quantity, buy_price: buyPrice,
-                    buy_date: buyDate || new Date().toISOString().split('T')[0] });
-    saveHoldings();
+    holdings.push({
+        symbol: symbol,
+        quantity: quantity,
+        buy_price: buyPrice,
+        buy_date: buyDate || new Date().toISOString().split('T')[0]
+    });
+
+    saveHoldings(); // 🔹 Save to localStorage
     renderHoldingsTable();
-    ['stockSymbol','quantity','buyPrice','buyDate'].forEach(id =>
-        document.getElementById(id).value = '');
+    
+    // Clear inputs
+    document.getElementById('stockSymbol').value = '';
+    document.getElementById('quantity').value = '';
+    document.getElementById('buyPrice').value = '';
+    document.getElementById('buyDate').value = '';
 }
 
 function removeHolding(index) {
     holdings.splice(index, 1);
-    saveHoldings();
+    saveHoldings(); // 🔹 Save after removal
     renderHoldingsTable();
 }
 
 function renderHoldingsTable() {
     const tbody = document.getElementById('holdingsBody');
+    
     if (holdings.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-500">No holdings added yet. Add your first stock above.</td></tr>';
         return;
     }
+
     tbody.innerHTML = holdings.map((h, i) => `
         <tr>
             <td class="font-semibold">${h.symbol}</td>
@@ -338,97 +481,48 @@ function renderHoldingsTable() {
     `).join('');
 }
 
-// ── Price fetch via Flask proxy (/get-price/SYMBOL) ────────────────────────
-// The browser calls YOUR Flask server — no CORS, no external DNS needed.
-// Flask then calls yfinance internally and returns the price as JSON.
-async function fetchPriceViaProxy(symbol) {
-    try {
-        const res = await fetch(`/get-price/${encodeURIComponent(symbol)}`);
-        if (!res.ok) return null;
-        const data = await res.json();
-        if (data.price && data.price > 0) {
-            console.log(`✅ ${symbol}: ₹${data.price} [${data.source}]`);
-            return { price: data.price, source: data.source };
-        }
-    } catch(e) {
-        console.warn(`Proxy fetch failed for ${symbol}:`, e.message);
+function analyzePortfolio() {
+    if (holdings.length === 0) {
+        alert('Please add at least one stock');
+        return;
     }
-    return null;
-}
-
-async function enrichHoldingsWithPrices(holdingsArr) {
-    const status = document.getElementById('fetchStatus');
-    const enriched = [];
-    const failed   = [];
-
-    for (let i = 0; i < holdingsArr.length; i++) {
-        const h = holdingsArr[i];
-        if (status) status.textContent = `📡 Fetching live price ${i+1}/${holdingsArr.length}: ${h.symbol}…`;
-
-        const result = await fetchPriceViaProxy(h.symbol);
-
-        if (result) {
-            enriched.push({ ...h, current_price: result.price, price_source: result.source });
-        } else {
-            failed.push(h.symbol);
-            enriched.push({ ...h, current_price: h.buy_price, price_source: 'fetch failed' });
-        }
-    }
-
-    if (status) status.textContent = '';
-
-    if (failed.length) {
-        const warn = document.createElement('div');
-        warn.className = 'bg-yellow-50 border border-yellow-400 text-yellow-800 rounded-lg p-3 mb-4 text-sm';
-        warn.innerHTML = `⚠️ Could not fetch live price for: <strong>${failed.join(', ')}</strong>.<br>
-            Make sure you are using the correct NSE ticker symbol (e.g. <code>TATAMOTORS</code>, <code>INFY</code>, <code>TCS</code>).<br>
-            Showing buy price as fallback for those stocks.`;
-        const container = document.getElementById('resultsContainer');
-        const old = container.querySelector('.price-warn');
-        if (old) old.remove();
-        warn.classList.add('price-warn');
-        container.prepend(warn);
-    }
-
-    return enriched;
-}
-
-// ── Main analyze ───────────────────────────────────────────────────────────
-async function analyzePortfolio() {
-    if (holdings.length === 0) { alert('Please add at least one stock'); return; }
 
     document.getElementById('loadingIndicator').classList.remove('hidden');
     document.getElementById('resultsContainer').classList.add('hidden');
 
-    try {
-        // STEP 1 — fetch live prices through Flask proxy
-        const enriched = await enrichHoldingsWithPrices(holdings);
-
-        // STEP 2 — send enriched holdings (already have current_price) to backend
-        const res  = await fetch('/portfolio-management/analyze', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ holdings: enriched })
-        });
-        const data = await res.json();
-
+    fetch('/portfolio-management/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ holdings: holdings })
+    })
+    .then(res => res.json())
+    .then(data => {
         document.getElementById('loadingIndicator').classList.add('hidden');
-        if (!data.success) { alert('Error: ' + data.error); return; }
+        
+        if (!data.success) {
+            alert('Error: ' + data.error);
+            return;
+        }
 
+        // 🔹 SAVE ANALYSIS RESULT LOCALLY
         lastAnalysisResult = data;
         localStorage.setItem('portfolio_analysis', JSON.stringify({
-            holdings: enriched, result: data,
+            holdings: holdings,
+            result: data,
             timestamp: new Date().toISOString()
         }));
 
         displayResults(data);
         document.getElementById('resultsContainer').classList.remove('hidden');
+        
+        // Scroll to results
         document.getElementById('resultsContainer').scrollIntoView({ behavior: 'smooth' });
-
-    } catch(err) {
+    })
+    .catch(err => {
         document.getElementById('loadingIndicator').classList.add('hidden');
+        console.error(err);
         alert('Error analyzing portfolio: ' + err.message);
-    }
+    });
 }
 
 function displayResults(data) {

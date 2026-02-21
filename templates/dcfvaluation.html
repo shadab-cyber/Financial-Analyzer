@@ -6,47 +6,163 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+<style>
+/* Mobile-responsive table wrapper */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure tables don't break layout on mobile */
+table {
+    min-width: 600px;
+}
+
+/* Stack cards on mobile */
+@media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr !important; }
+    .section-card { padding: 16px; }
+    .metric-card { padding: 12px; }
+    h1 { font-size: 1.75rem !important; }
+    h2 { font-size: 1.25rem !important; }
+    .section-title { font-size: 1.25rem !important; }
+}
+
+/* Touch-friendly buttons */
+button, .btn, a[class*="btn"] {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+/* Improved mobile padding */
+@media (max-width: 640px) {
+    body { padding: 0 !important; }
+    .max-w-7xl { padding-left: 1rem; padding-right: 1rem; }
+}
+</style>
+
 </head>
 
 <body class="bg-gray-100 min-h-screen p-6">
 
-<!-- ================= NAVBAR ================= -->
-<nav class="text-white px-6 py-4 shadow-md mb-8" style="background-color:#457b9d;">
-  <div class="max-w-7xl mx-auto flex justify-between items-center">
-    <div class="text-xl font-bold">💼 Financial Analyzer</div>
-    <div class="flex space-x-4">
-      <a href="/"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Home
+<!-- ================= MOBILE-RESPONSIVE NAVBAR ================= -->
+<nav class="text-white shadow-md mb-8" style="background-color:#457b9d;">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between items-center h-16">
+      
+      <!-- Logo -->
+      <div class="flex-shrink-0">
+        <a href="/" class="text-xl font-bold">💼 Financial Analyzer</a>
+      </div>
+
+      <!-- Desktop Menu -->
+      <div class="hidden lg:flex space-x-2">
+        <a href="/" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Home
+        </a>
+        <a href="/dcf" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          DCF
+        </a>
+        <a href="/financial-modelling" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Modelling
+        </a>
+        <a href="/technical-analysis" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Technical
+        </a>
+        <a href="/portfolio-management" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Portfolio
+        </a>
+        <a href="/performance-analytics" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Performance
+        </a>
+        <a href="/strategy-optimization" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Strategy
+        </a>
+      </div>
+
+      <!-- Mobile menu button -->
+      <div class="lg:hidden">
+        <button id="mobile-menu-btn" type="button" 
+                class="inline-flex items-center justify-center p-2 rounded-md hover:bg-white hover:bg-opacity-20 focus:outline-none">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            <path id="close-icon" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Menu -->
+  <div id="mobile-menu" class="hidden lg:hidden">
+    <div class="px-2 pt-2 pb-3 space-y-1">
+      <a href="/" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        🏠 Home
       </a>
-      <a href="/dcf"
-         class="px-4 py-2 rounded-lg bg-white bg-opacity-20 font-semibold hover:bg-white hover:bg-opacity-20 transition">
-        DCF Valuation
+      <a href="/dcf" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📊 DCF Valuation
       </a>
-      <a href="/financial-modelling"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Financial Modelling
+      <a href="/financial-modelling" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📈 Financial Modelling
       </a>
-      <a href="/technical-analysis"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Technical Analysis
+      <a href="/technical-analysis" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📉 Technical Analysis
       </a>
-      <a href="/portfolio-management"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Portfolio Management
+      <a href="/portfolio-management" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        💼 Portfolio Management
       </a>
-      <a href="/performance-analytics"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Performance Analytics
+      <a href="/performance-analytics" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📊 Performance Analytics
       </a>
-      <a href="/strategy-optimization"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Strategy Optimization
+      <a href="/strategy-optimization" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        🎯 Strategy Optimization
       </a>
     </div>
   </div>
 </nav>
+
+<script>
+// Mobile menu toggle
+document.addEventListener('DOMContentLoaded', function() {
+  const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+  const mobileMenu = document.getElementById('mobile-menu');
+  const menuIcon = document.getElementById('menu-icon');
+  const closeIcon = document.getElementById('close-icon');
+
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener('click', function() {
+      mobileMenu.classList.toggle('hidden');
+      menuIcon.classList.toggle('hidden');
+      closeIcon.classList.toggle('hidden');
+    });
+  }
+
+  // Highlight active page
+  const currentPath = window.location.pathname;
+  document.querySelectorAll('.nav-link, #mobile-menu a').forEach(link => {
+    if (link.getAttribute('href') === currentPath) {
+      link.classList.add('bg-white', 'bg-opacity-20', 'font-semibold');
+    }
+  });
+});
+</script>
 <!-- =============== NAVBAR END =============== -->
+
 
 <div class="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow-lg">
 
@@ -158,7 +274,7 @@ function renderDCF(data) {
   });
 
   document.getElementById("tables").innerHTML = `
-    <table class="w-full border text-sm">
+    <div class="table-responsive overflow-x-auto"><table class="w-full border text-sm">
       <thead class="bg-gray-200">
         <tr>
           <th class="border p-2">Year</th>
@@ -166,7 +282,7 @@ function renderDCF(data) {
         </tr>
       </thead>
       <tbody>${rows}</tbody>
-    </table>
+    </table></div>
   `;
 }
 </script>

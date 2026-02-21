@@ -65,48 +65,164 @@ th {
     color: white;
 }
 </style>
+
+<style>
+/* Mobile-responsive table wrapper */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure tables don't break layout on mobile */
+table {
+    min-width: 600px;
+}
+
+/* Stack cards on mobile */
+@media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr !important; }
+    .section-card { padding: 16px; }
+    .metric-card { padding: 12px; }
+    h1 { font-size: 1.75rem !important; }
+    h2 { font-size: 1.25rem !important; }
+    .section-title { font-size: 1.25rem !important; }
+}
+
+/* Touch-friendly buttons */
+button, .btn, a[class*="btn"] {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+/* Improved mobile padding */
+@media (max-width: 640px) {
+    body { padding: 0 !important; }
+    .max-w-7xl { padding-left: 1rem; padding-right: 1rem; }
+}
+</style>
+
 </head>
 
 <body class="bg-gray-100 min-h-screen">
 
 <!-- NAVBAR -->
-<!-- ================= NAVBAR ================= -->
-<nav class="text-white px-6 py-4 shadow-md mb-8" style="background-color:#457b9d;">
-  <div class="max-w-7xl mx-auto flex justify-between items-center">
-    <div class="text-xl font-bold">💼 Financial Analyzer</div>
-    <div class="flex space-x-4">
-      <a href="/"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Home
+<!-- ================= MOBILE-RESPONSIVE NAVBAR ================= -->
+<nav class="text-white shadow-md mb-8" style="background-color:#457b9d;">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between items-center h-16">
+      
+      <!-- Logo -->
+      <div class="flex-shrink-0">
+        <a href="/" class="text-xl font-bold">💼 Financial Analyzer</a>
+      </div>
+
+      <!-- Desktop Menu -->
+      <div class="hidden lg:flex space-x-2">
+        <a href="/" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Home
+        </a>
+        <a href="/dcf" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          DCF
+        </a>
+        <a href="/financial-modelling" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Modelling
+        </a>
+        <a href="/technical-analysis" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Technical
+        </a>
+        <a href="/portfolio-management" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Portfolio
+        </a>
+        <a href="/performance-analytics" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Performance
+        </a>
+        <a href="/strategy-optimization" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Strategy
+        </a>
+      </div>
+
+      <!-- Mobile menu button -->
+      <div class="lg:hidden">
+        <button id="mobile-menu-btn" type="button" 
+                class="inline-flex items-center justify-center p-2 rounded-md hover:bg-white hover:bg-opacity-20 focus:outline-none">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            <path id="close-icon" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Menu -->
+  <div id="mobile-menu" class="hidden lg:hidden">
+    <div class="px-2 pt-2 pb-3 space-y-1">
+      <a href="/" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        🏠 Home
       </a>
-      <a href="/dcf"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        DCF Valuation
+      <a href="/dcf" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📊 DCF Valuation
       </a>
-      <a href="/financial-modelling"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Financial Modelling
+      <a href="/financial-modelling" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📈 Financial Modelling
       </a>
-      <a href="/technical-analysis"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Technical Analysis
+      <a href="/technical-analysis" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📉 Technical Analysis
       </a>
-      <a href="/portfolio-management"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Portfolio Management
+      <a href="/portfolio-management" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        💼 Portfolio Management
       </a>
-      <a href="/performance-analytics"
-         class="px-4 py-2 rounded-lg  hover:bg-white hover:bg-opacity-20 transition">
-        Performance Analytics
+      <a href="/performance-analytics" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📊 Performance Analytics
       </a>
-      <a href="/strategy-optimization"
-         class="px-4 py-2 rounded-lg bg-white bg-opacity-20 font-semibold hover:bg-white hover:bg-opacity-20 transition">
-        Strategy Optimization
+      <a href="/strategy-optimization" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        🎯 Strategy Optimization
       </a>
     </div>
   </div>
 </nav>
+
+<script>
+// Mobile menu toggle
+document.addEventListener('DOMContentLoaded', function() {
+  const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+  const mobileMenu = document.getElementById('mobile-menu');
+  const menuIcon = document.getElementById('menu-icon');
+  const closeIcon = document.getElementById('close-icon');
+
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener('click', function() {
+      mobileMenu.classList.toggle('hidden');
+      menuIcon.classList.toggle('hidden');
+      closeIcon.classList.toggle('hidden');
+    });
+  }
+
+  // Highlight active page
+  const currentPath = window.location.pathname;
+  document.querySelectorAll('.nav-link, #mobile-menu a').forEach(link => {
+    if (link.getAttribute('href') === currentPath) {
+      link.classList.add('bg-white', 'bg-opacity-20', 'font-semibold');
+    }
+  });
+});
+</script>
 <!-- =============== NAVBAR END =============== -->
+
 
 <!-- MAIN CONTAINER -->
 <div class="max-w-7xl mx-auto px-6">
@@ -350,7 +466,7 @@ th {
       
       <h3 class="text-lg font-semibold mb-3">Top 10 Parameter Combinations</h3>
       <div class="overflow-x-auto">
-        <table id="optimizationTable">
+        <div class="table-responsive overflow-x-auto"><table id="optimizationTable">
           <thead>
             <tr>
               <th>Rank</th>
@@ -362,7 +478,7 @@ th {
             </tr>
           </thead>
           <tbody id="optimizationBody"></tbody>
-        </table>
+        </table></div>
       </div>
     </div>
 
@@ -388,7 +504,7 @@ th {
       
       <h3 class="text-lg font-semibold mb-3">Walk-Forward Windows</h3>
       <div class="overflow-x-auto">
-        <table id="walkForwardTable">
+        <div class="table-responsive overflow-x-auto"><table id="walkForwardTable">
           <thead>
             <tr>
               <th>Window</th>
@@ -399,7 +515,7 @@ th {
             </tr>
           </thead>
           <tbody id="walkForwardBody"></tbody>
-        </table>
+        </table></div>
       </div>
     </div>
 
@@ -443,7 +559,7 @@ th {
       
       <h3 class="text-lg font-semibold mb-3">Slippage Impact Analysis</h3>
       <div class="overflow-x-auto">
-        <table id="slippageTable">
+        <div class="table-responsive overflow-x-auto"><table id="slippageTable">
           <thead>
             <tr>
               <th>Slippage %</th>
@@ -452,7 +568,7 @@ th {
             </tr>
           </thead>
           <tbody id="slippageBody"></tbody>
-        </table>
+        </table></div>
       </div>
     </div>
 
@@ -469,7 +585,7 @@ th {
       
       <h3 class="text-lg font-semibold mb-3">Position Sizing Methods Comparison</h3>
       <div class="overflow-x-auto">
-        <table id="positionSizingTable">
+        <div class="table-responsive overflow-x-auto"><table id="positionSizingTable">
           <thead>
             <tr>
               <th>Method</th>
@@ -480,7 +596,7 @@ th {
             </tr>
           </thead>
           <tbody id="positionSizingBody"></tbody>
-        </table>
+        </table></div>
       </div>
       
       <div class="mt-4 p-4 bg-green-50 border-l-4 border-green-500 rounded">
