@@ -6,7 +6,7 @@ Year format assumed: Mar-YY, Mar-24, etc. (tolerant to similar headings).
 """
 
 # import tkinter as tk
-from tkinter import filedialog
+# from tkinter import filedialog
 import fitz  # PyMuPDF
 import pytesseract
 from PIL import Image
