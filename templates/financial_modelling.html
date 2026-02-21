@@ -71,37 +71,66 @@
 </style>
 
 <style>
-/* Mobile-responsive table wrapper */
+/* Mobile responsive enhancements */
+@media (max-width: 768px) {
+    .section-card {
+        padding: 16px;
+    }
+    
+    h1 {
+        font-size: 1.5rem !important;
+    }
+    
+    h2 {
+        font-size: 1.125rem !important;
+    }
+    
+    h3 {
+        font-size: 1rem !important;
+    }
+    
+    /* Stack guide steps nicely on mobile */
+    .space-y-4 > div {
+        margin-bottom: 1rem;
+    }
+    
+    /* Make buttons full width on mobile */
+    button {
+        width: 100%;
+        min-height: 44px;
+    }
+    
+    /* Ensure step numbers don't wrap */
+    .flex.items-center.gap-2 {
+        flex-wrap: nowrap;
+    }
+}
+
+/* Table responsive wrapper */
 .table-responsive {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }
 
-/* Ensure tables don't break layout on mobile */
 table {
     min-width: 600px;
 }
 
-/* Stack cards on mobile */
-@media (max-width: 768px) {
-    .grid { grid-template-columns: 1fr !important; }
-    .section-card { padding: 16px; }
-    .metric-card { padding: 12px; }
-    h1 { font-size: 1.75rem !important; }
-    h2 { font-size: 1.25rem !important; }
-    .section-title { font-size: 1.25rem !important; }
-}
-
-/* Touch-friendly buttons */
-button, .btn, a[class*="btn"] {
+/* Touch-friendly elements */
+button, input[type="file"], a[class*="btn"] {
     min-height: 44px;
-    min-width: 44px;
+    touch-action: manipulation;
 }
 
-/* Improved mobile padding */
 @media (max-width: 640px) {
-    body { padding: 0 !important; }
-    .max-w-7xl { padding-left: 1rem; padding-right: 1rem; }
+    body {
+        padding: 0 !important;
+    }
+    
+    .max-w-7xl {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
 }
 </style>
 
@@ -234,6 +263,121 @@ document.addEventListener('DOMContentLoaded', function() {
     <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">
       📊 Financial Modelling
     </h1>
+  <!-- How to Use Guide - Collapsible -->
+  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 mb-6 border border-blue-200">
+    <div class="flex justify-between items-center cursor-pointer" onclick="toggleGuide()">
+      <h2 class="text-lg font-bold text-blue-800 flex items-center gap-2">
+        <span>📚</span>
+        <span>How to Use This Tool</span>
+      </h2>
+      <button id="guideToggle" class="text-blue-600 font-bold text-2xl hover:text-blue-800 transition">
+        +
+      </button>
+    </div>
+    
+    <div id="guideContent" class="hidden mt-4 space-y-4">
+      <!-- Step-by-step instructions -->
+      <div class="bg-white rounded-lg p-4 shadow-sm">
+        <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">1</span>
+          Go to Screener.in
+        </h3>
+        <p class="text-gray-700 text-sm ml-8">
+          Visit <a href="https://www.screener.in" target="_blank" class="text-blue-600 underline hover:text-blue-800">screener.in</a> and search for your desired company.
+        </p>
+      </div>
+
+      <div class="bg-white rounded-lg p-4 shadow-sm">
+        <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">2</span>
+          Download Excel Data
+        </h3>
+        <p class="text-gray-700 text-sm ml-8">
+          Click <strong>"Export to Excel"</strong> button on the company page to download the financial data.
+        </p>
+      </div>
+
+      <div class="bg-white rounded-lg p-4 shadow-sm">
+        <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">3</span>
+          Clean Up Excel File
+        </h3>
+        <p class="text-gray-700 text-sm ml-8 mb-2">
+          Open the downloaded Excel file and:
+        </p>
+        <ul class="text-gray-700 text-sm ml-12 list-disc space-y-1">
+          <li>Delete all sheets <strong>except "Data Sheet"</strong></li>
+          <li>Rename "Data Sheet" to <strong>"Balance Sheet & P&L"</strong></li>
+        </ul>
+      </div>
+
+      <div class="bg-white rounded-lg p-4 shadow-sm">
+        <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">4</span>
+          Add Cash Flow Data
+        </h3>
+        <p class="text-gray-700 text-sm ml-8 mb-2">
+          Create a new sheet named <strong>"Cash Flow Data"</strong>:
+        </p>
+        <ul class="text-gray-700 text-sm ml-12 list-disc space-y-1">
+          <li>Go back to Screener.in</li>
+          <li>Scroll down to the <strong>Cash Flow section</strong></li>
+          <li>Click to <strong>expand</strong> the cash flow table</li>
+          <li>Copy the entire cash flow table</li>
+          <li>Paste it into the "Cash Flow Data" sheet</li>
+        </ul>
+      </div>
+
+      <div class="bg-white rounded-lg p-4 shadow-sm border-l-4 border-orange-500">
+        <h3 class="font-semibold text-orange-800 mb-2 flex items-center gap-2">
+          <span>⚠️</span>
+          Important: Align Dates
+        </h3>
+        <p class="text-gray-700 text-sm">
+          Make sure the <strong>dates/years align properly</strong> with the line items after pasting Cash Flow data. Adjust if needed.
+        </p>
+      </div>
+
+      <div class="bg-white rounded-lg p-4 shadow-sm">
+        <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">5</span>
+          Save & Upload
+        </h3>
+        <p class="text-gray-700 text-sm ml-8">
+          Save your Excel file and upload it using the form below.
+        </p>
+      </div>
+
+      <!-- Download Sample -->
+      <div class="bg-green-50 border border-green-300 rounded-lg p-4 mt-4">
+        <div class="flex items-start gap-3">
+          <span class="text-2xl">📄</span>
+          <div class="flex-1">
+            <h3 class="font-semibold text-green-800 mb-2">Need Help? Download Sample File</h3>
+            <p class="text-sm text-gray-700 mb-3">
+              See a properly formatted Excel file example to understand the structure.
+            </p>
+            <button onclick="downloadSampleExcel()" 
+                    class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold transition shadow-sm text-sm">
+              📥 Download Sample Excel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Final Summary -->
+      <div class="bg-blue-50 border border-blue-300 rounded-lg p-4">
+        <h3 class="font-semibold text-blue-800 mb-2">✅ Final Checklist</h3>
+        <ul class="text-sm text-gray-700 space-y-1 ml-4">
+          <li>✓ Two sheets: "Balance Sheet & P&L" and "Cash Flow Data"</li>
+          <li>✓ Dates/years aligned properly</li>
+          <li>✓ File saved as .xlsx format</li>
+          <li>✓ Ready to upload below!</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
 
     <div class="border-2 border-dashed border-gray-300 p-6 rounded-lg text-center">
       <label class="block font-semibold mb-2 text-gray-700">
@@ -264,7 +408,9 @@ document.addEventListener('DOMContentLoaded', function() {
         📈 INCOME STATEMENT
       </div>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="incomeTable"></table></div>
+        <div class="table-responsive">
+<table id="incomeTable"></table>
+</div>
       </div>
     </div>
 
@@ -274,7 +420,9 @@ document.addEventListener('DOMContentLoaded', function() {
         💰 BALANCE SHEET
       </div>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="balanceTable"></table></div>
+        <div class="table-responsive">
+<table id="balanceTable"></table>
+</div>
       </div>
     </div>
 
@@ -284,7 +432,9 @@ document.addEventListener('DOMContentLoaded', function() {
         💵 CASH FLOW STATEMENT
       </div>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="cashFlowTable"></table></div>
+        <div class="table-responsive">
+<table id="cashFlowTable"></table>
+</div>
       </div>
     </div>
 
@@ -294,7 +444,9 @@ document.addEventListener('DOMContentLoaded', function() {
         📊 RATIO ANALYSIS
       </div>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="ratioTable"></table></div>
+        <div class="table-responsive">
+<table id="ratioTable"></table>
+</div>
       </div>
     </div>
 
@@ -307,13 +459,17 @@ document.addEventListener('DOMContentLoaded', function() {
       <!-- Common Size Income Statement -->
       <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">Common Size Income Statement</h3>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="commonSizeIncomeTable"></table></div>
+        <div class="table-responsive">
+<table id="commonSizeIncomeTable"></table>
+</div>
       </div>
       
       <!-- Common Size Balance Sheet -->
       <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">Common Size Balance Sheet</h3>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="commonSizeBalanceTable"></table></div>
+        <div class="table-responsive">
+<table id="commonSizeBalanceTable"></table>
+</div>
       </div>
     </div>
 
@@ -330,19 +486,25 @@ document.addEventListener('DOMContentLoaded', function() {
       <!-- Sales Forecast -->
       <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">📈 Sales Forecast</h3>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="salesForecastTable"></table></div>
+        <div class="table-responsive">
+<table id="salesForecastTable"></table>
+</div>
       </div>
       
       <!-- EBITDA Forecast -->
       <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">💰 EBITDA Forecast</h3>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="ebitdaForecastTable"></table></div>
+        <div class="table-responsive">
+<table id="ebitdaForecastTable"></table>
+</div>
       </div>
       
       <!-- EPS Forecast -->
       <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">📊 EPS Forecast</h3>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="epsForecastTable"></table></div>
+        <div class="table-responsive">
+<table id="epsForecastTable"></table>
+</div>
       </div>
     </div>
 
@@ -357,7 +519,9 @@ document.addEventListener('DOMContentLoaded', function() {
       </p>
       
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="fcffTable"></table></div>
+        <div class="table-responsive">
+<table id="fcffTable"></table>
+</div>
       </div>
     </div>
 
@@ -422,7 +586,9 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
       
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="waccTable"></table></div>
+        <div class="table-responsive">
+<table id="waccTable"></table>
+</div>
       </div>
     </div>
 
@@ -514,25 +680,33 @@ document.addEventListener('DOMContentLoaded', function() {
       <!-- FCFF Forecast Table -->
       <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">FCFF Forecast & Present Value</h3>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="fcffForecastTable"></table></div>
+        <div class="table-responsive">
+<table id="fcffForecastTable"></table>
+</div>
       </div>
       
       <!-- Terminal Value Breakdown -->
       <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">Terminal Value Calculation</h3>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="terminalValueTable"></table></div>
+        <div class="table-responsive">
+<table id="terminalValueTable"></table>
+</div>
       </div>
       
       <!-- DCF Valuation Summary -->
       <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">DCF Valuation Breakdown</h3>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="dcfValuationTable"></table></div>
+        <div class="table-responsive">
+<table id="dcfValuationTable"></table>
+</div>
       </div>
       
       <!-- Sensitivity Analysis -->
       <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">Sensitivity Analysis (Growth Rate)</h3>
       <div class="overflow-x-auto">
-        <div class="table-responsive overflow-x-auto"><table id="sensitivityTable"></table></div>
+        <div class="table-responsive">
+<table id="sensitivityTable"></table>
+</div>
       </div>
     </div>
 
@@ -576,7 +750,9 @@ document.addEventListener('DOMContentLoaded', function() {
         <!-- Scenario Comparison Table -->
         <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">Scenario Comparison</h3>
         <div class="overflow-x-auto">
-          <div class="table-responsive overflow-x-auto"><table id="scenarioComparisonTable"></table></div>
+          <div class="table-responsive">
+<table id="scenarioComparisonTable"></table>
+</div>
         </div>
         
         <!-- Valuation Range -->
@@ -605,7 +781,9 @@ document.addEventListener('DOMContentLoaded', function() {
         <!-- Risk/Reward Analysis -->
         <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">Risk/Reward Analysis</h3>
         <div class="overflow-x-auto">
-          <div class="table-responsive overflow-x-auto"><table id="riskRewardTable"></table></div>
+          <div class="table-responsive">
+<table id="riskRewardTable"></table>
+</div>
         </div>
         
       </div>
@@ -686,13 +864,17 @@ document.addEventListener('DOMContentLoaded', function() {
         <!-- Z-Score Trend Table -->
         <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">Historical Z-Scores</h3>
         <div class="overflow-x-auto">
-          <div class="table-responsive overflow-x-auto"><table id="zscoreTable"></table></div>
+          <div class="table-responsive">
+<table id="zscoreTable"></table>
+</div>
         </div>
         
         <!-- Component Breakdown -->
         <h3 class="text-lg font-bold text-gray-700 mb-3 mt-6">Z-Score Components (Latest Year)</h3>
         <div class="overflow-x-auto">
-          <div class="table-responsive overflow-x-auto"><table id="zscoreComponentsTable"></table></div>
+          <div class="table-responsive">
+<table id="zscoreComponentsTable"></table>
+</div>
         </div>
         
         <!-- Interpretation & Recommendations -->
@@ -1908,6 +2090,37 @@ function renderInterpretationAndRecommendations(interpretations, recommendations
         li.style.marginLeft = "20px";
         recoList.appendChild(li);
     });
+}
+</script>
+
+
+<script>
+// Toggle How to Use guide
+function toggleGuide() {
+  const content = document.getElementById('guideContent');
+  const toggle = document.getElementById('guideToggle');
+  
+  if (content.classList.contains('hidden')) {
+    content.classList.remove('hidden');
+    toggle.textContent = '−';
+  } else {
+    content.classList.add('hidden');
+    toggle.textContent = '+';
+  }
+}
+
+// Download sample Excel file
+function downloadSampleExcel() {
+  // Create a link to download the sample file
+  const link = document.createElement('a');
+  link.href = '/static/sample_financial_model.xlsx';
+  link.download = 'Sample_Financial_Model.xlsx';
+  link.click();
+  
+  // Show a message if file not found
+  link.onerror = function() {
+    alert('Sample file is being prepared. Please contact support if this issue persists.');
+  };
 }
 </script>
 
