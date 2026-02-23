@@ -193,12 +193,12 @@ def analyze():
         return jsonify(result)
 
     except Exception as e:
-    import traceback
-    print(f"❌ ANALYZE ERROR: {str(e)}")  # This will show in logs
-    print(traceback.format_exc())         # This shows full error details
-    app.logger.error(f"Analyze error: {str(e)}")
-    app.logger.error(traceback.format_exc())
-    return jsonify({"error": str(e)}), 500
+     import traceback
+     print(f"❌ ANALYZE ERROR: {str(e)}")  # This will show in logs
+     print(traceback.format_exc())         # This shows full error details
+     app.logger.error(f"Analyze error: {str(e)}")
+     app.logger.error(traceback.format_exc())
+     return jsonify({"error": str(e)}), 500
     finally:
         for p in paths:
             cleanup(p)   # ✅ always delete uploaded files
