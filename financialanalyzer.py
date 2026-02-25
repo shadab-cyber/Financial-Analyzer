@@ -1,67 +1,94 @@
 #!/usr/bin/env python3
 """
-financialanalyzer.py  —  Robust Income / Balance / CashFlow extractor.
+financialanalyzer.py  —  Financial statement extractor using pdfplumber.
 
-Key fixes vs original:
-  1. pdf_to_text: tries native text layer first (fast), falls back to OCR only
-     for image-based PDFs. OCR DPI lowered to 150 (2x faster).
-  2. Auto-detects Tesseract on Linux (Render) — no hardcoded Windows path.
-  3. Extractors use PRIORITY-BASED matching: the highest-priority keyword that
-     yields numbers wins. Later lines cannot overwrite it. This prevents
-     sub-totals / footnotes from overwriting the real data row.
-  4. Extractors also try MULTI-LINE look-ahead: if the label is on one line and
-     the numbers are on the next 1-2 lines, they are still captured.
-  5. detect_all_types() returns ALL statement types present in a combined PDF
-     so a single annual-report PDF produces all 3 sections.
-  6. All max() calls are guarded with a trailing 0 to prevent empty-sequence
-     crashes.
+Strategy:
+  1. Use pdfplumber to extract TABLES (structured rows/cols) from each page.
+     This is by far the most reliable method for digital PDFs.
+  2. Also extract raw text lines as fallback for scanned PDFs.
+  3. For each row, check if the first cell matches a known keyword; if so,
+     collect numeric values from the remaining cells.
+  4. PRIORITY-BASED: once a field is filled it is LOCKED (no overwriting).
+  5. MULTI-LINE look-ahead for label-only rows where numbers are on the next line.
 """
 
-import fitz          # PyMuPDF
-import pytesseract
-from PIL import Image
-import io
 import re
 import shutil
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 
 # ── Tesseract: auto-detect on Linux/Render; fall back to Windows path ─────────
-_tess = shutil.which("tesseract")
-pytesseract.pytesseract.tesseract_cmd = _tess if _tess else \
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+try:
+    import pytesseract
+    _tess = shutil.which("tesseract")
+    pytesseract.pytesseract.tesseract_cmd = _tess if _tess else \
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    TESSERACT_OK = True
+except ImportError:
+    TESSERACT_OK = False
 
-DEBUG = False   # set True to print matched lines during extraction
+DEBUG = False   # set True to print matched rows during extraction
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PDF → text
+# PDF → rows   (pdfplumber primary, OCR fallback)
 # ══════════════════════════════════════════════════════════════════════════════
+def pdf_to_rows(pdf_path: str) -> List[List[str]]:
+    """
+    Returns a list of rows. Each row is a list of string cells.
+    Uses pdfplumber tables first (best for digital PDFs).
+    Falls back to line-by-line text, then OCR.
+    """
+    import pdfplumber
+
+    all_rows: List[List[str]] = []
+
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+
+            # ── Method 1: pdfplumber table extraction ───────────────────────
+            tables = page.extract_tables()
+            got_tables = False
+            for table in tables:
+                for row in table:
+                    clean = [str(c).strip() if c else "" for c in row]
+                    if any(c for c in clean):
+                        all_rows.append(clean)
+                        got_tables = True
+
+            if got_tables:
+                continue
+
+            # ── Method 2: plain text lines (for text PDFs without tables) ───
+            text = page.extract_text()
+            if text and text.strip():
+                for line in text.splitlines():
+                    line = line.strip()
+                    if line:
+                        # Split label from numbers — treat each line as a 1-row table
+                        all_rows.append([line])
+                continue
+
+            # ── Method 3: OCR fallback for scanned pages ────────────────────
+            if TESSERACT_OK:
+                try:
+                    from PIL import Image
+                    import io
+                    pix_bytes = page.to_image(resolution=150).original
+                    text_ocr = pytesseract.image_to_string(pix_bytes)
+                    for line in text_ocr.splitlines():
+                        line = line.strip()
+                        if line:
+                            all_rows.append([line])
+                except Exception:
+                    pass
+
+    return all_rows
+
+
+# Keep backward-compat: pdf_to_text returns flat lines (used by detect_type)
 def pdf_to_text(pdf_path: str) -> List[str]:
-    """
-    Extract text lines from a PDF.
-    Tries the native text layer first (instant, works for digital PDFs).
-    Falls back to Tesseract OCR at 150 DPI for scanned/image PDFs.
-    """
-    doc = fitz.open(pdf_path)
-    lines: List[str] = []
-
-    for page in doc:
-        native = page.get_text("text")
-        if native and native.strip():
-            for ln in native.splitlines():
-                ln = ln.strip()
-                if ln:
-                    lines.append(ln)
-        else:
-            pix = page.get_pixmap(dpi=150)
-            img = Image.open(io.BytesIO(pix.tobytes("png")))
-            text = pytesseract.image_to_string(img)
-            for ln in text.splitlines():
-                ln = ln.strip()
-                if ln:
-                    lines.append(ln)
-
-    return lines
+    rows = pdf_to_rows(pdf_path)
+    return [" ".join(r) for r in rows if r]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -70,11 +97,12 @@ def pdf_to_text(pdf_path: str) -> List[str]:
 def clean_number(token) -> Optional[float]:
     if token is None:
         return None
-    s = str(token)
-    s = s.replace("\u200b", "").replace(",", "").replace(" ", "")
+    s = str(token).strip()
+    s = s.replace("\u200b", "").replace("\xa0", "").replace(",", "").replace(" ", "")
     s = s.replace("(", "-").replace(")", "")
+    # Remove any currency symbols, units like "Cr", "Lakhs", "%"
     s = re.sub(r"[^0-9.\-]", "", s)
-    if s in ("", "-", ".", None):
+    if s in ("", "-", ".", ""):
         return None
     try:
         return float(s)
@@ -82,10 +110,25 @@ def clean_number(token) -> Optional[float]:
         return None
 
 
-def find_numbers(line: str) -> List[float]:
+def find_numbers_in_cells(cells: List[str]) -> List[float]:
+    """Extract numbers from a list of cells (skip the label cell at index 0)."""
+    nums = []
+    for cell in cells[1:]:   # skip first cell (label)
+        n = clean_number(cell)
+        if n is not None:
+            nums.append(n)
+    return nums
+
+
+def find_numbers_in_line(line: str) -> List[float]:
+    """Extract all numbers from a single text string."""
     toks = re.findall(r"-?\(?[0-9,]+(?:\.[0-9]+)?\)?", line)
-    cleaned = [clean_number(t) for t in toks]
-    return [c for c in cleaned if c is not None]
+    result = []
+    for t in toks:
+        n = clean_number(t)
+        if n is not None:
+            result.append(n)
+    return result
 
 
 def cagr_percent(vals: List) -> Optional[float]:
@@ -127,48 +170,55 @@ def ratio_yearly(num_list, den_list, scale=2) -> List:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Core extraction engine  (PRIORITY-BASED, MULTI-LINE AWARE)
+# Core extraction engine
 # ══════════════════════════════════════════════════════════════════════════════
-def _extract(lines: List[str], patterns: Dict[str, List[str]]) -> Dict[str, List[float]]:
+def _extract_from_rows(rows: List[List[str]], patterns: Dict[str, List[str]]) -> Dict[str, List[float]]:
     """
-    Priority-based extractor.
+    Priority-based row extractor.
 
-    patterns maps: field_name -> [kw_high_priority, kw_lower_priority, ...]
-
-    Rules:
-    - Iterate lines. For every UNLOCKED field, check if current line matches
-      any keyword (highest priority first).
-    - If match found but no numbers on this line, look ahead 1-2 lines.
-    - Once a field has data it is LOCKED — no further overwriting.
-    - FIRST good match wins (earliest in document, highest priority keyword).
+    For each row:
+      - Joins all cells into a searchable label string
+      - Checks each unlocked field's keywords (highest priority first)
+      - If matched, collects numbers from the non-label cells
+      - If no numbers in current row, looks ahead 1-2 rows
+      - Locks the field once it has data (no overwriting)
     """
     res: Dict[str, List[float]] = {k: [] for k in patterns}
     locked = set()
 
-    for idx, line in enumerate(lines):
-        low = line.lower().replace("\u2013", "-").replace("\u2014", "-")
+    for idx, row in enumerate(rows):
+        # Build a normalized label from ALL cells in the row
+        label = " ".join(str(c) for c in row).lower()
+        label = label.replace("\u2013", "-").replace("\u2014", "-").replace("\u2019", "'")
 
         for field, keywords in patterns.items():
             if field in locked:
                 continue
 
-            matched = False
+            matched_kw = None
             for kw in keywords:
-                if kw in low:
-                    matched = True
+                if kw in label:
+                    matched_kw = kw
                     break
 
-            if not matched:
+            if not matched_kw:
                 continue
 
-            # Try numbers on this line first
-            nums = find_numbers(line)
+            # Try to get numbers from cells (multi-column table row)
+            nums = find_numbers_in_cells(row)
 
-            # Look ahead up to 2 lines if no numbers found
+            # If that gave nothing, try parsing the entire row as a line of text
+            if not nums:
+                nums = find_numbers_in_line(label)
+
+            # Look ahead up to 2 rows
             if not nums:
                 for ahead in range(1, 3):
-                    if idx + ahead < len(lines):
-                        nums = find_numbers(lines[idx + ahead])
+                    if idx + ahead < len(rows):
+                        next_row = rows[idx + ahead]
+                        nums = find_numbers_in_cells(next_row)
+                        if not nums:
+                            nums = find_numbers_in_line(" ".join(str(c) for c in next_row))
                         if nums:
                             break
 
@@ -176,7 +226,7 @@ def _extract(lines: List[str], patterns: Dict[str, List[str]]) -> Dict[str, List
                 res[field] = nums
                 locked.add(field)
                 if DEBUG:
-                    print(f"  [MATCH] {field!r:35s} <- {nums[:5]}  | line: {line!r[:80]}")
+                    print(f"  [MATCH] {field!r:35s} kw={matched_kw!r:40s} nums={nums[:6]}")
 
     return res
 
@@ -184,7 +234,9 @@ def _extract(lines: List[str], patterns: Dict[str, List[str]]) -> Dict[str, List
 # ══════════════════════════════════════════════════════════════════════════════
 # Statement-specific extractors
 # ══════════════════════════════════════════════════════════════════════════════
-def extract_income_series(lines: List[str]) -> dict:
+def extract_income_series(lines_or_rows) -> dict:
+    # Accept either flat lines (List[str]) or rows (List[List[str]])
+    rows = _to_rows(lines_or_rows)
     patterns = {
         "revenue": [
             "revenue from operations",
@@ -205,7 +257,6 @@ def extract_income_series(lines: List[str]) -> dict:
             "profit/loss for the period",
             "profit / loss for the period",
             "profit/loss for the year",
-            "profit / loss for the year",
             "profit for the period",
             "profit for the year",
             "profit after tax",
@@ -225,6 +276,7 @@ def extract_income_series(lines: List[str]) -> dict:
             "total tax expense",
             "income tax expense",
             "tax expense",
+            "provision for tax",
             "current tax",
             "deferred tax",
             "income tax",
@@ -261,7 +313,6 @@ def extract_income_series(lines: List[str]) -> dict:
             "personnel expenses",
             "employee cost",
             "salaries and wages",
-            "salaries wages",
         ],
         "inventory_change": [
             "changes in inventories of finished goods",
@@ -271,10 +322,11 @@ def extract_income_series(lines: List[str]) -> dict:
             "change in inventories",
         ],
     }
-    return _extract(lines, patterns)
+    return _extract_from_rows(rows, patterns)
 
 
-def extract_balance_series(lines: List[str]) -> dict:
+def extract_balance_series(lines_or_rows) -> dict:
+    rows = _to_rows(lines_or_rows)
     patterns = {
         "cash": [
             "cash and cash equivalents",
@@ -335,10 +387,11 @@ def extract_balance_series(lines: List[str]) -> dict:
             "borrowings",
         ],
     }
-    return _extract(lines, patterns)
+    return _extract_from_rows(rows, patterns)
 
 
-def extract_cashflow_series(lines: List[str]) -> dict:
+def extract_cashflow_series(lines_or_rows) -> dict:
+    rows = _to_rows(lines_or_rows)
     patterns = {
         "cfo": [
             "net cash generated from operating activities",
@@ -350,6 +403,7 @@ def extract_cashflow_series(lines: List[str]) -> dict:
             "net cash flow from operating",
             "cash flow from operating activities",
             "net cash from operating",
+            "net cash used in operating",
         ],
         "cfi": [
             "net cash used in investing activities",
@@ -393,18 +447,27 @@ def extract_cashflow_series(lines: List[str]) -> dict:
             "net decrease",
         ],
     }
-    return _extract(lines, patterns)
+    return _extract_from_rows(rows, patterns)
+
+
+def _to_rows(lines_or_rows) -> List[List[str]]:
+    """Accept either List[str] or List[List[str]]."""
+    if not lines_or_rows:
+        return []
+    if isinstance(lines_or_rows[0], list):
+        return lines_or_rows
+    # Flat lines — wrap each in a list
+    return [[line] for line in lines_or_rows]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Statement type detection
 # ══════════════════════════════════════════════════════════════════════════════
-def detect_type(lines: List[str], filename: str = "") -> Optional[str]:
-    """Returns primary type for a single-statement PDF."""
-    txt = " ".join(lines).lower()
+def detect_type(lines, filename: str = "") -> Optional[str]:
+    txt = " ".join(lines if isinstance(lines[0], str) else
+                   [" ".join(r) for r in lines]).lower() if lines else ""
     fname = filename.lower()
 
-    # Strong filename hints
     if any(k in fname for k in ["income", "p&l", "pnl", "profit", " pl ", "_pl_", "-pl-"]):
         return "income"
     if any(k in fname for k in ["balance", " bs ", "_bs_", "-bs-", "balance-sheet", "balancesheet"]):
@@ -412,7 +475,6 @@ def detect_type(lines: List[str], filename: str = "") -> Optional[str]:
     if any(k in fname for k in ["cash", "flow", "cfs", "cashflow", "cash-flow"]):
         return "cash"
 
-    # Content scoring
     income_score = sum([
         4 if "revenue from operations" in txt else 0,
         4 if "profit for the period" in txt or "profit for the year" in txt else 0,
@@ -447,12 +509,9 @@ def detect_type(lines: List[str], filename: str = "") -> Optional[str]:
     return "balance"
 
 
-def detect_all_types(lines: List[str]) -> List[str]:
-    """
-    Returns ALL statement types present in a combined PDF.
-    Used by app.py so a single annual-report PDF produces all 3 sections.
-    """
-    txt = " ".join(lines).lower()
+def detect_all_types(lines) -> List[str]:
+    txt = " ".join(lines if isinstance(lines[0], str) else
+                   [" ".join(r) for r in lines]).lower() if lines else ""
     found = []
 
     income_signals = [
@@ -503,7 +562,6 @@ def analyze_income(data: dict) -> dict:
 
     net_cur = v(net_profit, 0)
 
-    # EBITDA series
     max_len = max(len(net_profit), len(interest), len(tax), len(depreciation), 0)
     ebitda_series = []
     for i in range(max_len):
@@ -534,27 +592,27 @@ def analyze_income(data: dict) -> dict:
         gross_margin = round(gross_profit / rev_cur * 100, 2) if rev_cur else None
 
     return {
-        "Statement":                        "Income Statement",
-        "Revenue (All Years)":              revenue,
-        "Net Profit (All Years)":           net_profit,
-        "EBITDA (All Years)":               ebitda_series,
-        "COGS (All Years)":                 cogs,
-        "Employee Cost (All Years)":        employee_cost,
-        "Depreciation (All Years)":         depreciation,
-        "Interest (All Years)":             interest,
-        "Tax (All Years)":                  tax,
-        "Purchases (All Years)":            purchases,
-        "Inventory Change (All Years)":     inventory_change,
-        "5Y Revenue CAGR (%)":              cagr_percent(revenue),
-        "5Y Net Profit CAGR (%)":           cagr_percent(net_profit),
-        "5Y EBITDA CAGR (%)":               cagr_percent(ebitda_series),
-        "Revenue Growth (%)":               revenue_growth,
-        "Average Revenue Growth (%)":       average_growth(revenue),
-        "Average Net Profit Growth (%)":    average_growth(net_profit),
-        "Operating Margin (%)":             operating_margin,
-        "Net Profit Margin (%)":            net_profit_margin,
-        "Gross Profit":                     gross_profit,
-        "Gross Margin (%)":                 gross_margin,
+        "Statement":                     "Income Statement",
+        "Revenue (All Years)":           revenue,
+        "Net Profit (All Years)":        net_profit,
+        "EBITDA (All Years)":            ebitda_series,
+        "COGS (All Years)":              cogs,
+        "Employee Cost (All Years)":     employee_cost,
+        "Depreciation (All Years)":      depreciation,
+        "Interest (All Years)":          interest,
+        "Tax (All Years)":               tax,
+        "Purchases (All Years)":         purchases,
+        "Inventory Change (All Years)":  inventory_change,
+        "5Y Revenue CAGR (%)":           cagr_percent(revenue),
+        "5Y Net Profit CAGR (%)":        cagr_percent(net_profit),
+        "5Y EBITDA CAGR (%)":            cagr_percent(ebitda_series),
+        "Revenue Growth (%)":            revenue_growth,
+        "Average Revenue Growth (%)":    average_growth(revenue),
+        "Average Net Profit Growth (%)": average_growth(net_profit),
+        "Operating Margin (%)":          operating_margin,
+        "Net Profit Margin (%)":         net_profit_margin,
+        "Gross Profit":                  gross_profit,
+        "Gross Margin (%)":              gross_margin,
     }
 
 
@@ -736,23 +794,23 @@ def analyze_cashflow(data: dict, balance_data: dict = None, income_data: dict = 
             round(cfo_i / ebit_i, 2) if (cfo_i is not None and ebit_i not in (None, 0)) else None)
 
     return {
-        "Statement":                                "Cash Flow",
-        "Operating Cash Flow (All Years)":          cfo,
-        "Investing Cash Flow (All Years)":          cfi,
-        "Financing Cash Flow (All Years)":          cff,
-        "CapEx (All Years)":                        capex,
-        "Free Cash Flow (All Years)":               fcf,
-        "Net Change in Cash (All Years)":           netch,
-        "Operating Cash Flow Ratio (All Years)":    ocf_ratio,
-        "Cash Flow to Debt Ratio (All Years)":      cf_to_debt,
-        "Cash Return on Assets (%) (All Years)":    croa,
-        "Cash Return on Equity (%) (All Years)":    croe,
-        "Cash Flow Margin (%) (All Years)":         cf_margin,
-        "Earnings Quality Ratio (All Years)":       earnings_quality,
-        "5Y CAGR Operating Cash Flow (%)":          cagr_percent(cfo),
-        "5Y Avg Operating Cash Flow Ratio":         avg(ocf_ratio[:5]),
-        "5Y Avg Cash Flow to Debt Ratio":           avg(cf_to_debt[:5]),
-        "5Y Avg Earnings Quality Ratio":            avg(earnings_quality[:5]),
+        "Statement":                             "Cash Flow",
+        "Operating Cash Flow (All Years)":       cfo,
+        "Investing Cash Flow (All Years)":       cfi,
+        "Financing Cash Flow (All Years)":       cff,
+        "CapEx (All Years)":                     capex,
+        "Free Cash Flow (All Years)":            fcf,
+        "Net Change in Cash (All Years)":        netch,
+        "Operating Cash Flow Ratio (All Years)": ocf_ratio,
+        "Cash Flow to Debt Ratio (All Years)":   cf_to_debt,
+        "Cash Return on Assets (%) (All Years)": croa,
+        "Cash Return on Equity (%) (All Years)": croe,
+        "Cash Flow Margin (%) (All Years)":      cf_margin,
+        "Earnings Quality Ratio (All Years)":    earnings_quality,
+        "5Y CAGR Operating Cash Flow (%)":       cagr_percent(cfo),
+        "5Y Avg Operating Cash Flow Ratio":      avg(ocf_ratio[:5]),
+        "5Y Avg Cash Flow to Debt Ratio":        avg(cf_to_debt[:5]),
+        "5Y Avg Earnings Quality Ratio":         avg(earnings_quality[:5]),
     }
 
 
@@ -776,10 +834,17 @@ def main():
 
     for p in paths:
         print(f"\nExtracting: {p}")
-        lines = pdf_to_text(p)
-        inc = extract_income_series(lines)
-        bal = extract_balance_series(lines)
-        cf  = extract_cashflow_series(lines)
+        rows = pdf_to_rows(p)
+        lines = [" ".join(r) for r in rows]
+
+        inc = extract_income_series(rows)
+        bal = extract_balance_series(rows)
+        cf  = extract_cashflow_series(rows)
+
+        print(f"  Income fields with data:  {[k for k,v in inc.items() if v]}")
+        print(f"  Balance fields with data: {[k for k,v in bal.items() if v]}")
+        print(f"  CashFlow fields with data:{[k for k,v in cf.items() if v]}")
+
         if any(v for v in inc.values()) and income_data is None:
             income_data = inc
         if any(v for v in bal.values()) and balance_data is None:
