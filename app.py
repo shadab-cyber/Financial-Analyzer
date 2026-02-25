@@ -16,7 +16,7 @@ from Strategy_Optimization import run_complete_optimization, run_backtest
 from dcf_valuation import run_dcf_from_pdf_text
 from pdf_text_extractor import extract_financials_from_pdf
 from financialanalyzer import (
-    pdf_to_text, detect_type,
+    pdf_to_text, detect_type, detect_all_types,
     extract_income_series, extract_balance_series, extract_cashflow_series,
     analyze_income, analyze_balance, analyze_cashflow
 )
@@ -171,37 +171,72 @@ def analyze():
                 continue
             path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
             paths.append(path)
-
             lines = pdf_to_text(path)
-            stype = detect_type(lines, file.filename)
 
-            if stype == 'income':
-                income_data = extract_income_series(lines)
-            elif stype == 'balance':
-                balance_data = extract_balance_series(lines)
-            elif stype == 'cash':
-                cash_data = extract_cashflow_series(lines)
+            # ✅ FIX A: detect ALL statement types present in this PDF
+            # (annual reports often contain all 3 in one file)
+            types_in_file = detect_all_types(lines)
+
+            # If detect_all_types found nothing, fall back to primary detect
+            if not types_in_file:
+                primary = detect_type(lines, file.filename)
+                if primary:
+                    types_in_file = [primary]
+
+            app.logger.error(f'[DEBUG] {file.filename}: detected types={types_in_file}')
+
+            # ✅ FIX B: extract each type found, fill slots that are still empty
+            if 'income' in types_in_file and income_data is None:
+                candidate = extract_income_series(lines)
+                if any(v for v in candidate.values()):
+                    income_data = candidate
+                    app.logger.error(f'[DEBUG] income_data keys with data: {[k for k,v in candidate.items() if v]}')
+
+            if 'balance' in types_in_file and balance_data is None:
+                candidate = extract_balance_series(lines)
+                if any(v for v in candidate.values()):
+                    balance_data = candidate
+                    app.logger.error(f'[DEBUG] balance_data keys with data: {[k for k,v in candidate.items() if v]}')
+
+            if 'cash' in types_in_file and cash_data is None:
+                candidate = extract_cashflow_series(lines)
+                if any(v for v in candidate.values()):
+                    cash_data = candidate
+                    app.logger.error(f'[DEBUG] cash_data keys with data: {[k for k,v in candidate.items() if v]}')
 
         result = {}
-        if income_data:
-            result['Income Statement'] = analyze_income(income_data)
-        if balance_data:
-            result['Balance Sheet'] = analyze_balance(balance_data, income_data)
-        if cash_data:
-            result['Cash Flow'] = analyze_cashflow(cash_data, balance_data, income_data)
 
+        # ✅ FIX C: wrap each section independently — one failure won't kill others
+        if income_data and any(v for v in income_data.values()):
+            try:
+                result['Income Statement'] = analyze_income(income_data)
+            except Exception as e:
+                app.logger.error(f'analyze_income error: {e}')
+                result['Income Statement'] = {'error': str(e)}
+
+        if balance_data and any(v for v in balance_data.values()):
+            try:
+                result['Balance Sheet'] = analyze_balance(balance_data, income_data)
+            except Exception as e:
+                app.logger.error(f'analyze_balance error: {e}')
+                result['Balance Sheet'] = {'error': str(e)}
+
+        if cash_data and any(v for v in cash_data.values()):
+            try:
+                result['Cash Flow'] = analyze_cashflow(cash_data, balance_data, income_data)
+            except Exception as e:
+                app.logger.error(f'analyze_cashflow error: {e}')
+                result['Cash Flow'] = {'error': str(e)}
+
+        app.logger.error(f'[DEBUG] result sections: {list(result.keys())}')
         return jsonify(result)
 
     except Exception as e:
-     import traceback
-     print(f"❌ ANALYZE ERROR: {str(e)}")  # This will show in logs
-     print(traceback.format_exc())         # This shows full error details
-     app.logger.error(f"Analyze error: {str(e)}")
-     app.logger.error(traceback.format_exc())
-     return jsonify({"error": str(e)}), 500
+        app.logger.error(f'analyze error: {e}')
+        return err('analyze failed', 500)
     finally:
         for p in paths:
-            cleanup(p)   # ✅ always delete uploaded files
+            cleanup(p)
 
 
 # =============================================================================
