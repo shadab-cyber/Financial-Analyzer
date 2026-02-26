@@ -1,12 +1,18 @@
 # pdf_text_extractor.py
 import pdfplumber
 import pytesseract
-import cv2
-import numpy as np
 from PIL import Image
 import pandas as pd
 import json
 import io
+
+# cv2 is optional — only needed for scanned PDF preprocessing
+try:
+    import cv2
+    import numpy as np
+    _CV2_OK = True
+except ImportError:
+    _CV2_OK = False
 
 # ----------------------------------
 # STEP 1: PAGE TYPE DETECTION
@@ -20,6 +26,8 @@ def is_scanned_page(page, text_threshold=30):
 # STEP 2: OCR WITH PREPROCESSING
 # ----------------------------------
 def preprocess_image(img):
+    if not _CV2_OK:
+        return img
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray = cv2.threshold(gray, 0, 255,
                           cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
@@ -28,10 +36,15 @@ def preprocess_image(img):
 
 
 def ocr_page(page):
-    pil_image = page.to_image(resolution=300).original
-    open_cv_img = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
-    processed = preprocess_image(open_cv_img)
-    text = pytesseract.image_to_string(processed, config="--psm 6")
+    pil_image = page.to_image(resolution=150).original
+    if _CV2_OK:
+        import numpy as np
+        open_cv_img = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+        processed = preprocess_image(open_cv_img)
+        text = pytesseract.image_to_string(processed, config="--psm 6")
+    else:
+        # Fallback: OCR directly on PIL image without OpenCV preprocessing
+        text = pytesseract.image_to_string(pil_image, config="--psm 6")
     return text
 
 
