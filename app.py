@@ -215,16 +215,57 @@ def analyze():
             cleanup(p)
 
 
-@app.route('/debug-pdf', methods=['POST'])
-def debug_pdf():
-    """Upload a PDF here to see exactly what text lines are extracted.
-    Use in browser: go to /debug or use curl:
-    curl -F 'files=@report.pdf' https://YOURAPP.onrender.com/debug-pdf
-    """
+@app.route('/debug-pdf', methods=['GET'])
+def debug_pdf_page():
+    """Browser-friendly debug page — upload PDFs and see exactly what gets extracted."""
+    return """<!DOCTYPE html>
+<html><head><title>PDF Debug</title>
+<style>
+body{font-family:monospace;padding:20px;background:#1e1e1e;color:#d4d4d4}
+h2{color:#569cd6}textarea{width:100%;height:200px;background:#252526;color:#ce9178;border:1px solid #555;padding:8px;font-size:13px}
+button{background:#0e639c;color:#fff;border:none;padding:10px 24px;font-size:14px;cursor:pointer;margin-top:8px}
+button:hover{background:#1177bb}
+#out{white-space:pre-wrap;background:#252526;color:#9cdcfe;padding:16px;margin-top:16px;border:1px solid #555;max-height:80vh;overflow-y:auto;font-size:12px}
+.match{color:#4ec9b0;font-weight:bold}.empty{color:#f44747}label{color:#9cdcfe}
+</style></head>
+<body>
+<h2>🔍 PDF Debug — See exactly what gets extracted</h2>
+<form id="f" enctype="multipart/form-data">
+  <label>Upload your financial statement PDFs:</label><br><br>
+  <input type="file" name="files" multiple accept=".pdf" style="color:#fff"><br>
+  <button type="submit">Analyze & Show Raw Extraction</button>
+</form>
+<div id="out">Results will appear here...</div>
+<script>
+document.getElementById('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const out = document.getElementById('out');
+  out.textContent = 'Extracting... please wait';
+  const fd = new FormData(e.target);
+  try {
+    const r = await fetch('/debug-pdf-run', {method:'POST', body:fd});
+    const txt = await r.text();
+    // Highlight matched lines
+    out.textContent = txt;
+
+  } catch(err) {
+    out.textContent = 'Error: ' + err.message;
+  }
+});
+</script>
+</body></html>""", 200, {'Content-Type': 'text/html'}
+
+
+@app.route('/debug-pdf-run', methods=['POST'])
+def debug_pdf_run():
+    """Runs extraction and returns plain text report."""
     paths = []
     out = []
     try:
         files = request.files.getlist('files')
+        if not files or not any(f.filename for f in files):
+            return 'No files uploaded', 400
+
         for file in files:
             if not file or not allowed_pdf(file.filename):
                 continue
@@ -232,29 +273,44 @@ def debug_pdf():
             paths.append(path)
             lines = pdf_to_text(path)
 
-            out.append(f"FILE: {file.filename} — {len(lines)} lines extracted")
-            out.append("=" * 70)
-            out.append("FIRST 150 LINES:")
-            for i, ln in enumerate(lines[:150]):
+            out.append(f"{'='*70}")
+            out.append(f"FILE: {file.filename}")
+            out.append(f"Total lines extracted: {len(lines)}")
+            out.append(f"{'='*70}")
+            out.append("")
+            out.append("--- FIRST 200 LINES FROM PDF ---")
+            for i, ln in enumerate(lines[:200]):
                 out.append(f"  [{i:03d}] {ln}")
 
             out.append("")
-            out.append("INCOME EXTRACTION:")
+            out.append("--- INCOME STATEMENT EXTRACTION ---")
             inc = extract_income_series(lines)
             for k, v in inc.items():
-                out.append(f"  {k}: {v}")
+                tag = "[MATCHED]" if v else ""
+                out.append(f"  {tag} {k}: {v}")
 
             out.append("")
-            out.append("BALANCE EXTRACTION:")
+            out.append("--- BALANCE SHEET EXTRACTION ---")
             bal = extract_balance_series(lines)
             for k, v in bal.items():
-                out.append(f"  {k}: {v}")
+                tag = "[MATCHED]" if v else ""
+                out.append(f"  {tag} {k}: {v}")
 
             out.append("")
-            out.append("CASHFLOW EXTRACTION:")
+            out.append("--- CASH FLOW EXTRACTION ---")
             cf = extract_cashflow_series(lines)
             for k, v in cf.items():
-                out.append(f"  {k}: {v}")
+                tag = "[MATCHED]" if v else ""
+                out.append(f"  {tag} {k}: {v}")
+
+            out.append("")
+            matched_inc = [k for k,v in inc.items() if v]
+            matched_bal = [k for k,v in bal.items() if v]
+            matched_cf  = [k for k,v in cf.items()  if v]
+            out.append(f"SUMMARY:")
+            out.append(f"  Income  fields matched: {matched_inc}")
+            out.append(f"  Balance fields matched: {matched_bal}")
+            out.append(f"  CashFlow fields matched:{matched_cf}")
 
         return "\n".join(out), 200, {'Content-Type': 'text/plain; charset=utf-8'}
     except Exception as e:

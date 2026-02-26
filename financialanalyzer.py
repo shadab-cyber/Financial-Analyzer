@@ -33,10 +33,8 @@ DEBUG = False   # True → print every matched row to stdout
 # ══════════════════════════════════════════════════════════════════════════════
 def pdf_to_text(pdf_path: str) -> List[str]:
     """
-    Returns a flat list of non-empty text lines from the PDF.
-    Uses pdfplumber's table extraction first — this preserves the label/number
-    structure of financial tables far better than raw text dumps.
-    Falls back to plain text extraction, then OCR for scanned pages.
+    Extract ALL text from a PDF using multiple strategies simultaneously.
+    Never skips a page. Always extracts both table rows and plain text.
     """
     import pdfplumber
 
@@ -44,49 +42,47 @@ def pdf_to_text(pdf_path: str) -> List[str]:
 
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
+            page_lines = set()  # deduplicate within a page
 
-            # ── Strategy 1: extract structured tables ───────────────────────
-            # Each table row becomes one line: cells joined by " | "
-            # so "Revenue from operations | 12345 | 11234" is one searchable line
-            # and find_numbers() will pick up 12345, 11234 from the same line.
-            tables = page.extract_tables()
-            got_table = False
-            for table in tables:
-                for row in table:
-                    # Clean each cell
-                    cells = [str(c).strip() if c else "" for c in row]
-                    cells = [re.sub(r'\s+', ' ', c) for c in cells]
-                    # Only keep rows that have at least one non-empty cell
-                    if not any(c for c in cells):
-                        continue
-                    # Join cells with a separator so label + numbers are on one line
-                    line = " | ".join(c for c in cells if c)
-                    lines.append(line)
-                    got_table = True
+            # Strategy 1: structured table rows (best for financial tables)
+            # Each row → cells joined by " | " so label+numbers are on one line
+            try:
+                tables = page.extract_tables()
+                for table in (tables or []):
+                    for row in (table or []):
+                        if not row:
+                            continue
+                        cells = [re.sub(r'\s+', ' ', str(c).strip()) if c else "" for c in row]
+                        cells = [c for c in cells if c]
+                        if cells:
+                            page_lines.add(" | ".join(cells))
+            except Exception:
+                pass
 
-            if got_table:
-                continue
+            # Strategy 2: plain text extraction (catches text outside tables)
+            try:
+                text = page.extract_text()
+                if text:
+                    for ln in text.splitlines():
+                        ln = ln.strip()
+                        if ln:
+                            page_lines.add(ln)
+            except Exception:
+                pass
 
-            # ── Strategy 2: plain text (non-table digital PDFs) ─────────────
-            text = page.extract_text()
-            if text and text.strip():
-                for ln in text.splitlines():
-                    ln = ln.strip()
-                    if ln:
-                        lines.append(ln)
-                continue
-
-            # ── Strategy 3: OCR for scanned pages ───────────────────────────
-            if _TESS_OK:
+            # Strategy 3: OCR fallback if nothing extracted so far
+            if not page_lines and _TESS_OK:
                 try:
                     img = page.to_image(resolution=150).original
                     ocr_text = pytesseract.image_to_string(img)
                     for ln in ocr_text.splitlines():
                         ln = ln.strip()
                         if ln:
-                            lines.append(ln)
+                            page_lines.add(ln)
                 except Exception:
                     pass
+
+            lines.extend(page_lines)
 
     return lines
 
