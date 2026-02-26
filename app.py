@@ -16,7 +16,7 @@ from Strategy_Optimization import run_complete_optimization, run_backtest
 from dcf_valuation import run_dcf_from_pdf_text
 from pdf_text_extractor import extract_financials_from_pdf
 from financialanalyzer import (
-    pdf_to_rows, pdf_to_text, detect_type, detect_all_types,
+    pdf_to_text, detect_type,
     extract_income_series, extract_balance_series, extract_cashflow_series,
     analyze_income, analyze_balance, analyze_cashflow
 )
@@ -172,59 +172,39 @@ def analyze():
             path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
             paths.append(path)
 
-            # Use pdfplumber row extraction (structured tables, much better than raw text)
-            rows  = pdf_to_rows(path)
-            lines = [" ".join(r) for r in rows]
+            lines = pdf_to_text(path)
 
-            types_in_file = detect_all_types(lines)
-            if not types_in_file:
-                primary = detect_type(lines, file.filename)
-                if primary:
-                    types_in_file = [primary]
-
-            app.logger.error(f'[analyze] {file.filename}: types={types_in_file} rows={len(rows)}')
-
-            if 'income' in types_in_file and income_data is None:
-                candidate = extract_income_series(rows)
-                if any(v for v in candidate.values()):
-                    income_data = candidate
-                    app.logger.error(f'[analyze] income fields found: {[k for k,v in candidate.items() if v]}')
-
-            if 'balance' in types_in_file and balance_data is None:
-                candidate = extract_balance_series(rows)
-                if any(v for v in candidate.values()):
-                    balance_data = candidate
-                    app.logger.error(f'[analyze] balance fields found: {[k for k,v in candidate.items() if v]}')
-
-            if 'cash' in types_in_file and cash_data is None:
-                candidate = extract_cashflow_series(rows)
-                if any(v for v in candidate.values()):
-                    cash_data = candidate
-                    app.logger.error(f'[analyze] cash fields found: {[k for k,v in candidate.items() if v]}')
+            # Try ALL 3 extractors on every file — fills whichever slots are empty
+            if income_data is None:
+                c = extract_income_series(lines)
+                if any(v for v in c.values()):
+                    income_data = c
+            if balance_data is None:
+                c = extract_balance_series(lines)
+                if any(v for v in c.values()):
+                    balance_data = c
+            if cash_data is None:
+                c = extract_cashflow_series(lines)
+                if any(v for v in c.values()):
+                    cash_data = c
 
         result = {}
         if income_data and any(v for v in income_data.values()):
             try:
                 result['Income Statement'] = analyze_income(income_data)
             except Exception as e:
-                app.logger.error(f'analyze_income error: {e}')
-                result['Income Statement'] = {'error': str(e)}
-
+                app.logger.error(f'income error: {e}')
         if balance_data and any(v for v in balance_data.values()):
             try:
                 result['Balance Sheet'] = analyze_balance(balance_data, income_data)
             except Exception as e:
-                app.logger.error(f'analyze_balance error: {e}')
-                result['Balance Sheet'] = {'error': str(e)}
-
+                app.logger.error(f'balance error: {e}')
         if cash_data and any(v for v in cash_data.values()):
             try:
                 result['Cash Flow'] = analyze_cashflow(cash_data, balance_data, income_data)
             except Exception as e:
-                app.logger.error(f'analyze_cashflow error: {e}')
-                result['Cash Flow'] = {'error': str(e)}
+                app.logger.error(f'cashflow error: {e}')
 
-        app.logger.error(f'[analyze] final sections: {list(result.keys())}')
         return jsonify(result)
 
     except Exception as e:
@@ -235,11 +215,11 @@ def analyze():
             cleanup(p)
 
 
-@app.route('/debug-analyze', methods=['POST'])
-def debug_analyze():
-    """Debug endpoint: upload PDFs here to see exactly what rows are extracted
-    and which keywords matched. Returns plain text you can read in the browser.
-    Use: curl -F 'files=@yourfile.pdf' https://your-app.onrender.com/debug-analyze
+@app.route('/debug-pdf', methods=['POST'])
+def debug_pdf():
+    """Upload a PDF here to see exactly what text lines are extracted.
+    Use in browser: go to /debug or use curl:
+    curl -F 'files=@report.pdf' https://YOURAPP.onrender.com/debug-pdf
     """
     paths = []
     out = []
@@ -250,42 +230,36 @@ def debug_analyze():
                 continue
             path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
             paths.append(path)
+            lines = pdf_to_text(path)
 
-            rows  = pdf_to_rows(path)
-            lines = [" ".join(r) for r in rows]
+            out.append(f"FILE: {file.filename} — {len(lines)} lines extracted")
+            out.append("=" * 70)
+            out.append("FIRST 150 LINES:")
+            for i, ln in enumerate(lines[:150]):
+                out.append(f"  [{i:03d}] {ln}")
 
-            out.append(f"\n{'='*70}")
-            out.append(f"FILE: {file.filename}  ({len(rows)} rows extracted)")
-            out.append(f"{'='*70}")
-            out.append("\n--- FIRST 100 ROWS ---")
-            for i, row in enumerate(rows[:100]):
-                label = row[0][:90] if row else ''
-                nums  = [c for c in row[1:] if c.strip()] if len(row)>1 else []
-                out.append(f"  [{i:03d}] {label!r:92s}  extra_cells={nums}")
-
-            out.append("\n--- DETECTED TYPES ---")
-            out.append(f"  detect_all_types : {detect_all_types(lines)}")
-            out.append(f"  detect_type      : {detect_type(lines, file.filename)}")
-
-            out.append("\n--- INCOME EXTRACTION RESULT ---")
-            inc = extract_income_series(rows)
+            out.append("")
+            out.append("INCOME EXTRACTION:")
+            inc = extract_income_series(lines)
             for k, v in inc.items():
                 out.append(f"  {k}: {v}")
 
-            out.append("\n--- BALANCE EXTRACTION RESULT ---")
-            bal = extract_balance_series(rows)
+            out.append("")
+            out.append("BALANCE EXTRACTION:")
+            bal = extract_balance_series(lines)
             for k, v in bal.items():
                 out.append(f"  {k}: {v}")
 
-            out.append("\n--- CASHFLOW EXTRACTION RESULT ---")
-            cf = extract_cashflow_series(rows)
+            out.append("")
+            out.append("CASHFLOW EXTRACTION:")
+            cf = extract_cashflow_series(lines)
             for k, v in cf.items():
                 out.append(f"  {k}: {v}")
 
         return "\n".join(out), 200, {'Content-Type': 'text/plain; charset=utf-8'}
     except Exception as e:
         import traceback
-        return f"Debug error: {e}\n{traceback.format_exc()}", 500
+        return f"Error: {e}\n{traceback.format_exc()}", 500
     finally:
         for p in paths:
             cleanup(p)
