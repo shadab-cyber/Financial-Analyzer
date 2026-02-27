@@ -217,8 +217,9 @@ def analyze():
         return jsonify(result)
 
     except Exception as e:
-        app.logger.error(f'analyze error: {e}')
-        return err('analyze failed', 500)
+        import traceback
+        app.logger.error(f'analyze error: {e}\n{traceback.format_exc()}')
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
     finally:
         for p in paths:
             cleanup(p)
