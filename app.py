@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify, render_template, session
 import os
 import time
 import logging
+import threading
+import uuid
+import json
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 
@@ -49,6 +52,39 @@ os.makedirs(UPLOAD_FOLDER_DCF,      exist_ok=True)
 
 app.config['UPLOAD_FOLDER_ANALYZER'] = UPLOAD_FOLDER_ANALYZER
 app.config['UPLOAD_FOLDER_DCF']      = UPLOAD_FOLDER_DCF
+
+# =============================================================================
+# JOB STORE — in-memory dict for background processing results
+# Keys: job_id (uuid), Values: {status, result, error, created_at}
+# =============================================================================
+_jobs: dict = {}
+_jobs_lock = threading.Lock()
+JOBS_FOLDER = 'jobs'
+os.makedirs(JOBS_FOLDER, exist_ok=True)
+
+def _set_job(job_id: str, data: dict):
+    """Persist job state to disk so it survives worker restarts."""
+    with _jobs_lock:
+        _jobs[job_id] = data
+    try:
+        with open(os.path.join(JOBS_FOLDER, f'{job_id}.json'), 'w') as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+def _get_job(job_id: str) -> dict:
+    """Read job state — memory first, then disk fallback."""
+    with _jobs_lock:
+        if job_id in _jobs:
+            return _jobs[job_id]
+    try:
+        path = os.path.join(JOBS_FOLDER, f'{job_id}.json')
+        if os.path.exists(path):
+            with open(path) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return None
 
 
 # =============================================================================
@@ -161,67 +197,56 @@ def get_price(symbol):
 
 
 # =============================================================================
-# ANALYZER API
+# ANALYZER API  —  background processing with job polling
 # =============================================================================
-@app.route('/analyze', methods=['POST'])
-def analyze():
-    paths = []
+
+def _run_analysis_job(job_id: str, file_path_pairs: list):
+    """
+    Runs in a background thread. Extracts text and analyses all PDFs.
+    Updates job state at each step so the browser can show live progress.
+    """
     try:
-        files = request.files.getlist('files')
         income_data = balance_data = cash_data = None
+        total = len(file_path_pairs)
 
-        # Validate file count: 5 to 8
-        valid_files = [f for f in files if f and allowed_pdf(f.filename)]
-        if len(valid_files) < 5:
-            return jsonify({'error': f'Please upload at least 5 annual report PDFs. You uploaded {len(valid_files)}.'}), 400
-        if len(valid_files) > 8:
-            return jsonify({'error': f'Maximum 8 PDFs allowed. You uploaded {len(valid_files)}.'}), 400
+        for idx, (filename, path) in enumerate(file_path_pairs):
+            _set_job(job_id, {
+                'status': 'processing',
+                'progress': f'Reading file {idx+1}/{total}: {filename}',
+                'percent': int((idx / total) * 80),
+            })
 
-        # Save all files first, then check for image PDFs before doing slow extraction
-        file_path_pairs = []
-        for file in valid_files:
-            path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
-            paths.append(path)
-            file_path_pairs.append((file, path))
-
-        # Quick pre-check: detect image/scanned PDFs and reject immediately
-        image_pdfs = [f.filename for f, p in file_path_pairs if is_image_pdf(p)]
-        if image_pdfs:
-            return jsonify({'error': (
-                f'The following PDFs are image/scanned files (no text layer): '
-                f'{", ".join(image_pdfs)}. '
-                f'Please use annual reports from BSE India (bseindia.com) or the '
-                f'company official website — those are text-based PDFs that extract instantly.'
-            )}), 400
-
-        for file, path in file_path_pairs:
             try:
                 lines = pdf_to_text(path)
-                app.logger.error(f'[analyze] {file.filename}: {len(lines)} lines extracted')
+                app.logger.error(f'[job:{job_id}] {filename}: {len(lines)} lines')
             except Exception as ex:
-                app.logger.error(f'[analyze] pdf_to_text failed for {file.filename}: {ex}')
+                app.logger.error(f'[job:{job_id}] pdf_to_text failed: {ex}')
                 lines = []
 
             if not lines:
-                app.logger.error(f'[analyze] WARNING: 0 lines from {file.filename}')
                 continue
 
-            # Try all 3 extractors — each PDF may contain any/all statements
             if income_data is None:
                 c = extract_income_series(lines)
                 if any(v for v in c.values()):
                     income_data = c
-                    app.logger.error(f'[analyze] income found in {file.filename}')
             if balance_data is None:
                 c = extract_balance_series(lines)
                 if any(v for v in c.values()):
                     balance_data = c
-                    app.logger.error(f'[analyze] balance found in {file.filename}')
             if cash_data is None:
                 c = extract_cashflow_series(lines)
                 if any(v for v in c.values()):
                     cash_data = c
-                    app.logger.error(f'[analyze] cashflow found in {file.filename}')
+
+            # Cleanup file after processing
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+
+        # Build result
+        _set_job(job_id, {'status': 'processing', 'progress': 'Computing ratios...', 'percent': 90})
 
         result = {}
         if income_data and any(v for v in income_data.values()):
@@ -240,16 +265,78 @@ def analyze():
             except Exception as e:
                 app.logger.error(f'cashflow error: {e}')
 
-        return jsonify(result)
+        _set_job(job_id, {'status': 'done', 'result': result, 'percent': 100})
 
     except Exception as e:
         import traceback
-        app.logger.error(f'analyze error: {e}\n{traceback.format_exc()}')
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
-    finally:
+        app.logger.error(f'[job:{job_id}] fatal: {e}\n{traceback.format_exc()}')
+        _set_job(job_id, {'status': 'error', 'error': str(e)})
+
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    """
+    Accepts PDF uploads, saves them, starts background thread, returns job_id immediately.
+    The browser polls /analyze/status/<job_id> for progress and result.
+    """
+    paths = []
+    try:
+        files = request.files.getlist('files')
+        valid_files = [f for f in files if f and allowed_pdf(f.filename)]
+
+        if len(valid_files) < 5:
+            return jsonify({'error': f'Please upload at least 5 annual report PDFs. You uploaded {len(valid_files)}.'}), 400
+        if len(valid_files) > 8:
+            return jsonify({'error': f'Maximum 8 PDFs allowed. You uploaded {len(valid_files)}.'}), 400
+
+        # Save all files synchronously (fast)
+        file_path_pairs = []
+        for file in valid_files:
+            path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
+            paths = []  # don't auto-cleanup — background thread owns these files
+            file_path_pairs.append((file.filename, path))
+
+        # Quick image PDF check (reads only 3 pages per file — fast)
+        image_pdfs = [fname for fname, p in file_path_pairs if is_image_pdf(p)]
+        if image_pdfs:
+            for _, p in file_path_pairs:
+                cleanup(p)
+            return jsonify({'error': (
+                f'These PDFs have no text layer (image/scanned): {", ".join(image_pdfs)}. '
+                f'Please use annual reports from bseindia.com or the company website.'
+            )}), 400
+
+        # Create job and start background thread
+        job_id = str(uuid.uuid4())
+        _set_job(job_id, {'status': 'queued', 'progress': 'Starting...', 'percent': 0})
+
+        thread = threading.Thread(
+            target=_run_analysis_job,
+            args=(job_id, file_path_pairs),
+            daemon=True
+        )
+        thread.start()
+
+        return jsonify({'job_id': job_id}), 202
+
+    except Exception as e:
+        import traceback
+        app.logger.error(f'analyze submit error: {e}\n{traceback.format_exc()}')
         for p in paths:
             cleanup(p)
+        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
+
+@app.route('/analyze/status/<job_id>', methods=['GET'])
+def analyze_status(job_id):
+    """
+    Poll this endpoint every 3 seconds.
+    Returns: {status: queued|processing|done|error, progress, percent, result?, error?}
+    """
+    job = _get_job(job_id)
+    if job is None:
+        return jsonify({'status': 'error', 'error': 'Job not found. It may have expired.'}), 404
+    return jsonify(job)
 
 @app.route('/debug-pdf', methods=['GET'])
 def debug_pdf_page():
