@@ -30,7 +30,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32)
 
 # ✅ FIX 2: File upload size limit — 50MB max (prevents server crash attacks)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB — supports 5–8 annual report PDFs
 
 # ✅ FIX 3: Production logging — errors go to a file, not stdout
 logging.basicConfig(
@@ -92,6 +92,10 @@ def err(msg, code=500):
 # =============================================================================
 # ✅ FIX 6: Custom error pages — no raw Flask 404/500 pages in production
 # =============================================================================
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({'error': 'Files too large. Each annual report PDF should be under 100MB. Try uploading fewer files or smaller PDFs.'}), 413
+
 @app.errorhandler(404)
 def not_found(_):
     return render_template('404.html'), 404
