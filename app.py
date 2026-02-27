@@ -174,7 +174,7 @@ def analyze():
 
             lines = pdf_to_text(path)
 
-            # Try ALL 3 extractors on every file — fills whichever slots are empty
+            # Single annual report PDF — try all 3 extractors, fill whichever slots have data
             if income_data is None:
                 c = extract_income_series(lines)
                 if any(v for v in c.values()):
@@ -271,14 +271,55 @@ def debug_pdf_run():
                 continue
             path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
             paths.append(path)
-            lines = pdf_to_text(path)
 
+            # Show what each strategy extracts individually
             out.append(f"{'='*70}")
             out.append(f"FILE: {file.filename}")
-            out.append(f"Total lines extracted: {len(lines)}")
             out.append(f"{'='*70}")
-            out.append("")
-            out.append("--- FIRST 200 LINES FROM PDF ---")
+
+            # Raw PyMuPDF text
+            try:
+                import fitz
+                doc = fitz.open(path)
+                out.append(f"\nPyMuPDF pages: {len(doc)}")
+                out.append("--- PyMuPDF RAW TEXT (first 100 lines) ---")
+                raw_lines = []
+                for pg in doc:
+                    t = pg.get_text("text")
+                    for ln in t.splitlines():
+                        ln = ln.strip()
+                        if ln:
+                            raw_lines.append(ln)
+                for i, ln in enumerate(raw_lines[:100]):
+                    out.append(f"  [{i:03d}] {ln}")
+                out.append(f"  ... total PyMuPDF lines: {len(raw_lines)}")
+                doc.close()
+            except Exception as e:
+                out.append(f"PyMuPDF error: {e}")
+
+            # pdfplumber text
+            try:
+                import pdfplumber
+                with pdfplumber.open(path) as pdf:
+                    out.append(f"\npdfplumber pages: {len(pdf.pages)}")
+                    out.append("--- pdfplumber RAW TEXT (first 50 lines) ---")
+                    plumb_lines = []
+                    for pg in pdf.pages:
+                        t = pg.extract_text()
+                        if t:
+                            for ln in t.splitlines():
+                                ln = ln.strip()
+                                if ln:
+                                    plumb_lines.append(ln)
+                    for i, ln in enumerate(plumb_lines[:50]):
+                        out.append(f"  [{i:03d}] {ln}")
+                    out.append(f"  ... total pdfplumber lines: {len(plumb_lines)}")
+            except Exception as e:
+                out.append(f"pdfplumber error: {e}")
+
+            # Full extraction result
+            lines = pdf_to_text(path)
+            out.append(f"\n--- COMBINED EXTRACTION: {len(lines)} lines ---")
             for i, ln in enumerate(lines[:200]):
                 out.append(f"  [{i:03d}] {ln}")
 
