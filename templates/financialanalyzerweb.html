@@ -363,8 +363,17 @@ form.addEventListener('submit', async (e) => {
         if (stalledCount > 20) { showError('Processing stalled. Please try again.'); }
 
       } catch (pollErr) {
+        // 502 = server restarting, retry silently up to 10 times
         stalledCount++;
-        if (stalledCount > 5) { showError('Lost connection to server. Please try again.'); }
+        if (stalledCount > 10) {
+          showError('Lost connection to server after multiple retries. Please try uploading again.');
+        } else {
+          resultCards.querySelector && (resultCards.innerHTML = `
+            <div class="space-y-2">
+              <div class="text-yellow-600 font-medium">⚠️ Server restarting, retrying... (${stalledCount}/10)</div>
+              <div class="text-gray-400 text-xs">This is normal on the free tier. Please wait.</div>
+            </div>`);
+        }
       }
     }, 3000);
 
