@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">
     📊 Stock Financial Analyzer
-    <p class="text-sm font-normal text-gray-500 mt-1">Upload one Annual Report PDF — extracts all 3 financial statements automatically</p>
+    <p class="text-sm font-normal text-gray-500 mt-1">Upload 5–8 Annual Report PDFs (one per year) — extracts all 3 financial statements automatically</p>
   </h1>
 
   <!-- Upload Form -->
@@ -181,23 +181,23 @@ document.addEventListener('DOMContentLoaded', function() {
         <li>Go to <strong>bseindia.com</strong> or the company's official website</li>
         <li>Search for the company → go to <strong>Annual Reports</strong> section</li>
         <li>Download the latest <strong>Annual Report PDF</strong></li>
-        <li>Upload it below — all 3 statements are inside one file ✅</li>
+        <li>Upload 5–8 annual report PDFs (one per year) — all statements auto-extracted ✅</li>
       </ol>
       <p class="mt-2 text-xs text-blue-600">💡 Annual reports from BSE/company websites are text-based PDFs — they work instantly without OCR.</p>
     </div>
 
     <div>
       <label class="block font-semibold mb-1 text-gray-700">
-        Upload Annual Report PDF <span class="text-blue-600 font-normal text-sm">(single file — contains all statements)</span>
+        Upload Annual Report PDFs <span class="text-blue-600 font-normal text-sm">(5 to 8 files — one per year)</span>
       </label>
-      <input type="file" name="files" accept="application/pdf"
+      <input type="file" name="files" accept="application/pdf" multiple
         class="w-full border border-gray-300 p-3 rounded-lg focus:ring focus:ring-blue-200" required />
-      <p class="text-xs text-gray-400 mt-1">Supported: BSE filings, company website annual reports, Screener.in exports</p>
+      <p class="text-xs text-gray-400 mt-1">Select 5 to 8 annual report PDFs (one per year). Supported: BSE filings, company website annual reports, Screener.in exports</p>
     </div>
 
     <button type="submit" id="submitBtn"
       class="w-full bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition font-semibold shadow-md">
-      🔍 Analyze Annual Report
+      🔍 Analyze Annual Reports
     </button>
   </form>
 
@@ -239,8 +239,19 @@ form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const fileInput = form.querySelector('input[type="file"]');
-  const file = fileInput.files[0];
-  if (!file) return;
+  const files = fileInput.files;
+
+  // Validate file count: 5 to 8
+  if (files.length < 5) {
+    alert(`Please upload at least 5 annual report PDFs. You selected ${files.length}.`);
+    return;
+  }
+  if (files.length > 8) {
+    alert(`Maximum 8 PDFs allowed. You selected ${files.length}. Please remove some.`);
+    return;
+  }
+
+  const fileNames = Array.from(files).map(f => f.name);
 
   // UI: loading state
   submitBtn.disabled = true;
@@ -248,9 +259,12 @@ form.addEventListener('submit', async (e) => {
   resultSection.classList.remove('hidden');
   statusBadge.classList.add('hidden');
   resultCards.innerHTML = `
-    <div class="space-y-2">
-      <div class="text-blue-600 font-medium animate-pulse">📄 Reading annual report: <strong>${file.name}</strong></div>
-      <div class="text-gray-400 text-sm">Extracting Income Statement, Balance Sheet and Cash Flow...</div>
+    <div class="space-y-3">
+      <div class="text-blue-600 font-medium animate-pulse">📄 Processing ${files.length} annual reports...</div>
+      <div class="space-y-1">
+        ${fileNames.map(n => `<div class="text-gray-500 text-sm flex items-center gap-2"><span class="animate-pulse">⏳</span> ${n}</div>`).join('')}
+      </div>
+      <div class="text-gray-400 text-xs mt-2">Extracting Income Statement, Balance Sheet and Cash Flow from each file...</div>
       <div class="w-full bg-gray-200 rounded-full h-2 mt-3">
         <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width:60%"></div>
       </div>
@@ -277,14 +291,19 @@ form.addEventListener('submit', async (e) => {
       throw new Error('Server returned invalid response. The PDF may have taken too long to process.');
     }
 
+    // Handle server-side validation errors
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
     const sections = Object.keys(data).filter(k => !data[k].error);
     const errors   = Object.keys(data).filter(k =>  data[k].error);
 
     if (sections.length === 0) {
       resultCards.innerHTML = `
         <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-5 text-yellow-800">
-          <p class="font-semibold mb-2">⚠️ No financial data could be extracted</p>
-          <p class="text-sm mb-3">This usually means the PDF is an image/scanned file. Try these sources instead:</p>
+          <p class="font-semibold mb-2">⚠️ No financial data could be extracted from any of the ${fileNames.length} files</p>
+          <p class="text-sm mb-3">This usually means the PDFs are image/scanned files. Try these sources instead:</p>
           <ul class="text-sm list-disc list-inside space-y-1">
             <li><strong>BSE India</strong> — bseindia.com → company → Annual Reports</li>
             <li><strong>Company website</strong> → Investor Relations → Annual Reports</li>
@@ -298,7 +317,7 @@ form.addEventListener('submit', async (e) => {
       return;
     }
 
-    statusBadge.textContent = `✅ Found: ${sections.join(', ')}`;
+    statusBadge.textContent = `✅ ${fileNames.length} files processed — Found: ${sections.join(', ')}`;
     statusBadge.className = 'text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full';
     statusBadge.classList.remove('hidden');
     renderCards(data);
@@ -314,7 +333,7 @@ form.addEventListener('submit', async (e) => {
       </div>`;
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = '🔍 Analyze Annual Report';
+    submitBtn.textContent = '🔍 Analyze Annual Reports';
   }
 });
 

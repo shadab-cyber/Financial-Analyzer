@@ -166,27 +166,36 @@ def analyze():
         files = request.files.getlist('files')
         income_data = balance_data = cash_data = None
 
-        for file in files:
-            if not file or not allowed_pdf(file.filename):
-                continue
+        # Validate file count: 5 to 8
+        valid_files = [f for f in files if f and allowed_pdf(f.filename)]
+        if len(valid_files) < 5:
+            return jsonify({'error': f'Please upload at least 5 annual report PDFs. You uploaded {len(valid_files)}.'}), 400
+        if len(valid_files) > 8:
+            return jsonify({'error': f'Maximum 8 PDFs allowed. You uploaded {len(valid_files)}.'}), 400
+
+        for file in valid_files:
             path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
             paths.append(path)
 
             lines = pdf_to_text(path)
+            app.logger.error(f'[analyze] {file.filename}: {len(lines)} lines extracted')
 
-            # Single annual report PDF — try all 3 extractors, fill whichever slots have data
+            # Try all 3 extractors — each PDF may contain any/all statements
             if income_data is None:
                 c = extract_income_series(lines)
                 if any(v for v in c.values()):
                     income_data = c
+                    app.logger.error(f'[analyze] income found in {file.filename}')
             if balance_data is None:
                 c = extract_balance_series(lines)
                 if any(v for v in c.values()):
                     balance_data = c
+                    app.logger.error(f'[analyze] balance found in {file.filename}')
             if cash_data is None:
                 c = extract_cashflow_series(lines)
                 if any(v for v in c.values()):
                     cash_data = c
+                    app.logger.error(f'[analyze] cashflow found in {file.filename}')
 
         result = {}
         if income_data and any(v for v in income_data.values()):
