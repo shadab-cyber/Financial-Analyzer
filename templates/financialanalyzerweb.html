@@ -274,7 +274,7 @@ form.addEventListener('submit', async (e) => {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+    const timeout = setTimeout(() => controller.abort(), 300000); // 5 min timeout
 
     const response = await fetch('/analyze', {
       method: 'POST',
@@ -324,7 +324,7 @@ form.addEventListener('submit', async (e) => {
 
   } catch (err) {
     const msg = err.name === 'AbortError'
-      ? 'Request timed out (>2 min). The PDF is likely a scanned image. Please use a BSE/company website PDF instead.'
+      ? 'Request timed out (>5 min). BSE annual reports are large — try uploading fewer files (5 instead of 8), or use Screener.in exports which are much smaller.'
       : err.message;
     resultCards.innerHTML = `
       <div class="bg-red-50 border border-red-200 rounded-xl p-5 text-red-700">
