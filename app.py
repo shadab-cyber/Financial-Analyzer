@@ -205,6 +205,10 @@ def _run_analysis_job(job_id: str, file_path_pairs: list):
     Runs in a background thread. Extracts text and analyses all PDFs.
     Updates job state at each step so the browser can show live progress.
     """
+    import time as _time
+    job_start = _time.time()
+    MAX_JOB_SECONDS = 480  # 8 minutes total hard limit
+
     try:
         income_data = balance_data = cash_data = None
         total = len(file_path_pairs)
@@ -216,12 +220,27 @@ def _run_analysis_job(job_id: str, file_path_pairs: list):
                 'percent': int((idx / total) * 80),
             })
 
-            try:
-                lines = pdf_to_text(path)
-                app.logger.error(f'[job:{job_id}] {filename}: {len(lines)} lines')
-            except Exception as ex:
-                app.logger.error(f'[job:{job_id}] pdf_to_text failed: {ex}')
+            # Run pdf_to_text in a sub-thread with 90s timeout per file
+            lines = []
+            result_box = [None]
+            def _extract(p=path, rb=result_box):
+                try:
+                    rb[0] = pdf_to_text(p)
+                except Exception as ex:
+                    app.logger.error(f'[job:{job_id}] extract error: {ex}')
+                    rb[0] = []
+
+            t = threading.Thread(target=_extract, daemon=True)
+            t.start()
+            t.join(timeout=90)  # wait max 90 seconds per file
+
+            if t.is_alive():
+                app.logger.error(f'[job:{job_id}] TIMEOUT on {filename} — skipping')
                 lines = []
+            else:
+                lines = result_box[0] or []
+
+            app.logger.error(f'[job:{job_id}] {filename}: {len(lines)} lines')
 
             if not lines:
                 continue

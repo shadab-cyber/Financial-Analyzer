@@ -53,10 +53,14 @@ def is_image_pdf(pdf_path: str) -> bool:
 
 
 
+# Hard cap — never process more than this many pages per PDF
+_MAX_PAGES = 80
+
 def _find_financial_pages(doc) -> List[int]:
     """
-    Scan page text quickly to find pages containing financial statements.
-    Returns list of page indices. Falls back to last 60% of doc if nothing found.
+    Scan ALL pages quickly (just first 300 chars each) to find financial pages.
+    Returns at most _MAX_PAGES page indices.
+    Financial statements in BSE annual reports are usually in last 40% of doc.
     """
     TRIGGERS = [
         "statement of profit", "profit and loss", "profit & loss",
@@ -64,26 +68,30 @@ def _find_financial_pages(doc) -> List[int]:
         "cash flow", "income statement",
         "revenue from operations", "total assets", "total equity",
         "standalone financial", "consolidated financial",
+        "notes to financial", "auditor", "independent auditor",
     ]
     total = len(doc)
-    hits = []
+    hits = set()
+
     for i, page in enumerate(doc):
         try:
-            snippet = page.get_text("text")[:500].lower()
+            snippet = page.get_text("text")[:300].lower()
         except Exception:
             snippet = ""
         if any(t in snippet for t in TRIGGERS):
-            # Include a window of ±5 pages around each hit
-            start = max(0, i - 2)
-            end   = min(total, i + 30)
-            hits.extend(range(start, end))
+            # Small window around each hit — financial tables span ~5-10 pages
+            start = max(0, i - 1)
+            end   = min(total, i + 12)
+            hits.update(range(start, end))
 
     if hits:
-        return sorted(set(hits))
+        pages = sorted(hits)
+        return pages[:_MAX_PAGES]  # hard cap
 
-    # Fallback: process last 60% of document (financials are always near the end)
-    start = max(0, int(total * 0.40))
-    return list(range(start, total))
+    # Fallback: last 35% of doc, capped at _MAX_PAGES
+    start = max(0, int(total * 0.65))
+    pages = list(range(start, total))
+    return pages[:_MAX_PAGES]
 
 
 def pdf_to_text(pdf_path: str) -> List[str]:
