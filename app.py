@@ -16,7 +16,7 @@ from Strategy_Optimization import run_complete_optimization, run_backtest
 from dcf_valuation import run_dcf_from_pdf_text
 from pdf_text_extractor import extract_financials_from_pdf
 from financialanalyzer import (
-    pdf_to_text, detect_type,
+    pdf_to_text, detect_type, is_image_pdf,
     extract_income_series, extract_balance_series, extract_cashflow_series,
     analyze_income, analyze_balance, analyze_cashflow
 )
@@ -177,12 +177,34 @@ def analyze():
         if len(valid_files) > 8:
             return jsonify({'error': f'Maximum 8 PDFs allowed. You uploaded {len(valid_files)}.'}), 400
 
+        # Save all files first, then check for image PDFs before doing slow extraction
+        file_path_pairs = []
         for file in valid_files:
             path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
             paths.append(path)
+            file_path_pairs.append((file, path))
 
-            lines = pdf_to_text(path)
-            app.logger.error(f'[analyze] {file.filename}: {len(lines)} lines extracted')
+        # Quick pre-check: detect image/scanned PDFs and reject immediately
+        image_pdfs = [f.filename for f, p in file_path_pairs if is_image_pdf(p)]
+        if image_pdfs:
+            return jsonify({'error': (
+                f'The following PDFs are image/scanned files (no text layer): '
+                f'{", ".join(image_pdfs)}. '
+                f'Please use annual reports from BSE India (bseindia.com) or the '
+                f'company official website — those are text-based PDFs that extract instantly.'
+            )}), 400
+
+        for file, path in file_path_pairs:
+            try:
+                lines = pdf_to_text(path)
+                app.logger.error(f'[analyze] {file.filename}: {len(lines)} lines extracted')
+            except Exception as ex:
+                app.logger.error(f'[analyze] pdf_to_text failed for {file.filename}: {ex}')
+                lines = []
+
+            if not lines:
+                app.logger.error(f'[analyze] WARNING: 0 lines from {file.filename}')
+                continue
 
             # Try all 3 extractors — each PDF may contain any/all statements
             if income_data is None:

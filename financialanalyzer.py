@@ -19,23 +19,102 @@ except ImportError:
 
 DEBUG = False
 
-
-def pdf_to_text(pdf_path: str) -> List[str]:
-    lines: List[str] = []
-
-    # Strategy 1: PyMuPDF native text
+def is_image_pdf(pdf_path: str) -> bool:
+    """
+    Quick check: returns True if the PDF has no text layer (image/scanned PDF).
+    Checks only first 3 pages for speed.
+    """
     try:
         import fitz
         doc = fitz.open(pdf_path)
-        for page in doc:
-            text = page.get_text("text")
-            if text and text.strip():
-                for ln in text.splitlines():
-                    ln = ln.strip()
-                    if ln:
-                        lines.append(ln)
+        for i, page in enumerate(doc):
+            if i >= 3:
+                break
+            text = page.get_text("text").strip()
+            if len(text) > 50:   # found real text
+                doc.close()
+                return False
+        doc.close()
+        return True
+    except Exception:
+        pass
+    try:
+        import pdfplumber
+        with pdfplumber.open(pdf_path) as pdf:
+            for i, page in enumerate(pdf.pages):
+                if i >= 3:
+                    break
+                text = page.extract_text()
+                if text and len(text.strip()) > 50:
+                    return False
+        return True
+    except Exception:
+        return False
+
+
+
+def _find_financial_pages(doc) -> List[int]:
+    """
+    Scan page text quickly to find pages containing financial statements.
+    Returns list of page indices. Falls back to last 60% of doc if nothing found.
+    """
+    TRIGGERS = [
+        "statement of profit", "profit and loss", "profit & loss",
+        "balance sheet", "statement of financial position",
+        "cash flow", "income statement",
+        "revenue from operations", "total assets", "total equity",
+        "standalone financial", "consolidated financial",
+    ]
+    total = len(doc)
+    hits = []
+    for i, page in enumerate(doc):
+        try:
+            snippet = page.get_text("text")[:500].lower()
+        except Exception:
+            snippet = ""
+        if any(t in snippet for t in TRIGGERS):
+            # Include a window of ±5 pages around each hit
+            start = max(0, i - 2)
+            end   = min(total, i + 30)
+            hits.extend(range(start, end))
+
+    if hits:
+        return sorted(set(hits))
+
+    # Fallback: process last 60% of document (financials are always near the end)
+    start = max(0, int(total * 0.40))
+    return list(range(start, total))
+
+
+def pdf_to_text(pdf_path: str) -> List[str]:
+    """
+    Extract text from financial statement pages only.
+    For BSE annual reports (150-300 pages), scans for relevant pages first
+    so we only process ~30-60 pages instead of the whole document.
+    """
+    lines: List[str] = []
+
+    # Strategy 1: PyMuPDF — smart page selection
+    try:
+        import fitz
+        doc = fitz.open(pdf_path)
+        pages_to_read = _find_financial_pages(doc)
+
+        for i in pages_to_read:
+            page = doc[i]
+            # Plain text
             try:
-                raw = page.get_text("rawdict")
+                text = page.get_text("text")
+                if text and text.strip():
+                    for ln in text.splitlines():
+                        ln = ln.strip()
+                        if ln:
+                            lines.append(ln)
+            except Exception:
+                pass
+            # Row reconstruction (groups spans by Y coordinate → label | num | num)
+            try:
+                raw  = page.get_text("rawdict")
                 rows: Dict[int, list] = {}
                 for block in raw.get("blocks", []):
                     for bline in block.get("lines", []):
@@ -51,18 +130,21 @@ def pdf_to_text(pdf_path: str) -> List[str]:
                         lines.append(joined)
             except Exception:
                 pass
+
         doc.close()
     except ImportError:
         pass
     except Exception:
         pass
 
-    # Strategy 2: pdfplumber
+    # Strategy 2: pdfplumber (fallback for PDFs fitz can't read)
     if not lines:
         try:
             import pdfplumber
             with pdfplumber.open(pdf_path) as pdf:
-                for page in pdf.pages:
+                total = len(pdf.pages)
+                start = max(0, int(total * 0.40))
+                for page in pdf.pages[start:]:
                     try:
                         for table in (page.extract_tables() or []):
                             for row in table:
@@ -84,37 +166,24 @@ def pdf_to_text(pdf_path: str) -> List[str]:
         except Exception:
             pass
 
-    # Strategy 3: OCR via PyMuPDF (for Moneycontrol screenshot PDFs)
+    # Strategy 3: OCR (last resort — only if no text found at all)
     if not lines and _TESS_OK:
         try:
             import fitz
             from PIL import Image
             import io
-            doc = fitz.open(pdf_path)
-            for page in doc:
-                pix = page.get_pixmap(dpi=250)
-                img = Image.open(io.BytesIO(pix.tobytes("png")))
+            doc  = fitz.open(pdf_path)
+            pages_to_read = _find_financial_pages(doc)
+            for i in pages_to_read:
+                page = doc[i]
+                pix  = page.get_pixmap(dpi=200)
+                img  = Image.open(io.BytesIO(pix.tobytes("png")))
                 text = pytesseract.image_to_string(img, config="--psm 6 --oem 3")
                 for ln in text.splitlines():
                     ln = ln.strip()
                     if ln:
                         lines.append(ln)
             doc.close()
-        except Exception:
-            pass
-
-    # Strategy 4: OCR via pdfplumber
-    if not lines and _TESS_OK:
-        try:
-            import pdfplumber
-            with pdfplumber.open(pdf_path) as pdf:
-                for page in pdf.pages:
-                    img = page.to_image(resolution=250).original
-                    text = pytesseract.image_to_string(img, config="--psm 6 --oem 3")
-                    for ln in text.splitlines():
-                        ln = ln.strip()
-                        if ln:
-                            lines.append(ln)
         except Exception:
             pass
 
