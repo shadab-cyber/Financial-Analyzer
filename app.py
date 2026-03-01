@@ -51,6 +51,32 @@ app.config['UPLOAD_FOLDER_ANALYZER'] = UPLOAD_FOLDER_ANALYZER
 app.config['UPLOAD_FOLDER_DCF']      = UPLOAD_FOLDER_DCF
 
 # =============================================================================
+# HELPERS
+# =============================================================================
+def allowed_pdf(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS_PDF
+
+def allowed_excel(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS_EXCEL
+
+def save_temp_file(file, folder: str) -> str:
+    filename = secure_filename(file.filename)
+    path = os.path.join(folder, filename)
+    file.save(path)
+    return path
+
+def cleanup(path: str):
+    try:
+        if path and os.path.exists(path):
+            os.remove(path)
+    except Exception:
+        pass
+
+def err(msg: str, code: int = 400):
+    return jsonify({'error': msg}), code
+
+
+# =============================================================================
 # JOB STORE — background processing
 # =============================================================================
 _jobs: dict = {}
