@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">
     📊 Stock Financial Analyzer
-    <p class="text-sm font-normal text-gray-500 mt-1">Upload 5–8 Annual Report PDFs (one per year) — extracts all 3 financial statements automatically</p>
+    <p class="text-sm font-normal text-gray-500 mt-1">Upload Screener.in Excel (.xlsx) — extracts 10 years of P&L, Balance Sheet &amp; Cash Flow instantly</p>
   </h1>
 
   <!-- Upload Form -->
@@ -176,28 +176,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <!-- Info box -->
     <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-      <p class="font-semibold mb-1">📋 How to get your Annual Report PDF:</p>
+      <p class="font-semibold mb-1">📋 How to get the Excel file from Screener.in:</p>
       <ol class="list-decimal list-inside space-y-1 text-blue-700">
-        <li>Go to <strong>bseindia.com</strong> or the company's official website</li>
-        <li>Search for the company → go to <strong>Annual Reports</strong> section</li>
-        <li>Download the latest <strong>Annual Report PDF</strong></li>
-        <li>Upload 5–8 annual report PDFs (one per year) — all statements auto-extracted ✅</li>
+        <li>Go to <strong>screener.in</strong> and search for your company</li>
+        <li>Scroll down to the financial statements section</li>
+        <li>Click the <strong>Excel</strong> button (top right of financials)</li>
+        <li>Upload the downloaded <strong>.xlsx file</strong> below ✅</li>
       </ol>
-      <p class="mt-2 text-xs text-blue-600">💡 Annual reports from BSE/company websites are text-based PDFs — they work instantly without OCR.</p>
+      <p class="mt-2 text-xs text-blue-600">💡 The Excel contains a "Data Sheet" tab with 10 years of P&L, Balance Sheet and Cash Flow data — all extracted instantly.</p>
     </div>
 
     <div>
       <label class="block font-semibold mb-1 text-gray-700">
-        Upload Annual Report PDFs <span class="text-blue-600 font-normal text-sm">(5 to 8 files — one per year)</span>
+        Upload Screener.in Excel File <span class="text-blue-600 font-normal text-sm">(.xlsx — single file)</span>
       </label>
-      <input type="file" name="files" accept="application/pdf" multiple
+      <input type="file" name="files" accept=".xlsx,.xls"
         class="w-full border border-gray-300 p-3 rounded-lg focus:ring focus:ring-blue-200" required />
-      <p class="text-xs text-gray-400 mt-1">Select 5 to 8 annual report PDFs (one per year). Supported: BSE filings, company website annual reports, Screener.in exports</p>
+      <p class="text-xs text-gray-400 mt-1">Download from screener.in → company page → Excel button. Contains 10 years of annual data.</p>
     </div>
 
     <button type="submit" id="submitBtn"
       class="w-full bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition font-semibold shadow-md">
-      🔍 Analyze Annual Reports
+      🔍 Analyze Financials
     </button>
   </form>
 
@@ -241,32 +241,29 @@ form.addEventListener('submit', async (e) => {
   const fileInput = form.querySelector('input[type="file"]');
   const files = fileInput.files;
 
-  // Validate file count: 5 to 8
-  if (files.length < 5) {
-    alert(`Please upload at least 5 annual report PDFs. You selected ${files.length}.`);
+  if (files.length === 0) {
+    alert('Please select a Screener.in Excel file (.xlsx).');
     return;
   }
-  if (files.length > 8) {
-    alert(`Maximum 8 PDFs allowed. You selected ${files.length}. Please remove some.`);
+  const file = files[0];
+  if (!file.name.match(/\.xlsx?$/i)) {
+    alert('Please upload a .xlsx file downloaded from screener.in');
     return;
   }
 
-  const fileNames = Array.from(files).map(f => f.name);
+  const fileNames = [file.name];
 
   // UI: loading state
   submitBtn.disabled = true;
-  submitBtn.textContent = '⏳ Extracting data...';
+  submitBtn.textContent = '⏳ Analyzing...';
   resultSection.classList.remove('hidden');
   statusBadge.classList.add('hidden');
   resultCards.innerHTML = `
     <div class="space-y-3">
-      <div class="text-blue-600 font-medium animate-pulse">📄 Processing ${files.length} annual reports...</div>
-      <div class="space-y-1">
-        ${fileNames.map(n => `<div class="text-gray-500 text-sm flex items-center gap-2"><span class="animate-pulse">⏳</span> ${n}</div>`).join('')}
-      </div>
-      <div class="text-gray-400 text-xs mt-2">Extracting Income Statement, Balance Sheet and Cash Flow from each file...</div>
+      <div class="text-blue-600 font-medium animate-pulse">📊 Reading: <strong>${file.name}</strong></div>
+      <div class="text-gray-400 text-sm">Extracting 10 years of P&L, Balance Sheet and Cash Flow...</div>
       <div class="w-full bg-gray-200 rounded-full h-2 mt-3">
-        <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width:60%"></div>
+        <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width:40%"></div>
       </div>
     </div>`;
 
@@ -277,7 +274,7 @@ form.addEventListener('submit', async (e) => {
   function stopPolling() {
     if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
     submitBtn.disabled = false;
-    submitBtn.textContent = '🔍 Analyze Annual Reports';
+    submitBtn.textContent = '🔍 Analyze Financials';
   }
 
   function showError(msg) {
@@ -338,11 +335,11 @@ form.addEventListener('submit', async (e) => {
           if (sections.length === 0) {
             resultCards.innerHTML = `
               <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-5 text-yellow-800">
-                <p class="font-semibold mb-2">⚠️ No financial data found in any of the ${fileNames.length} files</p>
-                <p class="text-sm mb-3">Make sure you are uploading full annual reports (not just standalone P&L pages):</p>
+                <p class="font-semibold mb-2">⚠️ No financial data found in ${file.name}</p>
+                <p class="text-sm mb-3">Make sure this is a Screener.in Excel export with a "Data Sheet" tab:</p>
                 <ul class="text-sm list-disc list-inside space-y-1">
-                  <li><strong>BSE India</strong> — bseindia.com → company → Annual Reports</li>
-                  <li><strong>Company website</strong> → Investor Relations → Annual Reports</li>
+                  <li>Go to <strong>screener.in</strong> → search company → click Excel button</li>
+                  <li>Upload the downloaded <strong>.xlsx</strong> file</li>
                 </ul>
               </div>`;
             statusBadge.textContent = '⚠️ No data found';
@@ -351,7 +348,7 @@ form.addEventListener('submit', async (e) => {
             return;
           }
 
-          statusBadge.textContent = `✅ ${fileNames.length} files processed — Found: ${sections.join(', ')}`;
+          statusBadge.textContent = `✅ ${file.name} — Found: ${sections.join(', ')}`;
           statusBadge.className = 'text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full';
           statusBadge.classList.remove('hidden');
           renderCards(result);
@@ -387,42 +384,46 @@ function renderCards(data) {
 
   for (const section in data) {
     const sectionData = data[section];
-    if (sectionData.error) continue;
+    if (sectionData.error) {
+      const errBlock = document.createElement('div');
+      errBlock.className = "bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm";
+      errBlock.innerHTML = `<strong>${section}:</strong> ${sectionData.error}`;
+      resultCards.appendChild(errBlock);
+      continue;
+    }
 
     const icon = SECTION_ICONS[section] || '📌';
-
-    // Count non-empty fields
-    const filledFields = Object.entries(sectionData)
-      .filter(([k, v]) => k !== 'Statement' && v !== null && !(Array.isArray(v) && v.length === 0)).length;
-    const totalFields = Object.keys(sectionData).filter(k => k !== 'Statement').length;
+    const years = sectionData['Years'] || [];
 
     const block = document.createElement('div');
     block.className = "bg-white p-6 rounded-2xl shadow border border-gray-200";
+
+    // Header with year pills
     block.innerHTML = `
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-bold text-blue-700 flex items-center gap-2">
-          ${icon} ${section}
-        </h3>
-        <span class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full">
-          ${filledFields}/${totalFields} fields
-        </span>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <h3 class="text-lg font-bold text-blue-700">${icon} ${section}</h3>
+        <div class="flex flex-wrap gap-1">
+          ${years.map(y => `<span class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded font-mono">${y}</span>`).join('')}
+        </div>
       </div>`;
 
     const grid = document.createElement('div');
-    grid.className = "grid md:grid-cols-2 lg:grid-cols-3 gap-4";
+    grid.className = "grid md:grid-cols-2 gap-4";
 
     for (const key in sectionData) {
-      if (key === 'Statement') continue;
+      if (['Statement', 'Years'].includes(key)) continue;
       const value = sectionData[key];
       const isEmpty = value === null || value === undefined || value === '' ||
                       (Array.isArray(value) && value.length === 0);
-      if (isEmpty) continue; // skip empty fields — cleaner UI
+      if (isEmpty) continue;
 
       const card = document.createElement('div');
-      card.className = "bg-gray-50 p-4 rounded-xl border hover:shadow-md transition";
+      // Single values get smaller card, arrays get full width
+      const isArray = Array.isArray(value) && value.length > 1;
+      card.className = `bg-gray-50 p-4 rounded-xl border hover:shadow-md transition ${isArray ? 'md:col-span-2' : ''}`;
       card.innerHTML = `
         <div class="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">${key}</div>
-        <div class="text-gray-900 text-sm leading-relaxed">${formatValue(value)}</div>`;
+        <div class="text-gray-900 text-sm leading-relaxed">${formatValue(value, years)}</div>`;
       grid.appendChild(card);
     }
 
@@ -431,16 +432,26 @@ function renderCards(data) {
   }
 }
 
-function formatValue(value) {
+function formatValue(value, years) {
   if (Array.isArray(value)) {
     if (value.length === 0) return '<span class="text-gray-400 text-xs">—</span>';
-    return `<div class="flex flex-wrap gap-1">
-      ${value.map(v => `<span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-mono font-semibold">${v}</span>`).join('')}
+    // Show year label above each value
+    return `<div class="flex flex-wrap gap-2">
+      ${value.map((v, i) => {
+        const yr = years && years[i] ? years[i] : '';
+        const num = v === null || v === undefined ? '—' : v;
+        const color = typeof v === 'number' && v < 0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-800 border-blue-200';
+        return `<div class="border rounded-lg px-3 py-2 text-center min-w-[70px] ${color}">
+          <div class="text-xs text-gray-400 mb-1">${yr}</div>
+          <div class="font-mono font-bold text-sm">${num}</div>
+        </div>`;
+      }).join('')}
     </div>`;
   }
   if (value === null || value === '' || value === undefined)
     return '<span class="text-gray-400 text-xs">—</span>';
-  return `<span class="font-bold text-gray-800 text-base">${value}</span>`;
+  const color = typeof value === 'number' && value < 0 ? 'text-red-600' : 'text-gray-800';
+  return `<span class="font-bold text-base ${color}">${value}</span>`;
 }
 </script>
 
