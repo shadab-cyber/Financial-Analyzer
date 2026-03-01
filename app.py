@@ -18,11 +18,7 @@ from Performance_Analytics import run_complete_performance_analysis
 from Strategy_Optimization import run_complete_optimization, run_backtest
 from dcf_valuation import run_dcf_from_pdf_text
 from pdf_text_extractor import extract_financials_from_pdf
-from financialanalyzer import (
-    pdf_to_text, detect_type, is_image_pdf,
-    extract_income_series, extract_balance_series, extract_cashflow_series,
-    analyze_income, analyze_balance, analyze_cashflow
-)
+from financialanalyzer import analyze_excel
 
 # =============================================================================
 # APP SETUP
@@ -46,6 +42,7 @@ logging.basicConfig(
 UPLOAD_FOLDER_ANALYZER = 'uploads'
 UPLOAD_FOLDER_DCF      = 'uploads_dcf'
 ALLOWED_EXTENSIONS_PDF  = {'pdf'}
+ALLOWED_EXTENSIONS_EXCEL = {'xlsx', 'xls'}
 
 os.makedirs(UPLOAD_FOLDER_ANALYZER, exist_ok=True)
 os.makedirs(UPLOAD_FOLDER_DCF,      exist_ok=True)
@@ -54,8 +51,7 @@ app.config['UPLOAD_FOLDER_ANALYZER'] = UPLOAD_FOLDER_ANALYZER
 app.config['UPLOAD_FOLDER_DCF']      = UPLOAD_FOLDER_DCF
 
 # =============================================================================
-# JOB STORE — in-memory dict for background processing results
-# Keys: job_id (uuid), Values: {status, result, error, created_at}
+# JOB STORE — background processing
 # =============================================================================
 _jobs: dict = {}
 _jobs_lock = threading.Lock()
@@ -63,7 +59,6 @@ JOBS_FOLDER = 'jobs'
 os.makedirs(JOBS_FOLDER, exist_ok=True)
 
 def _set_job(job_id: str, data: dict):
-    """Persist job state to disk so it survives worker restarts."""
     with _jobs_lock:
         _jobs[job_id] = data
     try:
@@ -73,7 +68,6 @@ def _set_job(job_id: str, data: dict):
         pass
 
 def _get_job(job_id: str) -> dict:
-    """Read job state — memory first, then disk fallback."""
     with _jobs_lock:
         if job_id in _jobs:
             return _jobs[job_id]
@@ -88,273 +82,63 @@ def _get_job(job_id: str) -> dict:
 
 
 # =============================================================================
-# HELPERS
+# ANALYZER API  —  Screener.in Excel upload
 # =============================================================================
-def allowed_pdf(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS_PDF
 
-
-def save_temp_file(file, folder):
-    """Save an uploaded file with a unique timestamped name. Returns the path."""
-    os.makedirs(folder, exist_ok=True)
-    filename = f"{int(time.time() * 1000)}_{secure_filename(file.filename)}"
-    path = os.path.join(folder, filename)
-    file.save(path)
-    return path
-
-
-def cleanup(path):
-    """✅ FIX 4: Delete uploaded file after processing — prevents disk fill."""
+def _run_excel_job(job_id: str, filepath: str):
+    """Background thread: parse Excel and store result."""
     try:
-        if path and os.path.exists(path):
-            os.remove(path)
-    except Exception:
-        pass
-
-
-def err(msg, code=500):
-    """✅ FIX 5: Safe error responses — no internal details leaked to user."""
-    app.logger.error(msg)
-    # Show a friendly message to the user; details go to app.log
-    friendly = {
-        400: "Invalid request. Please check your input and try again.",
-        404: "Resource not found.",
-        413: "File too large. Maximum allowed size is 50 MB.",
-        500: "Something went wrong on our end. Please try again.",
-    }
-    return jsonify({"error": friendly.get(code, "An error occurred.")}), code
-
-
-# =============================================================================
-# ✅ FIX 6: Custom error pages — no raw Flask 404/500 pages in production
-# =============================================================================
-@app.errorhandler(413)
-def too_large(e):
-    return jsonify({'error': 'Files too large. Each annual report PDF should be under 100MB. Try uploading fewer files or smaller PDFs.'}), 413
-
-@app.errorhandler(404)
-def not_found(_):
-    return render_template('404.html'), 404
-
-
-@app.errorhandler(413)
-def too_large(_):
-    return jsonify({"error": "File too large. Maximum allowed size is 50 MB."}), 413
-
-
-@app.errorhandler(500)
-def server_error(_):
-    return render_template('500.html'), 500
-
-
-# =============================================================================
-# PAGES
-# =============================================================================
-@app.route('/')
-def home():
-    return render_template('financialanalyzerweb.html')
-
-@app.route('/dcf')
-def dcf_page():
-    return render_template('dcfvaluation.html')
-
-@app.route('/financial-modelling')
-def financial_modelling_page():
-    return render_template('financial_modelling.html')
-
-@app.route('/technical-analysis')
-def technical_analysis_page():
-    return render_template('technical_analysis.html')
-
-@app.route('/portfolio-management')
-def portfolio_management_page():
-    return render_template('portfolio_management.html')
-
-@app.route('/performance-analytics')
-def performance_analytics_page():
-    return render_template('performance_analytics.html')
-
-@app.route('/strategy-optimization')
-def strategy_optimization_page():
-    return render_template('strategy_optimization.html')
-
-
-# =============================================================================
-# ✅ PRICE PROXY — browser calls this; Flask calls yfinance; no CORS issues
-# =============================================================================
-@app.route('/get-price/<symbol>')
-def get_price(symbol):
-    try:
-        # Basic sanitisation — only allow alphanumeric + common ticker chars
-        safe = ''.join(c for c in symbol if c.isalnum() or c in ('-', '&', '.'))
-        price, source = fetch_price_for_symbol(safe)
-        if price:
-            return jsonify({'symbol': safe, 'price': price, 'source': source})
-        return jsonify({'symbol': safe, 'price': None, 'error': 'Price not available'}), 404
-    except Exception as e:
-        app.logger.error(f'get_price error for {symbol}: {e}')
-        return jsonify({'error': 'Could not fetch price'}), 500
-
-
-# =============================================================================
-# ANALYZER API  —  background processing with job polling
-# =============================================================================
-
-def _run_analysis_job(job_id: str, file_path_pairs: list):
-    """
-    Runs in a background thread. Extracts text and analyses all PDFs.
-    Updates job state at each step so the browser can show live progress.
-    """
-    import time as _time
-    job_start = _time.time()
-    MAX_JOB_SECONDS = 480  # 8 minutes total hard limit
-
-    try:
-        income_data = balance_data = cash_data = None
-        total = len(file_path_pairs)
-
-        for idx, (filename, path) in enumerate(file_path_pairs):
-            _set_job(job_id, {
-                'status': 'processing',
-                'progress': f'Reading file {idx+1}/{total}: {filename}',
-                'percent': int((idx / total) * 80),
-            })
-
-            # Run pdf_to_text in a sub-thread with 90s timeout per file
-            lines = []
-            result_box = [None]
-            def _extract(p=path, rb=result_box):
-                try:
-                    rb[0] = pdf_to_text(p)
-                except Exception as ex:
-                    app.logger.error(f'[job:{job_id}] extract error: {ex}')
-                    rb[0] = []
-
-            t = threading.Thread(target=_extract, daemon=True)
-            t.start()
-            t.join(timeout=90)  # wait max 90 seconds per file
-
-            if t.is_alive():
-                app.logger.error(f'[job:{job_id}] TIMEOUT on {filename} — skipping')
-                lines = []
-            else:
-                lines = result_box[0] or []
-
-            app.logger.error(f'[job:{job_id}] {filename}: {len(lines)} lines')
-
-            if not lines:
-                continue
-
-            if income_data is None:
-                c = extract_income_series(lines)
-                if any(v for v in c.values()):
-                    income_data = c
-            if balance_data is None:
-                c = extract_balance_series(lines)
-                if any(v for v in c.values()):
-                    balance_data = c
-            if cash_data is None:
-                c = extract_cashflow_series(lines)
-                if any(v for v in c.values()):
-                    cash_data = c
-
-            # Cleanup file after processing
-            try:
-                os.remove(path)
-            except Exception:
-                pass
-
-        # Build result
-        _set_job(job_id, {'status': 'processing', 'progress': 'Computing ratios...', 'percent': 90})
-
-        result = {}
-        if income_data and any(v for v in income_data.values()):
-            try:
-                result['Income Statement'] = analyze_income(income_data)
-            except Exception as e:
-                app.logger.error(f'income error: {e}')
-        if balance_data and any(v for v in balance_data.values()):
-            try:
-                result['Balance Sheet'] = analyze_balance(balance_data, income_data)
-            except Exception as e:
-                app.logger.error(f'balance error: {e}')
-        if cash_data and any(v for v in cash_data.values()):
-            try:
-                result['Cash Flow'] = analyze_cashflow(cash_data, balance_data, income_data)
-            except Exception as e:
-                app.logger.error(f'cashflow error: {e}')
-
+        _set_job(job_id, {'status': 'processing', 'progress': 'Reading Excel file...', 'percent': 30})
+        result = analyze_excel(filepath)
+        _set_job(job_id, {'status': 'processing', 'progress': 'Computing ratios...', 'percent': 80})
         _set_job(job_id, {'status': 'done', 'result': result, 'percent': 100})
-
     except Exception as e:
         import traceback
-        app.logger.error(f'[job:{job_id}] fatal: {e}\n{traceback.format_exc()}')
+        app.logger.error(f'[job:{job_id}] error: {e}\n{traceback.format_exc()}')
         _set_job(job_id, {'status': 'error', 'error': str(e)})
+    finally:
+        try:
+            os.remove(filepath)
+        except Exception:
+            pass
 
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     """
-    Accepts PDF uploads, saves them, starts background thread, returns job_id immediately.
-    The browser polls /analyze/status/<job_id> for progress and result.
+    Accepts a single Screener.in Excel file (.xlsx).
+    Returns job_id immediately. Browser polls /analyze/status/<job_id>.
     """
-    paths = []
     try:
-        files = request.files.getlist('files')
-        valid_files = [f for f in files if f and allowed_pdf(f.filename)]
+        file = request.files.get('files') or request.files.get('file')
+        if not file or not file.filename:
+            return jsonify({'error': 'No file uploaded.'}), 400
 
-        if len(valid_files) < 5:
-            return jsonify({'error': f'Please upload at least 5 annual report PDFs. You uploaded {len(valid_files)}.'}), 400
-        if len(valid_files) > 8:
-            return jsonify({'error': f'Maximum 8 PDFs allowed. You uploaded {len(valid_files)}.'}), 400
+        ext = file.filename.rsplit('.', 1)[-1].lower()
+        if ext not in ('xlsx', 'xls'):
+            return jsonify({'error': f'Please upload a Screener.in Excel file (.xlsx). Got: .{ext}'}), 400
 
-        # Save all files synchronously (fast)
-        file_path_pairs = []
-        for file in valid_files:
-            path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
-            paths = []  # don't auto-cleanup — background thread owns these files
-            file_path_pairs.append((file.filename, path))
-
-        # Quick image PDF check (reads only 3 pages per file — fast)
-        image_pdfs = [fname for fname, p in file_path_pairs if is_image_pdf(p)]
-        if image_pdfs:
-            for _, p in file_path_pairs:
-                cleanup(p)
-            return jsonify({'error': (
-                f'These PDFs have no text layer (image/scanned): {", ".join(image_pdfs)}. '
-                f'Please use annual reports from bseindia.com or the company website.'
-            )}), 400
-
-        # Create job and start background thread
+        path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
         job_id = str(uuid.uuid4())
-        _set_job(job_id, {'status': 'queued', 'progress': 'Starting...', 'percent': 0})
+        _set_job(job_id, {'status': 'queued', 'progress': 'Upload received...', 'percent': 10})
 
-        thread = threading.Thread(
-            target=_run_analysis_job,
-            args=(job_id, file_path_pairs),
-            daemon=True
-        )
+        thread = threading.Thread(target=_run_excel_job, args=(job_id, path), daemon=True)
         thread.start()
 
         return jsonify({'job_id': job_id}), 202
 
     except Exception as e:
         import traceback
-        app.logger.error(f'analyze submit error: {e}\n{traceback.format_exc()}')
-        for p in paths:
-            cleanup(p)
+        app.logger.error(f'analyze error: {e}\n{traceback.format_exc()}')
         return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 
 @app.route('/analyze/status/<job_id>', methods=['GET'])
 def analyze_status(job_id):
-    """
-    Poll this endpoint every 3 seconds.
-    Returns: {status: queued|processing|done|error, progress, percent, result?, error?}
-    """
+    """Poll every 2 seconds for job result."""
     job = _get_job(job_id)
     if job is None:
-        return jsonify({'status': 'error', 'error': 'Job not found. It may have expired.'}), 404
+        return jsonify({'status': 'error', 'error': 'Job not found or expired.'}), 404
     return jsonify(job)
 
 @app.route('/debug-pdf', methods=['GET'])

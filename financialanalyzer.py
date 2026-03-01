@@ -1,777 +1,410 @@
 #!/usr/bin/env python3
 """
 financialanalyzer.py
-Handles Moneycontrol/Screener/BSE/NSE financial PDFs.
-Moneycontrol PDFs are IMAGE-based screenshots — OCR is required.
+Reads Screener.in Excel exports — 'Data Sheet' tab.
+
+Structure of Data Sheet:
+  Row with 'PROFIT & LOSS'  → annual P&L rows follow
+  Row with 'BALANCE SHEET'  → balance sheet rows follow
+  Row with 'CASH FLOW:'     → cash flow rows follow
+  Each section has a 'Report Date' row then data rows.
+  Columns B..K = up to 10 years of data.
 """
 
-import re
-import shutil
 from typing import List, Optional, Dict
-
-try:
-    import pytesseract
-    _tess = shutil.which("tesseract")
-    pytesseract.pytesseract.tesseract_cmd = _tess if _tess else r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    _TESS_OK = True
-except ImportError:
-    _TESS_OK = False
-
-DEBUG = False
-
-def is_image_pdf(pdf_path: str) -> bool:
-    """
-    Quick check: returns True if the PDF has no text layer (image/scanned PDF).
-    Checks only first 3 pages for speed.
-    """
-    try:
-        import fitz
-        doc = fitz.open(pdf_path)
-        for i, page in enumerate(doc):
-            if i >= 3:
-                break
-            text = page.get_text("text").strip()
-            if len(text) > 50:   # found real text
-                doc.close()
-                return False
-        doc.close()
-        return True
-    except Exception:
-        pass
-    try:
-        import pdfplumber
-        with pdfplumber.open(pdf_path) as pdf:
-            for i, page in enumerate(pdf.pages):
-                if i >= 3:
-                    break
-                text = page.extract_text()
-                if text and len(text.strip()) > 50:
-                    return False
-        return True
-    except Exception:
-        return False
+import datetime
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Excel reader
+# ══════════════════════════════════════════════════════════════════════════════
 
-# Hard cap — never process more than this many pages per PDF
-_MAX_PAGES = 80
-
-def _find_financial_pages(doc) -> List[int]:
-    """
-    Scan ALL pages quickly (just first 300 chars each) to find financial pages.
-    Returns at most _MAX_PAGES page indices.
-    Financial statements in BSE annual reports are usually in last 40% of doc.
-    """
-    TRIGGERS = [
-        "statement of profit", "profit and loss", "profit & loss",
-        "balance sheet", "statement of financial position",
-        "cash flow", "income statement",
-        "revenue from operations", "total assets", "total equity",
-        "standalone financial", "consolidated financial",
-        "notes to financial", "auditor", "independent auditor",
-    ]
-    total = len(doc)
-    hits = set()
-
-    for i, page in enumerate(doc):
+def _clean(v) -> Optional[float]:
+    """Convert cell value to float, return None if not a number."""
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        import re
+        s = v.replace(',', '').replace('%', '').strip()
+        s = re.sub(r'[^\d.\-]', '', s)
         try:
-            snippet = page.get_text("text")[:300].lower()
-        except Exception:
-            snippet = ""
-        if any(t in snippet for t in TRIGGERS):
-            # Small window around each hit — financial tables span ~5-10 pages
-            start = max(0, i - 1)
-            end   = min(total, i + 12)
-            hits.update(range(start, end))
-
-    if hits:
-        pages = sorted(hits)
-        return pages[:_MAX_PAGES]  # hard cap
-
-    # Fallback: last 35% of doc, capped at _MAX_PAGES
-    start = max(0, int(total * 0.65))
-    pages = list(range(start, total))
-    return pages[:_MAX_PAGES]
+            return float(s) if s else None
+        except ValueError:
+            return None
+    return None
 
 
-def pdf_to_text(pdf_path: str) -> List[str]:
+def _year_label(v) -> str:
+    """Convert a date cell to 'Mar-24' style label."""
+    if isinstance(v, datetime.datetime):
+        return v.strftime('%b-%y')
+    return str(v) if v else ''
+
+
+def read_screener_excel(filepath: str) -> dict:
     """
-    Extract text from financial statement pages only.
-    For BSE annual reports (150-300 pages), scans for relevant pages first
-    so we only process ~30-60 pages instead of the whole document.
+    Parse Screener.in Excel export — Data Sheet tab.
+    Sections: PROFIT & LOSS | Quarters | BALANCE SHEET | CASH FLOW
+    Returns dict with keys: years, income, balance, cashflow
     """
-    lines: List[str] = []
-
-    # Strategy 1: PyMuPDF — smart page selection
     try:
-        import fitz
-        doc = fitz.open(pdf_path)
-        pages_to_read = _find_financial_pages(doc)
-
-        for i in pages_to_read:
-            page = doc[i]
-            # Plain text
-            try:
-                text = page.get_text("text")
-                if text and text.strip():
-                    for ln in text.splitlines():
-                        ln = ln.strip()
-                        if ln:
-                            lines.append(ln)
-            except Exception:
-                pass
-            # Row reconstruction (groups spans by Y coordinate → label | num | num)
-            try:
-                raw  = page.get_text("rawdict")
-                rows: Dict[int, list] = {}
-                for block in raw.get("blocks", []):
-                    for bline in block.get("lines", []):
-                        y = int(bline["bbox"][1])
-                        for span in bline.get("spans", []):
-                            t = span["text"].strip()
-                            if t:
-                                rows.setdefault(y, []).append((span["bbox"][0], t))
-                for y in sorted(rows):
-                    cells = [t for _, t in sorted(rows[y])]
-                    joined = " | ".join(cells)
-                    if joined not in lines:
-                        lines.append(joined)
-            except Exception:
-                pass
-
-        doc.close()
+        import openpyxl
     except ImportError:
-        pass
-    except Exception:
-        pass
+        raise ImportError("openpyxl not installed. Add openpyxl to requirements.txt")
 
-    # Strategy 2: pdfplumber (fallback for PDFs fitz can't read)
-    if not lines:
-        try:
-            import pdfplumber
-            with pdfplumber.open(pdf_path) as pdf:
-                total = len(pdf.pages)
-                start = max(0, int(total * 0.40))
-                for page in pdf.pages[start:]:
-                    try:
-                        for table in (page.extract_tables() or []):
-                            for row in table:
-                                cells = [re.sub(r'\s+', ' ', str(c).strip()) if c else "" for c in row]
-                                cells = [c for c in cells if c]
-                                if cells:
-                                    lines.append(" | ".join(cells))
-                    except Exception:
-                        pass
-                    try:
-                        text = page.extract_text()
-                        if text:
-                            for ln in text.splitlines():
-                                ln = ln.strip()
-                                if ln:
-                                    lines.append(ln)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+    wb = openpyxl.load_workbook(filepath, data_only=True)
 
-    # Strategy 3: OCR (last resort — only if no text found at all)
-    if not lines and _TESS_OK:
-        try:
-            import fitz
-            from PIL import Image
-            import io
-            doc  = fitz.open(pdf_path)
-            pages_to_read = _find_financial_pages(doc)
-            for i in pages_to_read:
-                page = doc[i]
-                pix  = page.get_pixmap(dpi=200)
-                img  = Image.open(io.BytesIO(pix.tobytes("png")))
-                text = pytesseract.image_to_string(img, config="--psm 6 --oem 3")
-                for ln in text.splitlines():
-                    ln = ln.strip()
-                    if ln:
-                        lines.append(ln)
-            doc.close()
-        except Exception:
-            pass
+    # Find the Data Sheet (case-insensitive)
+    sheet_name = None
+    for name in wb.sheetnames:
+        if 'data' in name.lower():
+            sheet_name = name
+            break
+    if not sheet_name:
+        raise ValueError(f"No Data Sheet found. Available: {wb.sheetnames}")
 
-    return lines
+    ws = wb[sheet_name]
+    rows = list(ws.iter_rows(values_only=True))
+    n_rows = len(rows)
+
+    # ── Find ALL section boundaries ───────────────────────────────────────────
+    pl_start = quarters_start = bs_start = cf_start = price_start = None
+    for i, row in enumerate(rows):
+        label = str(row[0]).strip().upper() if row[0] else ''
+        if 'PROFIT' in label and 'LOSS' in label and pl_start is None:
+            pl_start = i
+        elif label == 'QUARTERS' and quarters_start is None:
+            quarters_start = i
+        elif label == 'BALANCE SHEET' and bs_start is None:
+            bs_start = i
+        elif 'CASH FLOW' in label and cf_start is None:
+            cf_start = i
+        elif label in ('PRICE:', 'PRICE') and price_start is None:
+            price_start = i
+
+    # ── Section boundaries (end = next section start) ────────────────────────
+    # P&L annual data ends at Quarters section
+    pl_end       = quarters_start if quarters_start else (bs_start if bs_start else n_rows)
+    # Quarters section skipped entirely
+    bs_end        = cf_start if cf_start else n_rows
+    # Cash flow ends at PRICE: row
+    cf_end        = price_start if price_start else n_rows
+
+    def _parse_section(start: int, end: int) -> Dict[str, List]:
+        """
+        Parse a section of rows. First 'Report Date' row = year labels.
+        Stops at the next section header.
+        """
+        section: Dict[str, List] = {}
+        for r in rows[start + 1: end]:
+            label = str(r[0]).strip() if r[0] else ''
+            if not label:
+                continue
+            # Stop if we hit another section header
+            upper = label.upper()
+            if any(h in upper for h in ['BALANCE SHEET', 'CASH FLOW', 'PRICE:', 'DERIVED', 'QUARTERS']):
+                break
+
+            vals = list(r[1:])  # columns B..K
+
+            if label == 'Report Date':
+                years = [_year_label(v) for v in vals if v is not None]
+                section['_years'] = years
+                section['_n']     = len(years)
+                continue
+
+            n   = section.get('_n', len(vals))
+            nums = [_clean(vals[i]) if i < len(vals) else None for i in range(n)]
+            section[label] = nums
+
+        return section
+
+    pl_data = _parse_section(pl_start, pl_end)  if pl_start is not None else {}
+    bs_data = _parse_section(bs_start, bs_end)  if bs_start is not None else {}
+    cf_data = _parse_section(cf_start, cf_end)  if cf_start is not None else {}
+
+    years = (pl_data.get('_years') or bs_data.get('_years') or cf_data.get('_years') or [])
+
+    return {'years': years, 'income': pl_data, 'balance': bs_data, 'cashflow': cf_data}
 
 
-def clean_number(token) -> Optional[float]:
-    if token is None:
+# ══════════════════════════════════════════════════════════════════════════════
+# Helpers
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _get(section: dict, *keys) -> List:
+    """Return first matching key's list, else empty list."""
+    for k in keys:
+        for sk in section:
+            if sk.lower().strip() == k.lower().strip():
+                return [v for v in section[sk] if v is not None] or section[sk]
+    return []
+
+
+def cagr(vals: List) -> Optional[float]:
+    vals = [v for v in vals if v is not None]
+    if len(vals) < 2 or vals[-1] <= 0 or vals[0] <= 0:
         return None
-    s = str(token).strip()
-    s = re.sub(r'[\u200b\xa0\u202f]', '', s)
-    s = re.sub(r'(?i)(cr\.?|crore|lakh|lakhs|mn|million|bn|billion|rs\.?|inr|\u20b9)', '', s)
-    s = s.replace(',', '').replace(' ', '')
-    s = s.replace('(', '-').replace(')', '')
-    s = re.sub(r'[^0-9.\-]', '', s)
-    if not s or s in ('-', '.', '--', '---'):
-        return None
-    try:
-        return float(s)
-    except ValueError:
-        return None
+    n = len(vals) - 1
+    return round(((vals[-1] / vals[0]) ** (1 / n) - 1) * 100, 2)
 
 
-def find_numbers(line: str) -> List[float]:
-    toks = re.findall(r'-?\(?\d[\d,]*(?:\.\d+)?\)?', line)
-    result = []
-    for t in toks:
-        n = clean_number(t)
-        if n is not None:
-            result.append(n)
-    return result
-
-
-def cagr_percent(vals: List) -> Optional[float]:
+def avg_growth(vals: List) -> Optional[float]:
     vals = [v for v in vals if v is not None]
     if len(vals) < 2:
         return None
-    start, end = vals[-1], vals[0]
-    n = len(vals) - 1
-    if start <= 0 or end <= 0:
-        return None
-    return round(((end / start) ** (1 / n) - 1) * 100, 2)
-
-
-def average_growth(values: List) -> Optional[float]:
-    if not values or len(values) < 2:
-        return None
     growths = []
-    for i in range(len(values) - 1):
-        cur, prev = values[i], values[i + 1]
-        if cur is None or prev in (None, 0):
-            continue
-        growths.append(((cur - prev) / prev) * 100)
+    for i in range(1, len(vals)):
+        if vals[i - 1] not in (None, 0):
+            growths.append((vals[i] - vals[i - 1]) / abs(vals[i - 1]) * 100)
     return round(sum(growths) / len(growths), 2) if growths else None
 
 
 def avg(lst: List) -> Optional[float]:
-    vals = [x for x in lst if x is not None]
+    vals = [v for v in lst if v is not None]
     return round(sum(vals) / len(vals), 2) if vals else None
 
 
-def ratio_yearly(num_list, den_list, scale=2) -> List:
-    max_len = max(len(num_list), len(den_list), 0)
+def ratio_yearly(num: List, den: List) -> List:
+    n = max(len(num), len(den))
     out = []
-    for i in range(max_len):
-        n = num_list[i] if i < len(num_list) else None
-        d = den_list[i] if i < len(den_list) else None
-        out.append(round(n / d, scale) if (n is not None and d not in (None, 0)) else None)
+    for i in range(n):
+        a = num[i] if i < len(num) else None
+        b = den[i] if i < len(den) else None
+        out.append(round(a / b, 2) if (a is not None and b not in (None, 0)) else None)
     return out
 
 
-def _normalize(text: str) -> str:
-    t = text.lower()
-    t = re.sub(r'[\u2013\u2014\u2015]', '-', t)
-    t = re.sub(r'[\u2018\u2019\u201c\u201d]', "'", t)
-    t = re.sub(r'\s+', ' ', t)
-    return t.strip()
+# ══════════════════════════════════════════════════════════════════════════════
+# Analyzers
+# ══════════════════════════════════════════════════════════════════════════════
 
+def analyze_income(inc: dict, years: List[str]) -> dict:
+    revenue    = _get(inc, 'Sales', 'Revenue', 'Net Sales')
+    net_profit = _get(inc, 'Net profit', 'Net Profit', 'PAT')
+    interest   = _get(inc, 'Interest', 'Finance Costs')
+    tax        = _get(inc, 'Tax', 'Tax Expense')
+    depreciation = _get(inc, 'Depreciation', 'Depreciation & Amortisation')
+    employee   = _get(inc, 'Employee Cost', 'Employee Benefit Expenses')
+    raw_mat    = _get(inc, 'Raw Material Cost', 'Cost of Materials Consumed', 'COGS')
+    other_inc  = _get(inc, 'Other Income')
+    pbt        = _get(inc, 'Profit before tax', 'PBT')
 
-def _extract(lines: List[str], patterns: Dict[str, List[str]]) -> Dict[str, List[float]]:
-    res: Dict[str, List[float]] = {k: [] for k in patterns}
-    locked: set = set()
-    for idx, line in enumerate(lines):
-        norm = _normalize(line)
-        for field, keywords in patterns.items():
-            if field in locked:
-                continue
-            if not any(kw in norm for kw in keywords):
-                continue
-            nums = find_numbers(line)
-            if not nums:
-                for ahead in range(1, 4):
-                    if idx + ahead < len(lines):
-                        nums = find_numbers(lines[idx + ahead])
-                        if nums:
-                            break
-            if nums:
-                res[field] = nums
-                locked.add(field)
-                if DEBUG:
-                    print(f"  [MATCH] {field:<35s} nums={nums[:6]}  line={line[:80]!r}")
-    return res
-
-
-def extract_income_series(lines: List[str]) -> dict:
-    patterns = {
-        "revenue": [
-            "revenue from operations [net]",
-            "revenue from operations [gross]",
-            "total operating revenues",
-            "revenue from operations",
-            "total revenue from operations",
-            "net revenue from operations",
-            "total operating revenue",
-            "net sales",
-            "net revenue",
-            "total revenue",
-            "turnover",
-            "revenue",
-            "sales",
-        ],
-        "net_profit": [
-            "profit/loss for the period",
-            "profit/loss from continuing operations",
-            "profit/loss after tax and before extraordinary items",
-            "profit/(loss) for the period",
-            "profit/(loss) for the year",
-            "profit for the period",
-            "profit for the year",
-            "profit after tax",
-            "net profit after tax",
-            "net profit",
-            "pat",
-        ],
-        "interest": [
-            "finance costs",
-            "finance cost",
-            "interest expense",
-            "interest and finance charges",
-            "borrowing costs",
-            "interest",
-        ],
-        "tax": [
-            "total tax expenses",
-            "tax expenses-continued operations",
-            "total tax expense",
-            "tax expense",
-            "provision for tax",
-            "current tax",
-            "income tax expense",
-            "income tax",
-        ],
-        "depreciation": [
-            "depreciation and amortisation expenses",
-            "depreciation and amortization expenses",
-            "depreciation and amortisation expense",
-            "depreciation and amortization expense",
-            "depreciation & amortization",
-            "depreciation and amortisation",
-            "depreciation and amortization",
-            "depreciation",
-            "amortisation",
-        ],
-        "cogs": [
-            "cost of materials consumed",
-            "cost of goods sold",
-            "raw material consumed",
-            "raw materials consumed",
-            "material consumed",
-        ],
-        "purchases": [
-            "purchase of stock-in trade",
-            "purchase of stock-in-trade",
-            "purchases of stock-in-trade",
-            "purchases of stock in trade",
-            "purchase of traded goods",
-            "purchases",
-        ],
-        "employee_cost": [
-            "employee benefit expenses",
-            "employee benefits expense",
-            "employee benefits expenses",
-            "personnel expenses",
-            "staff costs",
-            "employee cost",
-            "salaries and wages",
-        ],
-        "inventory_change": [
-            "changes in inventories of fg,wip and stock-in trade",
-            "changes in inventories of fg, wip and stock-in trade",
-            "changes in inventories of finished goods",
-            "change in inventories of finished goods",
-            "changes in inventories",
-            "change in inventories",
-        ],
-    }
-    return _extract(lines, patterns)
-
-
-def extract_balance_series(lines: List[str]) -> dict:
-    patterns = {
-        "cash": [
-            "cash and cash equivalents",
-            "cash & cash equivalents",
-            "cash and bank balances",
-            "cash & bank",
-        ],
-        "current_assets": [
-            "total current assets",
-            "current assets",
-        ],
-        "inventory": [
-            "inventories",
-            "inventory",
-        ],
-        "current_liabilities": [
-            "total current liabilities",
-            "current liabilities",
-        ],
-        "non_current_liabilities": [
-            "total non-current liabilities",
-            "non-current liabilities",
-            "non current liabilities",
-        ],
-        "shareholders_fund": [
-            "total equity",
-            "total shareholders' funds",
-            "total shareholders funds",
-            "shareholders' funds",
-            "net worth",
-        ],
-        "share_capital": [
-            "equity share capital",
-            "share capital",
-        ],
-        "reserves": [
-            "other equity",
-            "reserves and surplus",
-            "reserves & surplus",
-            "reserves",
-        ],
-        "other_comprehensive_income": [
-            "other comprehensive income",
-        ],
-        "total_assets": [
-            "total assets",
-        ],
-        "borrowings": [
-            "total borrowings",
-            "long-term borrowings",
-            "short-term borrowings",
-            "borrowings",
-        ],
-    }
-    return _extract(lines, patterns)
-
-
-def extract_cashflow_series(lines: List[str]) -> dict:
-    patterns = {
-        "cfo": [
-            "net cash from operating activities",
-            "net cash generated from operating activities",
-            "net cash used in operating activities",
-            "cash flow from operating activities",
-            "net cash from operating",
-        ],
-        "cfi": [
-            "net cash used in investing activities",
-            "net cash from investing activities",
-            "cash flow from investing activities",
-            "net cash from investing",
-        ],
-        "cff": [
-            "net cash used in financing activities",
-            "net cash from financing activities",
-            "cash flow from financing activities",
-            "net cash from financing",
-        ],
-        "capex": [
-            "purchase of property, plant and equipment",
-            "capital expenditure",
-            "purchase of fixed assets",
-            "purchase of tangible assets",
-        ],
-        "net_change_cash": [
-            "net increase/(decrease) in cash and cash equivalents",
-            "net decrease/(increase) in cash and cash equivalents",
-            "net increase in cash and cash equivalents",
-            "net decrease in cash and cash equivalents",
-            "net change in cash and cash equivalents",
-            "net change in cash",
-        ],
-    }
-    return _extract(lines, patterns)
-
-
-def detect_type(lines: List[str], filename: str = "") -> Optional[str]:
-    txt = _normalize(" ".join(lines))
-    fname = filename.lower()
-    if any(k in fname for k in ["income", "p&l", "pnl", "profit", "_pl", "-pl"]):
-        return "income"
-    if any(k in fname for k in ["balance", "_bs", "-bs", "balancesheet"]):
-        return "balance"
-    if any(k in fname for k in ["cash", "cashflow", "cash-flow", "cfs"]):
-        return "cash"
-    i = sum([4 if "revenue from operations" in txt else 0,
-             4 if "profit/loss for the period" in txt or "profit for the year" in txt else 0,
-             2 if "finance costs" in txt else 0])
-    b = sum([4 if "total assets" in txt else 0,
-             4 if "total equity" in txt or "total shareholders" in txt else 0,
-             3 if "current liabilities" in txt else 0])
-    c = sum([5 if "cash flow from operating" in txt else 0,
-             4 if "cash flow from investing" in txt else 0])
-    best = max(i, b, c, 0)
-    if best == 0:
-        return None
-    if i == best:
-        return "income"
-    if c == best:
-        return "cash"
-    return "balance"
-
-
-def detect_all_types(lines: List[str]) -> List[str]:
-    txt = _normalize(" ".join(lines))
-    found = []
-    if sum(1 for s in ["revenue from operations", "profit/loss for the period",
-                        "profit for the year", "finance costs", "employee benefit"] if s in txt) >= 2:
-        found.append("income")
-    if sum(1 for s in ["total assets", "total equity", "total shareholders",
-                        "current liabilities", "equity share capital"] if s in txt) >= 2:
-        found.append("balance")
-    if sum(1 for s in ["cash flow from operating", "net cash from operating",
-                        "cash flow from investing", "cash flow from financing"] if s in txt) >= 2:
-        found.append("cash")
-    return found
-
-
-def analyze_income(data: dict) -> dict:
-    revenue = data.get("revenue", [])
-    net_profit = data.get("net_profit", [])
-    interest = data.get("interest", [])
-    tax = data.get("tax", [])
-    depreciation = data.get("depreciation", [])
-    cogs = data.get("cogs", [])
-    purchases = data.get("purchases", [])
-    employee_cost = data.get("employee_cost", [])
-    inventory_change = data.get("inventory_change", [])
-
-    def v(s, i=0): return s[i] if len(s) > i else None
-
-    rev_cur, rev_prev = v(revenue, 0), v(revenue, 1)
-    net_cur = v(net_profit, 0)
-    revenue_growth = round(((rev_cur - rev_prev) / rev_prev * 100), 2) \
-        if (rev_cur is not None and rev_prev not in (None, 0)) else None
-
-    max_len = max(len(net_profit), len(interest), len(tax), len(depreciation), 0)
-    ebitda_series = []
-    for i in range(max_len):
-        n  = net_profit[i]   if i < len(net_profit)   else None
-        it = interest[i]     if i < len(interest)     else 0
-        tx = tax[i]          if i < len(tax)           else 0
+    # EBITDA = Net Profit + Tax + Interest + Depreciation
+    n = max(len(net_profit), len(tax), len(interest), len(depreciation))
+    ebitda = []
+    for i in range(n):
+        np = net_profit[i]  if i < len(net_profit)   else 0
+        tx = tax[i]         if i < len(tax)           else 0
+        it = interest[i]    if i < len(interest)      else 0
         dp = depreciation[i] if i < len(depreciation) else 0
-        if n is not None:
-            ebitda_series.append(round((n or 0) + (it or 0) + (tx or 0) + (dp or 0), 2))
+        if any(v is not None for v in [np, tx, it, dp]):
+            ebitda.append(round((np or 0)+(tx or 0)+(it or 0)+(dp or 0), 2))
 
-    op = round((net_cur or 0) + (v(interest, 0) or 0) + (v(tax, 0) or 0), 2) if net_cur is not None else None
-    opm = round(op / rev_cur * 100, 2) if (op is not None and rev_cur not in (None, 0)) else None
-    npm = round(net_cur / rev_cur * 100, 2) if (net_cur is not None and rev_cur not in (None, 0)) else None
+    def pct(a, b): return round(a / b * 100, 2) if (a is not None and b not in (None, 0)) else None
 
-    cogs0 = v(cogs, 0) or 0
-    pur0  = v(purchases, 0) or 0
-    emp0  = v(employee_cost, 0) or 0
-    inv0  = v(inventory_change, 0) or 0
-    gp = gm = None
-    if rev_cur is not None:
-        tc = cogs0 + pur0 + emp0 - inv0
-        gp = round(rev_cur - tc, 2)
-        gm = round(gp / rev_cur * 100, 2) if rev_cur else None
+    # Latest year metrics
+    rev0  = revenue[0]    if revenue    else None
+    np0   = net_profit[0] if net_profit else None
+    ebit0 = ebitda[0]     if ebitda     else None
+
+    opm = pct(ebit0, rev0)
+    npm = pct(np0, rev0)
 
     return {
-        "Statement": "Income Statement",
-        "Revenue (All Years)": revenue,
-        "Net Profit (All Years)": net_profit,
-        "EBITDA (All Years)": ebitda_series,
-        "COGS (All Years)": cogs,
-        "Employee Cost (All Years)": employee_cost,
-        "Depreciation (All Years)": depreciation,
-        "Interest (All Years)": interest,
-        "Tax (All Years)": tax,
-        "Purchases (All Years)": purchases,
-        "Inventory Change (All Years)": inventory_change,
-        "5Y Revenue CAGR (%)": cagr_percent(revenue),
-        "5Y Net Profit CAGR (%)": cagr_percent(net_profit),
-        "5Y EBITDA CAGR (%)": cagr_percent(ebitda_series),
-        "Revenue Growth (%)": revenue_growth,
-        "Average Revenue Growth (%)": average_growth(revenue),
-        "Average Net Profit Growth (%)": average_growth(net_profit),
-        "Operating Margin (%)": opm,
-        "Net Profit Margin (%)": npm,
-        "Gross Profit": gp,
-        "Gross Margin (%)": gm,
+        'Statement':                   'Income Statement',
+        'Years':                       years,
+        'Revenue (All Years)':         revenue,
+        'Net Profit (All Years)':      net_profit,
+        'EBITDA (All Years)':          ebitda,
+        'PBT (All Years)':             pbt,
+        'Depreciation (All Years)':    depreciation,
+        'Interest (All Years)':        interest,
+        'Tax (All Years)':             tax,
+        'Employee Cost (All Years)':   employee,
+        'Raw Material Cost (All Yrs)': raw_mat,
+        'Other Income (All Years)':    other_inc,
+        '5Y Revenue CAGR (%)':         cagr(revenue[-6:] if len(revenue) > 6 else revenue),
+        '5Y Net Profit CAGR (%)':      cagr(net_profit[-6:] if len(net_profit) > 6 else net_profit),
+        '5Y EBITDA CAGR (%)':          cagr(ebitda[-6:] if len(ebitda) > 6 else ebitda),
+        'Avg Revenue Growth (%)':      avg_growth(revenue),
+        'Avg Net Profit Growth (%)':   avg_growth(net_profit),
+        'EBITDA Margin (%)':           opm,
+        'Net Profit Margin (%)':       npm,
     }
 
 
-def analyze_balance(data: dict, income_data: dict = None) -> dict:
-    cash = data.get("cash", [])
-    ca   = data.get("current_assets", [])
-    inv  = data.get("inventory", [])
-    cl   = data.get("current_liabilities", [])
-    ncl  = data.get("non_current_liabilities", [])
-    tsf  = data.get("shareholders_fund", [])
-    sc   = data.get("share_capital", [])
-    rs   = data.get("reserves", [])
-    oci  = data.get("other_comprehensive_income", [])
-    ta   = data.get("total_assets", [])
+def analyze_balance(bs: dict, inc: dict, years: List[str]) -> dict:
+    equity_cap = _get(bs, 'Equity Share Capital', 'Share Capital')
+    reserves   = _get(bs, 'Reserves', 'Reserves and Surplus')
+    borrowings = _get(bs, 'Borrowings', 'Total Borrowings')
+    other_liab = _get(bs, 'Other Liabilities')
+    total      = _get(bs, 'Total')
+    net_block  = _get(bs, 'Net Block', 'Fixed Assets')
+    investments= _get(bs, 'Investments')
+    other_assets=_get(bs, 'Other Assets')
+    receivables= _get(bs, 'Receivables', 'Debtors')
+    inventory  = _get(bs, 'Inventory', 'Inventories')
+    cash       = _get(bs, 'Cash & Bank', 'Cash and Cash Equivalents')
 
-    total_liab = []
-    for i in range(max(len(cl), len(ncl), 0)):
-        c = cl[i]  if i < len(cl)  else 0
-        n = ncl[i] if i < len(ncl) else 0
-        total_liab.append((c or 0) + (n or 0))
-
-    current_ratio = ratio_yearly(ca, cl)
-    cash_ratio    = ratio_yearly(cash, cl)
-
-    max_eq = max(len(tsf), len(sc), len(rs), len(oci), 0)
+    # Equity = Share Capital + Reserves
+    n = max(len(equity_cap), len(reserves))
     equity = []
-    for i in range(max_eq):
-        if tsf and i < len(tsf) and tsf[i] is not None:
-            equity.append(tsf[i])
-        else:
-            s = (sc[i] if i < len(sc) else 0 or 0) + \
-                (rs[i] if i < len(rs) else 0 or 0) + \
-                (oci[i] if i < len(oci) else 0 or 0)
-            equity.append(s if s else None)
+    for i in range(n):
+        ec = equity_cap[i] if i < len(equity_cap) else 0
+        rs = reserves[i]   if i < len(reserves)   else 0
+        equity.append(round((ec or 0) + (rs or 0), 2))
 
-    de = ratio_yearly(total_liab, equity)
-    dr = ratio_yearly(total_liab, ta)
-    wc = [round(ca[i] - cl[i], 2)
-          if i < len(ca) and i < len(cl) and ca[i] is not None and cl[i] is not None
-          else None for i in range(min(len(ca), len(cl)))]
+    # Total debt
+    debt = borrowings  # from screener this is total borrowings
 
-    nps = income_data.get("net_profit", []) if income_data else []
-    its = income_data.get("interest",   []) if income_data else []
-    txs = income_data.get("tax",        []) if income_data else []
+    de_ratio   = ratio_yearly(debt, equity)
+    # Current ratio approximation: (Cash + Receivables + Inventory) / Other Liabilities
+    cur_assets = []
+    for i in range(max(len(cash), len(receivables), len(inventory))):
+        c  = cash[i]        if i < len(cash)        else 0
+        r  = receivables[i] if i < len(receivables) else 0
+        iv = inventory[i]   if i < len(inventory)   else 0
+        cur_assets.append(round((c or 0)+(r or 0)+(iv or 0), 2))
+    current_ratio = ratio_yearly(cur_assets, other_liab)
 
-    max_y = max(len(ta), len(equity), len(nps), len(its), len(txs), len(cl), 0)
-    ic = []; roa = []; roe = []; roce = []
-    for i in range(max_y):
-        np_i = nps[i] if i < len(nps) else None
-        it_i = its[i] if i < len(its) else None
-        tx_i = txs[i] if i < len(txs) else None
-        ta_i = ta[i]  if i < len(ta)  else None
-        cl_i = cl[i]  if i < len(cl)  else None
-        eq_i = equity[i] if i < len(equity) else None
-        ebit = None if (np_i is None and it_i is None and tx_i is None) \
-            else (np_i or 0) + (it_i or 0) + (tx_i or 0)
-        ic.append(round(ebit / it_i, 2) if (ebit is not None and it_i not in (None, 0)) else None)
-        roa.append(round(np_i / ta_i * 100, 2) if (np_i is not None and ta_i not in (None, 0)) else None)
-        roe.append(round(np_i / eq_i * 100, 2) if (np_i is not None and eq_i not in (None, 0)) else None)
-        dr_ = (ta_i - cl_i) if (ta_i is not None and cl_i is not None) else None
-        roce.append(round(ebit / dr_ * 100, 2) if (ebit is not None and dr_ not in (None, 0)) else None)
+    net_profit = _get(inc, 'Net profit', 'Net Profit', 'PAT')
+    interest   = _get(inc, 'Interest', 'Finance Costs')
+    tax        = _get(inc, 'Tax', 'Tax Expense')
+
+    roa = ratio_yearly([v * 100 if v else v for v in net_profit], total)
+    roe = ratio_yearly([v * 100 if v else v for v in net_profit], equity)
+
+    # Interest coverage = EBIT / Interest
+    n2 = max(len(net_profit), len(tax), len(interest))
+    ebit_list = []
+    for i in range(n2):
+        np = net_profit[i] if i < len(net_profit) else 0
+        tx = tax[i]        if i < len(tax)        else 0
+        it = interest[i]   if i < len(interest)   else 0
+        ebit_list.append((np or 0)+(tx or 0)+(it or 0))
+    ic = ratio_yearly(ebit_list, interest)
 
     return {
-        "Statement": "Balance Sheet",
-        "Cash (All Years)": cash, "Current Assets (All Years)": ca,
-        "Inventory (All Years)": inv, "Total Assets (All Years)": ta,
-        "Current Liabilities (All Years)": cl, "Non-Current Liabilities (All Years)": ncl,
-        "Total Liabilities (All Years)": total_liab, "Share Capital (All Years)": sc,
-        "Reserves (All Years)": rs, "Computed Equity (All Years)": equity,
-        "Cash Ratio (All Years)": cash_ratio, "Current Ratio (All Years)": current_ratio,
-        "Working Capital (All Years)": wc, "Debt-to-Equity (All Years)": de,
-        "Debt Ratio (All Years)": dr, "Interest Coverage Ratio (All Years)": ic,
-        "Return on Assets (ROA %) (All Years)": roa, "Return on Equity (ROE %) (All Years)": roe,
-        "Return on Capital Employed (ROCE %) (All Years)": roce,
-        "5Y Avg Current Ratio": avg(current_ratio[:5]), "5Y Avg D/E": avg(de[:5]),
-        "5Y Avg ROA (%)": avg(roa[:5]), "5Y Avg ROE (%)": avg(roe[:5]),
+        'Statement':                                 'Balance Sheet',
+        'Years':                                     years,
+        'Equity Share Capital (All Years)':          equity_cap,
+        'Reserves (All Years)':                      reserves,
+        'Total Equity (All Years)':                  equity,
+        'Borrowings (All Years)':                    borrowings,
+        'Total Assets (All Years)':                  total,
+        'Net Block (All Years)':                     net_block,
+        'Investments (All Years)':                   investments,
+        'Cash & Bank (All Years)':                   cash,
+        'Receivables (All Years)':                   receivables,
+        'Inventory (All Years)':                     inventory,
+        'Approx Current Assets (All Years)':         cur_assets,
+        'Debt-to-Equity (All Years)':                de_ratio,
+        'Approx Current Ratio (All Years)':          current_ratio,
+        'Return on Assets ROA % (All Years)':        roa,
+        'Return on Equity ROE % (All Years)':        roe,
+        'Interest Coverage Ratio (All Years)':       ic,
+        '5Y Avg D/E':                                avg(de_ratio[-6:]),
+        '5Y Avg ROA (%)':                            avg(roa[-6:]),
+        '5Y Avg ROE (%)':                            avg(roe[-6:]),
+        '5Y Avg Current Ratio':                      avg(current_ratio[-6:]),
     }
 
 
-def analyze_cashflow(data: dict, balance_data: dict = None, income_data: dict = None) -> dict:
-    cfo   = data.get("cfo", [])
-    cfi   = data.get("cfi", [])
-    cff   = data.get("cff", [])
-    capex = data.get("capex", [])
-    netch = data.get("net_change_cash", [])
+def analyze_cashflow(cf: dict, bs: dict, inc: dict, years: List[str]) -> dict:
+    cfo   = _get(cf, 'Cash from Operating Activity', 'CFO', 'Operating Cash Flow')
+    cfi   = _get(cf, 'Cash from Investing Activity', 'CFI', 'Investing Cash Flow')
+    cff   = _get(cf, 'Cash from Financing Activity', 'CFF', 'Financing Cash Flow')
+    netchg= _get(cf, 'Net Cash Flow', 'Net Change in Cash')
 
-    fcf = [round(cfo[i] - abs(capex[i]), 2)
-           if cfo[i] is not None and capex[i] is not None else None
-           for i in range(min(len(cfo), len(capex)))]
+    revenue    = _get(inc, 'Sales', 'Revenue')
+    net_profit = _get(inc, 'Net profit', 'Net Profit')
+    total      = _get(bs, 'Total')
+    equity_cap = _get(bs, 'Equity Share Capital')
+    reserves   = _get(bs, 'Reserves')
+    equity = [round((equity_cap[i] or 0)+(reserves[i] or 0), 2)
+              for i in range(max(len(equity_cap), len(reserves)))]
 
-    cl  = balance_data.get("current_liabilities",     []) if balance_data else []
-    ncl = balance_data.get("non_current_liabilities", []) if balance_data else []
-    ta  = balance_data.get("total_assets",            []) if balance_data else []
-    eq  = []
-    if balance_data:
-        tsf = balance_data.get("shareholders_fund", [])
-        sc  = balance_data.get("share_capital",     [])
-        rs  = balance_data.get("reserves",          [])
-        oci = balance_data.get("other_comprehensive_income", [])
-        for i in range(max(len(tsf), len(sc), len(rs), len(oci), 0)):
-            if tsf and i < len(tsf) and tsf[i] is not None:
-                eq.append(tsf[i])
-            else:
-                s = (sc[i] if i < len(sc) else 0 or 0) + \
-                    (rs[i] if i < len(rs) else 0 or 0) + \
-                    (oci[i] if i < len(oci) else 0 or 0)
-                eq.append(s if s else None)
+    # Free Cash Flow = CFO + CFI (CFI is usually negative for capex)
+    fcf = []
+    for i in range(min(len(cfo), len(cfi))):
+        o = cfo[i]; fi = cfi[i]
+        fcf.append(round((o or 0)+(fi or 0), 2) if (o is not None or fi is not None) else None)
 
-    rev = income_data.get("revenue",    []) if income_data else []
-    np_ = income_data.get("net_profit", []) if income_data else []
-    it_ = income_data.get("interest",   []) if income_data else []
-    tx_ = income_data.get("tax",        []) if income_data else []
-
-    ocfr=[]; cfd=[]; croa=[]; croe=[]; cfm=[]; eqr=[]
-    max_y = max(len(cfo), len(cl), len(ncl), len(ta), len(eq),
-                len(rev), len(np_), len(it_), len(tx_), 0)
-    for i in range(max_y):
-        c_   = cfo[i] if i < len(cfo) else None
-        cl_  = cl[i]  if i < len(cl)  else None
-        nc_  = ncl[i] if i < len(ncl) else None
-        ta_  = ta[i]  if i < len(ta)  else None
-        eq_i = eq[i]  if i < len(eq)  else None
-        rv_  = rev[i] if i < len(rev) else None
-        np_i = np_[i] if i < len(np_) else None
-        it_i = it_[i] if i < len(it_) else None
-        tx_i = tx_[i] if i < len(tx_) else None
-        td = ((cl_ or 0) + (nc_ or 0)) if (cl_ is not None or nc_ is not None) else None
-        ocfr.append(round(c_ / cl_, 2)      if (c_ is not None and cl_  not in (None, 0)) else None)
-        cfd.append(round(c_ / td, 2)        if (c_ is not None and td   not in (None, 0)) else None)
-        croa.append(round(c_ / ta_ * 100, 2)  if (c_ is not None and ta_  not in (None, 0)) else None)
-        croe.append(round(c_ / eq_i * 100, 2) if (c_ is not None and eq_i not in (None, 0)) else None)
-        cfm.append(round(c_ / rv_ * 100, 2)   if (c_ is not None and rv_  not in (None, 0)) else None)
-        ebit = None if (np_i is None and it_i is None and tx_i is None) \
-            else (np_i or 0) + (it_i or 0) + (tx_i or 0)
-        eqr.append(round(c_ / ebit, 2) if (c_ is not None and ebit not in (None, 0)) else None)
+    # Earnings quality = CFO / Net Profit
+    eq_ratio = ratio_yearly(cfo, net_profit)
+    # CFO margin = CFO / Revenue
+    cfo_margin = ratio_yearly([v * 100 if v else v for v in cfo], revenue)
+    # Cash ROE = CFO / Equity * 100
+    cash_roe = ratio_yearly([v * 100 if v else v for v in cfo], equity)
+    # Cash ROA = CFO / Total Assets * 100
+    cash_roa = ratio_yearly([v * 100 if v else v for v in cfo], total)
 
     return {
-        "Statement": "Cash Flow",
-        "Operating Cash Flow (All Years)": cfo, "Investing Cash Flow (All Years)": cfi,
-        "Financing Cash Flow (All Years)": cff, "CapEx (All Years)": capex,
-        "Free Cash Flow (All Years)": fcf, "Net Change in Cash (All Years)": netch,
-        "Operating Cash Flow Ratio (All Years)": ocfr, "Cash Flow to Debt Ratio (All Years)": cfd,
-        "Cash Return on Assets (%) (All Years)": croa, "Cash Return on Equity (%) (All Years)": croe,
-        "Cash Flow Margin (%) (All Years)": cfm, "Earnings Quality Ratio (All Years)": eqr,
-        "5Y CAGR Operating Cash Flow (%)": cagr_percent(cfo),
-        "5Y Avg Operating Cash Flow Ratio": avg(ocfr[:5]),
-        "5Y Avg Cash Flow to Debt Ratio": avg(cfd[:5]),
-        "5Y Avg Earnings Quality Ratio": avg(eqr[:5]),
+        'Statement':                              'Cash Flow',
+        'Years':                                  years,
+        'Operating Cash Flow (All Years)':        cfo,
+        'Investing Cash Flow (All Years)':        cfi,
+        'Financing Cash Flow (All Years)':        cff,
+        'Free Cash Flow (All Years)':             fcf,
+        'Net Change in Cash (All Years)':         netchg,
+        'CFO Margin % (All Years)':               cfo_margin,
+        'Cash ROE % (All Years)':                 cash_roe,
+        'Cash ROA % (All Years)':                 cash_roa,
+        'Earnings Quality Ratio (All Years)':     eq_ratio,
+        '5Y CFO CAGR (%)':                        cagr(cfo[-6:] if len(cfo) > 6 else cfo),
+        '5Y Avg CFO Margin (%)':                  avg(cfo_margin[-6:]),
+        '5Y Avg Earnings Quality':                avg(eq_ratio[-6:]),
     }
 
 
-def main():
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-        root = tk.Tk(); root.withdraw()
-        paths = filedialog.askopenfilenames(filetypes=[("PDF Files", "*.pdf")])
-    except Exception:
-        paths = []
-    if not paths:
-        print("No files selected."); return
-    income_data = balance_data = cash_data = None
-    for p in paths:
-        print(f"\nExtracting: {p}")
-        lines = pdf_to_text(p)
-        print(f"  {len(lines)} lines extracted")
-        inc = extract_income_series(lines)
-        bal = extract_balance_series(lines)
-        cf  = extract_cashflow_series(lines)
-        print(f"  Income : {[k for k,v in inc.items() if v]}")
-        print(f"  Balance: {[k for k,v in bal.items() if v]}")
-        print(f"  Cash   : {[k for k,v in cf.items() if v]}")
-        if any(v for v in inc.values()) and income_data is None: income_data = inc
-        if any(v for v in bal.values()) and balance_data is None: balance_data = bal
-        if any(v for v in cf.values())  and cash_data   is None: cash_data = cf
-    if income_data:
-        print("\n===== INCOME STATEMENT =====")
-        for k, v in analyze_income(income_data).items(): print(f"  {k}: {v}")
+def analyze_excel(filepath: str) -> dict:
+    """
+    Main entry point. Pass path to Screener.in Excel file.
+    Returns full analysis dict ready for jsonify().
+    """
+    data = read_screener_excel(filepath)
+    years   = data['years']
+    inc     = data['income']
+    bs      = data['balance']
+    cf      = data['cashflow']
 
-if __name__ == "__main__":
-    main()
+    result = {}
+
+    if inc:
+        try:
+            result['Income Statement'] = analyze_income(inc, years)
+        except Exception as e:
+            result['Income Statement'] = {'error': str(e)}
+
+    if bs:
+        try:
+            result['Balance Sheet'] = analyze_balance(bs, inc, years)
+        except Exception as e:
+            result['Balance Sheet'] = {'error': str(e)}
+
+    if cf:
+        try:
+            result['Cash Flow'] = analyze_cashflow(cf, bs, inc, years)
+        except Exception as e:
+            result['Cash Flow'] = {'error': str(e)}
+
+    return result
+
+
+# ── Legacy PDF stubs — kept so app.py import doesn't break ──────────────────
+def pdf_to_text(pdf_path: str): return []
+def is_image_pdf(pdf_path: str) -> bool: return False
+def detect_type(lines, filename=''): return None
+def extract_income_series(lines): return {}
+def extract_balance_series(lines): return {}
+def extract_cashflow_series(lines): return {}
+
+
+if __name__ == '__main__':
+    import sys, json
+    path = sys.argv[1] if len(sys.argv) > 1 else 'Quick_Heal_Tech.xlsx'
+    result = analyze_excel(path)
+    print(json.dumps(result, indent=2, default=str))
