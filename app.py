@@ -82,6 +82,54 @@ def _get_job(job_id: str) -> dict:
 
 
 # =============================================================================
+# ERROR HANDLERS
+# =============================================================================
+@app.errorhandler(404)
+def not_found(_):
+    return render_template('404.html'), 404
+
+@app.errorhandler(413)
+def too_large(_):
+    return jsonify({'error': 'File too large. Maximum allowed size is 500 MB.'}), 413
+
+@app.errorhandler(500)
+def server_error(_):
+    return render_template('500.html'), 500
+
+
+# =============================================================================
+# PAGES
+# =============================================================================
+@app.route('/')
+def home():
+    return render_template('financialanalyzerweb.html')
+
+@app.route('/dcf')
+def dcf_page():
+    return render_template('dcfvaluation.html')
+
+@app.route('/financial-modelling')
+def financial_modelling_page():
+    return render_template('financial_modelling.html')
+
+@app.route('/technical-analysis')
+def technical_analysis_page():
+    return render_template('technical_analysis.html')
+
+@app.route('/portfolio-management')
+def portfolio_management_page():
+    return render_template('portfolio_management.html')
+
+@app.route('/performance-analytics')
+def performance_analytics_page():
+    return render_template('performance_analytics.html')
+
+@app.route('/strategy-optimization')
+def strategy_optimization_page():
+    return render_template('strategy_optimization.html')
+
+
+# =============================================================================
 # ANALYZER API  —  Screener.in Excel upload
 # =============================================================================
 
