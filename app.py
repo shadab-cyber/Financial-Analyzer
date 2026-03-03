@@ -128,31 +128,38 @@ def server_error(_):
 # =============================================================================
 @app.route('/')
 def home():
-    return render_template('financialanalyzerweb.html')
+    is_android = request.args.get('app') == 'android'
+    return render_template('financialanalyzerweb.html', is_android=is_android)
 
 @app.route('/dcf')
 def dcf_page():
-    return render_template('dcfvaluation.html')
+    is_android = request.args.get('app') == 'android'
+    return render_template('dcfvaluation.html', is_android=is_android)
 
 @app.route('/financial-modelling')
 def financial_modelling_page():
-    return render_template('financial_modelling.html')
+    is_android = request.args.get('app') == 'android'
+    return render_template('financial_modelling.html', is_android=is_android)
 
 @app.route('/technical-analysis')
 def technical_analysis_page():
-    return render_template('technical_analysis.html')
+    is_android = request.args.get('app') == 'android'
+    return render_template('technical_analysis.html', is_android=is_android)
 
 @app.route('/portfolio-management')
 def portfolio_management_page():
-    return render_template('portfolio_management.html')
+    is_android = request.args.get('app') == 'android'
+    return render_template('portfolio_management.html', is_android=is_android)
 
 @app.route('/performance-analytics')
 def performance_analytics_page():
-    return render_template('performance_analytics.html')
+    is_android = request.args.get('app') == 'android'
+    return render_template('performance_analytics.html', is_android=is_android)
 
 @app.route('/strategy-optimization')
 def strategy_optimization_page():
-    return render_template('strategy_optimization.html')
+    is_android = request.args.get('app') == 'android'
+    return render_template('strategy_optimization.html', is_android=is_android)
 
 
 # =============================================================================
