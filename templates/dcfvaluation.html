@@ -42,72 +42,51 @@ button, .btn, a[class*="btn"] {
 }
 </style>
 
-{% if is_android %}
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  nav, #mobile-menu { display: none !important; }
-  body, input, button, select, textarea { font-family: 'DM Sans', sans-serif !important; }
-  body { background-color: #F6F8FA !important; padding: 0 !important; margin: 0 !important; }
-  .min-h-screen { background-color: #F6F8FA !important; }
-  .p-6 { padding: 12px !important; }
-  .bg-white { background-color: #FFFFFF !important; border-radius: 20px !important; box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important; border: none !important; margin-bottom: 12px !important; padding: 18px !important; }
-  .bg-gray-100, .bg-gray-50 { background-color: #F6F8FA !important; }
-  .bg-gray-200 { background-color: #EDEEF0 !important; }
-  .bg-blue-50 { background-color: #F0FDF4 !important; border-left: 3px solid #00C853 !important; border-radius: 0 12px 12px 0 !important; }
-  .bg-blue-100 { background-color: #F0FDF4 !important; }
-  .bg-green-50 { background-color: #F0FDF4 !important; }
-  .bg-red-50   { background-color: #FFF5F5 !important; }
-  .bg-yellow-50{ background-color: #FFFBEB !important; }
-  .bg-indigo-50{ background-color: #F0FDF4 !important; }
-  .bg-gradient-to-r, .bg-gradient-to-br { background: linear-gradient(135deg, #00C853, #00897B) !important; border-radius: 16px !important; }
-  .text-gray-900, .text-gray-800, .text-gray-700 { color: #1a1a2e !important; }
-  .text-gray-600, .text-gray-500, .text-gray-400 { color: #9AA0AC !important; }
-  .text-blue-600, .text-blue-700, .text-blue-800 { color: #00897B !important; }
-  .text-indigo-600, .text-indigo-700 { color: #00897B !important; }
-  .text-green-600, .text-green-700 { color: #00C853 !important; }
-  .text-red-600, .text-red-700 { color: #F44336 !important; }
-  .text-yellow-600, .text-yellow-700 { color: #F59E0B !important; }
-  .border-gray-200, .border-gray-300 { border-color: #EDEEF0 !important; }
-  .border-blue-200, .border-blue-100 { border-color: #D1FAE5 !important; }
-  .bg-blue-600 { background: linear-gradient(135deg, #00C853, #00897B) !important; color: #fff !important; border-radius: 14px !important; border: none !important; padding: 15px !important; font-size: 14px !important; font-weight: 700 !important; box-shadow: 0 6px 20px rgba(0,200,83,0.3) !important; }
-  .bg-green-600 { background: linear-gradient(135deg, #00C853, #00897B) !important; border-radius: 14px !important; box-shadow: 0 4px 14px rgba(0,200,83,0.25) !important; }
-  .bg-red-600   { background-color: #F44336 !important; border-radius: 14px !important; }
-  .bg-indigo-600{ background: linear-gradient(135deg, #00C853, #00897B) !important; border-radius: 14px !important; }
-  input, select, textarea { background-color: #F6F8FA !important; border: 1.5px solid #EDEEF0 !important; border-radius: 12px !important; color: #1a1a2e !important; padding: 12px 14px !important; font-size: 14px !important; }
-  input::placeholder, textarea::placeholder { color: #9AA0AC !important; }
-  input:focus, select:focus, textarea:focus { border-color: #00C853 !important; box-shadow: 0 0 0 3px rgba(0,200,83,0.15) !important; outline: none !important; }
-  input[type="file"] { padding: 14px !important; border: 2px dashed #D1FAE5 !important; background: #F0FDF4 !important; border-radius: 14px !important; width: 100% !important; color: #00897B !important; }
-  table { border-color: #EDEEF0 !important; }
-  thead tr { background-color: #F0FDF4 !important; }
-  thead th { color: #00897B !important; font-weight: 700 !important; border-color: #EDEEF0 !important; font-size: 12px !important; }
-  tbody tr:nth-child(even) { background-color: #F6F8FA !important; }
-  tbody tr:nth-child(odd)  { background-color: #FFFFFF !important; }
-  tbody tr:hover           { background-color: #F0FDF4 !important; }
-  td { color: #1a1a2e !important; border-color: #EDEEF0 !important; font-size: 13px !important; }
-  .bg-gray-200.rounded-full { background-color: #EDEEF0 !important; }
-  .bg-blue-600.h-2, .bg-blue-600.h-3 { background: linear-gradient(90deg, #00C853, #00897B) !important; border-radius: 99px !important; box-shadow: none !important; padding: 0 !important; }
-  .section-card { background: #FFFFFF !important; border-radius: 20px !important; border: none !important; box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important; margin-bottom: 14px !important; }
-  .section-title { color: #00897B !important; }
-  .rounded-xl, .rounded-2xl { border-radius: 20px !important; }
-  .rounded-lg { border-radius: 16px !important; }
-  .shadow, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl { box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important; }
-  .border-dashed { border-color: #D1FAE5 !important; background: #F0FDF4 !important; border-radius: 16px !important; }
-  .bg-green-100 { background-color: #DCFCE7 !important; }
-  .bg-yellow-100{ background-color: #FEF9C3 !important; }
-  .bg-red-100   { background-color: #FEE2E2 !important; }
-  button { min-height: 48px !important; }
-  h1 { font-size: 20px !important; font-weight: 700 !important; color: #1a1a2e !important; }
-  h2 { font-size: 16px !important; font-weight: 700 !important; color: #1a1a2e !important; }
-  h3 { font-size: 14px !important; font-weight: 600 !important; color: #1a1a2e !important; }
-  ::-webkit-scrollbar { width: 3px; height: 3px; }
-  ::-webkit-scrollbar-track { background: #F6F8FA; }
-  ::-webkit-scrollbar-thumb { background: #D1FAE5; border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: #00C853; }
-</style>
-{% endif %}
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  const auth = getAuth(initializeApp({
+    apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",
+    authDomain:"financial-analyzer-afb07.firebaseapp.com",
+    projectId:"financial-analyzer-afb07",
+    storageBucket:"financial-analyzer-afb07.firebasestorage.app",
+    messagingSenderId:"572544893192",
+    appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"
+  }));
+  document.documentElement.style.visibility = "hidden";
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      document.documentElement.style.visibility = "visible";
+      const el = document.getElementById("userDisplayName");
+      if (el) el.textContent = user.displayName || user.email;
+      const av = document.getElementById("userAvatar");
+      if (av && user.photoURL) { av.src = user.photoURL; av.style.display = "inline-block"; }
+    } else {
+      window.location.href = "/login?next=" + encodeURIComponent(window.location.pathname + window.location.search);
+    }
+  });
+</script>
 </head>
 
 <body class="bg-gray-100 min-h-screen p-6">
+<div id="fa-user-bar" style="position:fixed;top:10px;right:12px;z-index:9999;display:flex;align-items:center;gap:6px;">
+  <img id="userAvatar" style="display:none;width:26px;height:26px;border-radius:50%;border:2px solid #B2EBF2;" src="" alt=""/>
+  <span id="userDisplayName" style="font-size:11px;font-weight:600;color:#0097A7;background:#E0F7FA;padding:3px 10px;border-radius:20px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+  <button onclick="doSignOut()" style="background:#fff;border:1.5px solid #EEEEEE;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;color:#757575;cursor:pointer;font-family:inherit;min-height:0;">Sign out</button>
+</div>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  const auth2 = getAuth(initializeApp({
+    apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",
+    authDomain:"financial-analyzer-afb07.firebaseapp.com",
+    projectId:"financial-analyzer-afb07",
+    storageBucket:"financial-analyzer-afb07.firebasestorage.app",
+    messagingSenderId:"572544893192",
+    appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"
+  }));
+  window.doSignOut = () => signOut(auth2).then(() => { fetch("/auth/logout",{method:"POST"}); window.location.href="/login"; });
+</script>
 
 <!-- ================= MOBILE-RESPONSIVE NAVBAR ================= -->
 <nav class="text-white shadow-md mb-8" style="background-color:#457b9d;">
