@@ -1,4 +1,6 @@
-from flask import Flask, request, jsonify, render_template, session
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+import firebase_admin
+from firebase_admin import auth as firebase_auth, credentials
 import os
 import time
 import logging
@@ -27,6 +29,25 @@ app = Flask(__name__)
 
 # ✅ FIX 1: Secret key from environment variable — never hardcoded
 app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32)
+
+# ── Firebase Admin SDK (server-side token verification) ──────────────────────
+if not firebase_admin._apps:
+    sa_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
+    if sa_json:
+        # Read credentials from environment variable (safe for public repos)
+        import json as _json
+        sa_dict = _json.loads(sa_json)
+        cred = credentials.Certificate(sa_dict)
+        firebase_admin.initialize_app(cred)
+    elif os.path.exists('service-account.json'):
+        # Fallback: read from file if present locally
+        cred = credentials.Certificate('service-account.json')
+        firebase_admin.initialize_app(cred)
+    else:
+        raise RuntimeError(
+            "Firebase credentials not found. "
+            "Set FIREBASE_SERVICE_ACCOUNT environment variable on Render."
+        )
 
 # ✅ FIX 2: File upload size limit — 50MB max (prevents server crash attacks)
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB — supports 5–8 annual report PDFs
@@ -161,6 +182,50 @@ def strategy_optimization_page():
     is_android = request.args.get('app') == 'android'
     return render_template('strategy_optimization.html', is_android=is_android)
 
+
+
+# =============================================================================
+# AUTH — Google Sign-In via Firebase
+# =============================================================================
+@app.route('/login')
+def login_page():
+    is_android = request.args.get('app') == 'android'
+    return render_template('login.html', is_android=is_android)
+
+@app.route('/auth/google', methods=['POST'])
+def auth_google():
+    """Verify Firebase ID token from client, create Flask session."""
+    try:
+        data     = request.get_json()
+        id_token = data.get('id_token') if data else None
+        if not id_token:
+            return jsonify({'error': 'No token provided'}), 400
+
+        decoded  = firebase_auth.verify_id_token(id_token)
+        session['user'] = {
+            'uid':   decoded['uid'],
+            'email': decoded.get('email', ''),
+            'name':  decoded.get('name', ''),
+            'photo': decoded.get('picture', ''),
+        }
+        session.permanent = True
+        return jsonify({'status': 'ok', 'user': session['user']})
+
+    except firebase_auth.InvalidIdTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+    except Exception as e:
+        app.logger.error(f'auth_google error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/auth/logout', methods=['POST'])
+def auth_logout():
+    session.pop('user', None)
+    return jsonify({'status': 'ok'})
+
+@app.route('/auth/status')
+def auth_status():
+    user = session.get('user')
+    return jsonify({'signed_in': bool(user), 'user': user})
 
 # =============================================================================
 # ANALYZER API  —  Screener.in Excel upload

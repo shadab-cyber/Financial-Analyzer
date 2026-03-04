@@ -1,29 +1,11 @@
-# ============================================================
-# Financial Analyzer — Python Dependencies
-# ============================================================
-
-# Web framework
-flask>=3.0.0
-werkzeug>=3.0.0
-gunicorn>=21.0.0
-
-# Data & finance
-pandas>=2.0.0
-numpy>=1.24.0
-yfinance>=0.2.36
-scipy>=1.11.0
-openpyxl>=3.1.0
-ta>=0.10.2
-scikit-learn>=1.3.0
-
-# PDF processing
-PyMuPDF>=1.23.0
-pdfplumber>=0.10.0
-Pillow>=10.0.0
-
-# OCR (for scanned PDFs)
-pytesseract>=0.3.10
-opencv-python-headless>=4.8.0
-
-# HTTP requests
-requests>=2.31.0
+flask
+flask-cors
+gunicorn
+openpyxl
+pandas
+numpy
+yfinance
+scipy
+requests
+werkzeug
+firebase-admin
