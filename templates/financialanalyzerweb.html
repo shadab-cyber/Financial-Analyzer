@@ -44,7 +44,7 @@ button, .btn, a[class*="btn"] {
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  const _authHome = getAuth(initializeApp({
+  const _ah = getAuth(initializeApp({
     apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",
     authDomain:"financial-analyzer-afb07.firebaseapp.com",
     projectId:"financial-analyzer-afb07",
@@ -52,26 +52,26 @@ button, .btn, a[class*="btn"] {
     messagingSenderId:"572544893192",
     appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"
   }));
-  onAuthStateChanged(_authHome, user => {
-    const loginBtn = document.getElementById("headerLoginBtn");
-    const userChip = document.getElementById("headerUserChip");
-    const userName = document.getElementById("headerUserName");
-    const userAvt  = document.getElementById("headerUserAvatar");
+  onAuthStateChanged(_ah, user => {
+    const loginBtn = document.getElementById("_loginBtn");
+    const chip     = document.getElementById("_userChip");
+    const uname    = document.getElementById("_uname");
+    const uavatar  = document.getElementById("_uavatar");
     if (user) {
       if (loginBtn) loginBtn.style.display = "none";
-      if (userChip) userChip.style.display = "flex";
-      if (userName) userName.textContent   = user.displayName || user.email;
-      if (userAvt && user.photoURL) { userAvt.src = user.photoURL; userAvt.style.display = "inline-block"; }
+      if (chip)     chip.style.display     = "flex";
+      if (uname)    uname.textContent      = user.displayName || user.email;
+      if (uavatar && user.photoURL) { uavatar.src = user.photoURL; uavatar.style.display = "inline-block"; }
     } else {
       if (loginBtn) loginBtn.style.display = "inline-flex";
-      if (userChip) userChip.style.display = "none";
+      if (chip)     chip.style.display     = "none";
     }
   });
-  window.doSignOut = () => signOut(_authHome).then(() => { fetch("/auth/logout",{method:"POST"}); location.reload(); });
+  window._signOut = () => signOut(_ah).then(() => { fetch("/auth/logout",{method:"POST"}); location.reload(); });
 </script>
 </head>
 
-<body class="bg-gray-100 min-h-screen p-6">
+<body class="bg-gray-100 min-h-screen">
 
 <!-- ================= MOBILE-RESPONSIVE NAVBAR ================= -->
 <nav class="text-white shadow-md mb-8" style="background-color:#457b9d;">
@@ -113,17 +113,11 @@ button, .btn, a[class*="btn"] {
            class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
           Strategy
         </a>
-      </div>
-
-      <!-- Auth buttons — right side of navbar -->
-      <div class="hidden lg:flex items-center gap-2 ml-3">
-        <a id="headerLoginBtn" href="/login" style="display:none;align-items:center;gap:6px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:5px 14px;font-size:12px;font-weight:600;color:#fff;text-decoration:none;white-space:nowrap;">
-          Sign In
-        </a>
-        <div id="headerUserChip" style="display:none;align-items:center;gap:6px;">
-          <img id="headerUserAvatar" style="display:none;width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,0.5);" src="" alt=""/>
-          <span id="headerUserName" style="font-size:12px;font-weight:600;color:#fff;background:rgba(255,255,255,0.15);padding:4px 10px;border-radius:20px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-          <button onclick="doSignOut()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;min-height:0;white-space:nowrap;">Sign out</button>
+        <a id="_loginBtn" href="/login" style="display:none;align-items:center;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:16px;padding:4px 12px;font-size:12px;font-weight:600;color:#fff;text-decoration:none;white-space:nowrap;margin-left:8px;">Sign In</a>
+        <div id="_userChip" style="display:none;align-items:center;gap:6px;margin-left:8px;padding-left:8px;border-left:1px solid rgba(255,255,255,0.2);">
+          <img id="_uavatar" style="display:none;width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,0.5);" src="" alt=""/>
+          <span id="_uname" style="font-size:11px;font-weight:600;color:#fff;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          <button onclick="_signOut()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:16px;padding:4px 10px;font-size:11px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;min-height:0;white-space:nowrap;">Sign out</button>
         </div>
       </div>
 
@@ -202,8 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <!-- =============== NAVBAR END =============== -->
 
-
-
+<div class="px-4 py-6">
 <div class="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-5xl mx-auto">
 
   <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">
@@ -495,5 +488,6 @@ function formatValue(value, years) {
 }
 </script>
 
+</div>
 </body>
 </html>

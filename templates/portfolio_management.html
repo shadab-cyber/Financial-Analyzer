@@ -99,14 +99,25 @@ button, .btn, a[class*="btn"] {
   onAuthStateChanged(auth, user => {
     if (user) {
       document.documentElement.style.visibility = "visible";
-      const el = document.getElementById("userDisplayName");
-      if (el) el.textContent = user.displayName || user.email;
-      const av = document.getElementById("userAvatar");
-      if (av && user.photoURL) { av.src = user.photoURL; av.style.display = "inline-block"; }
+      const el = document.getElementById("_uname"); if (el) el.textContent = user.displayName || user.email;
+      const av = document.getElementById("_uavatar"); if (av && user.photoURL) { av.src = user.photoURL; av.style.display = "inline-block"; }
     } else {
       window.location.href = "/login?next=" + encodeURIComponent(window.location.pathname + window.location.search);
     }
   });
+</script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  const _a = getAuth(initializeApp({
+    apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",
+    authDomain:"financial-analyzer-afb07.firebaseapp.com",
+    projectId:"financial-analyzer-afb07",
+    storageBucket:"financial-analyzer-afb07.firebasestorage.app",
+    messagingSenderId:"572544893192",
+    appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"
+  }));
+  window._signOut = () => signOut(_a).then(() => { fetch("/auth/logout",{method:"POST"}); window.location.href="/login"; });
 </script>
 </head>
 
@@ -114,7 +125,7 @@ button, .btn, a[class*="btn"] {
 
 <!-- NAVBAR -->
 <!-- ================= MOBILE-RESPONSIVE NAVBAR ================= -->
-<nav class="text-white shadow-md mb-8" style="position:relative;background-color:#457b9d;">
+<nav class="text-white shadow-md mb-8" style="background-color:#457b9d;">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex justify-between items-center h-16">
       
@@ -153,6 +164,11 @@ button, .btn, a[class*="btn"] {
            class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
           Strategy
         </a>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:8px;padding-left:8px;border-left:1px solid rgba(255,255,255,0.2);">
+          <img id="_uavatar" style="display:none;width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,0.5);" src="" alt=""/>
+          <span id="_uname" style="font-size:11px;font-weight:600;color:#fff;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          <button onclick="_signOut()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:16px;padding:4px 10px;font-size:11px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;min-height:0;white-space:nowrap;">Sign out</button>
+        </div>
       </div>
 
       <!-- Mobile menu button -->
@@ -201,25 +217,6 @@ button, .btn, a[class*="btn"] {
       </a>
     </div>
   </div>
-  <!-- Auth user bar — inside navbar -->
-  <div style="position:absolute;top:0;right:16px;height:64px;display:flex;align-items:center;gap:8px;z-index:100;">
-    <img id="userAvatar" style="display:none;width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,0.5);" src="" alt=""/>
-    <span id="userDisplayName" style="font-size:12px;font-weight:600;color:#fff;background:rgba(255,255,255,0.15);padding:4px 10px;border-radius:20px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-    <button onclick="doSignOut()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;min-height:0;white-space:nowrap;">Sign out</button>
-  </div>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  const _auth2 = getAuth(initializeApp({
-    apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",
-    authDomain:"financial-analyzer-afb07.firebaseapp.com",
-    projectId:"financial-analyzer-afb07",
-    storageBucket:"financial-analyzer-afb07.firebasestorage.app",
-    messagingSenderId:"572544893192",
-    appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"
-  }));
-  window.doSignOut = () => signOut(_auth2).then(() => { fetch("/auth/logout",{method:"POST"}); window.location.href="/login"; });
-</script>
 </nav>
 
 <script>
