@@ -144,15 +144,14 @@ button, .btn, a[class*="btn"] {
 <!-- ================= MOBILE-RESPONSIVE NAVBAR ================= -->
 <nav class="text-white shadow-md mb-8" style="background-color:#457b9d;">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="flex items-center h-16 gap-6">
+    <div class="flex justify-between items-center h-16">
       
-      <!-- Logo -->
-      <div class="flex-shrink-0 mr-2">
-        <a href="/" class="text-xl font-bold">💼 Financial Analyzer</a>
-      </div>
-
-      <!-- Desktop Menu -->
-      <div class="hidden lg:flex items-center space-x-1 flex-1">
+      <!-- Left group: logo + nav links -->
+      <div class="flex items-center gap-4">
+        <div class="flex-shrink-0">
+          <a href="/" class="text-xl font-bold">💼 Financial Analyzer</a>
+        </div>
+        <div class="hidden lg:flex items-center space-x-1">
         <a href="/" 
            class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
           Home
@@ -186,7 +185,8 @@ button, .btn, a[class*="btn"] {
           <span id="_uname" style="font-size:11px;font-weight:600;color:#fff;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
           <button onclick="_signOut()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:16px;padding:4px 10px;font-size:11px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;min-height:0;white-space:nowrap;">Sign out</button>
         </div>
-      </div>
+        </div>
+      </div><!-- end left group -->
 
       <!-- Mobile menu button -->
       <div class="lg:hidden ml-auto">
