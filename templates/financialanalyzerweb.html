@@ -76,15 +76,15 @@ button, .btn, a[class*="btn"] {
 <!-- ================= MOBILE-RESPONSIVE NAVBAR ================= -->
 <nav class="text-white shadow-md mb-8" style="background-color:#457b9d;">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="flex justify-between items-center h-16">
+    <div class="flex items-center h-16 gap-6">
       
       <!-- Logo -->
-      <div class="flex-shrink-0">
+      <div class="flex-shrink-0 mr-2">
         <a href="/" class="text-xl font-bold">💼 Financial Analyzer</a>
       </div>
 
       <!-- Desktop Menu -->
-      <div class="hidden lg:flex space-x-2">
+      <div class="hidden lg:flex items-center space-x-1 flex-1">
         <a href="/" 
            class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
           Home
@@ -122,7 +122,7 @@ button, .btn, a[class*="btn"] {
       </div>
 
       <!-- Mobile menu button -->
-      <div class="lg:hidden">
+      <div class="lg:hidden ml-auto">
         <button id="mobile-menu-btn" type="button" 
                 class="inline-flex items-center justify-center p-2 rounded-md hover:bg-white hover:bg-opacity-20 focus:outline-none">
           <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
