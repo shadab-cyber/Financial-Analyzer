@@ -110,7 +110,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged }
+    import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -125,6 +125,28 @@
     const app      = initializeApp(firebaseConfig);
     const auth     = getAuth(app);
     const provider = new GoogleAuthProvider();
+
+    // Detect WebView (Android app)
+    const isWebView = /wv/.test(navigator.userAgent) || /Android.*Version\/[\d.]+.*Chrome/.test(navigator.userAgent);
+
+    // Handle redirect result when returning from Google sign-in (WebView flow)
+    getRedirectResult(auth).then(async result => {
+      if (result && result.user) {
+        const idToken = await result.user.getIdToken();
+        const res = await fetch('/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: idToken })
+        });
+        if (res.ok) {
+          const next = new URLSearchParams(window.location.search).get('next') || '/';
+          window.location.href = next;
+        }
+      }
+    }).catch(err => {
+      const errorMsg = document.getElementById('errorMsg');
+      if (errorMsg) { errorMsg.textContent = 'Sign-in failed: ' + err.message; errorMsg.style.display = 'block'; }
+    });
 
     onAuthStateChanged(auth, user => {
       if (user) {
@@ -142,6 +164,13 @@
       btn.textContent = 'Signing in...';
 
       try {
+        if (isWebView) {
+          // Android WebView — use redirect (popup is blocked)
+          await signInWithRedirect(auth, provider);
+          return; // page will redirect to Google then come back
+        }
+
+        // Browser — use popup (better UX)
         const result  = await signInWithPopup(auth, provider);
         const idToken = await result.user.getIdToken();
 
