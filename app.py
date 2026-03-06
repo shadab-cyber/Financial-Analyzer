@@ -204,8 +204,8 @@ def robots():
 
 @app.route('/google<token>.html')
 def google_verification(token):
-    """Google Search Console verification — replace PASTE_YOUR_CODE_HERE with your actual code"""
-    return f'google-site-verification: google{token}.html'
+    from flask import Response
+    return Response(f'google-site-verification: google{token}', mimetype='text/html')
 
 # =============================================================================
 # AUTH — Google Sign-In via Firebase
