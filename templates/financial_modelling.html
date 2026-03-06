@@ -177,6 +177,8 @@ button, input[type="file"], a[class*="btn"] {
       document.documentElement.style.visibility="visible";
       const n=document.getElementById("_uname"); if(n) n.textContent=user.displayName||user.email;
       const a=document.getElementById("_uavatar"); if(a&&user.photoURL){a.src=user.photoURL;a.style.display="inline-block";}
+      const mn=document.getElementById("_mName"); if(mn) mn.textContent=user.displayName||user.email;
+      const ma=document.getElementById("_mAvatar"); if(ma&&user.photoURL){ma.src=user.photoURL;ma.style.display="inline-block";}
     } else {
       window.location.href="/login?next="+encodeURIComponent(window.location.pathname+window.location.search);
     }
@@ -262,7 +264,7 @@ button, input[type="file"], a[class*="btn"] {
       </div>
 
       <!-- Mobile menu button -->
-      <div class="lg:hidden">
+      <div class="lg:hidden ml-auto">
         <button id="mobile-menu-btn" type="button" 
                 class="inline-flex items-center justify-center p-2 rounded-md hover:bg-white hover:bg-opacity-20 focus:outline-none">
           <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -305,6 +307,14 @@ button, input[type="file"], a[class*="btn"] {
          class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
         🎯 Strategy Optimization
       </a>
+      <!-- Mobile auth -->
+      <div class="border-t border-white border-opacity-20 mt-2 pt-2 px-3 py-2">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <img id="_mAvatar" style="display:none;width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,0.5);" src="" alt=""/>
+          <span id="_mName" style="font-size:13px;font-weight:600;color:#fff;"></span>
+        </div>
+        <button onclick="_signOut()" style="width:100%;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:8px;padding:8px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;">Sign out</button>
+      </div>
     </div>
   </div>
 </nav>
