@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Allow: /dcf
+Allow: /financial-modelling
+Allow: /technical-analysis
+Allow: /portfolio-management
+Allow: /performance-analytics
+Allow: /strategy-optimization
+
+# Block login and auth endpoints from indexing
+Disallow: /login
+Disallow: /auth/
+Disallow: /analyze/
+Disallow: /static/
+
+Sitemap: https://financial-analyzer-m63v.onrender.com/sitemap.xml

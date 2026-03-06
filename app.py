@@ -184,6 +184,29 @@ def strategy_optimization_page():
 
 
 
+
+# =============================================================================
+# SEO — Sitemap, Robots, Google Search Console
+# =============================================================================
+@app.route('/sitemap.xml')
+def sitemap():
+    from flask import Response
+    import os
+    xml = open(os.path.join(app.root_path, 'sitemap.xml')).read()
+    return Response(xml, mimetype='application/xml')
+
+@app.route('/robots.txt')
+def robots():
+    from flask import Response
+    import os
+    txt = open(os.path.join(app.root_path, 'robots.txt')).read()
+    return Response(txt, mimetype='text/plain')
+
+@app.route('/google<token>.html')
+def google_verification(token):
+    """Google Search Console verification — replace PASTE_YOUR_CODE_HERE with your actual code"""
+    return f'google-site-verification: google{token}.html'
+
 # =============================================================================
 # AUTH — Google Sign-In via Firebase
 # =============================================================================
