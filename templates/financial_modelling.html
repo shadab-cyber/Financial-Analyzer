@@ -210,6 +210,28 @@ button, input[type="file"], a[class*="btn"] {
   /* Page content starts right below sticky nav */
   body { padding-top: 0 !important; margin-top: 0 !important; }
 </style>
+
+<style>
+/* ── Global hover & transition improvements ── */
+body { font-family: 'Manrope', sans-serif !important; }
+.nav-link { transition: all 0.2s ease !important; }
+.nav-link:hover { background: rgba(255,255,255,0.2) !important; transform: translateY(-1px); }
+button[type="submit"], .submit-btn, input[type="submit"] {
+  transition: all 0.25s ease !important;
+}
+button[type="submit"]:hover:not(:disabled), .submit-btn:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 22px rgba(69,123,157,0.4) !important;
+}
+.section-card, .metric-card, .result-card, [class*="card"] {
+  transition: box-shadow 0.2s ease, transform 0.2s ease !important;
+}
+.section-card:hover, .metric-card:hover {
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1) !important;
+}
+a { transition: color 0.18s ease, opacity 0.18s ease; }
+</style>
+
 </head>
 
 <body class="bg-gray-100 min-h-screen">
@@ -2215,6 +2237,63 @@ function downloadSampleExcel() {
   };
 }
 </script>
+
+
+<!-- =============== SHARED FOOTER =============== -->
+<style>
+footer.fa-footer{background:#1d3557;color:#a8b8cc;padding:56px 24px 28px;margin-top:72px;font-family:'Manrope',sans-serif;}
+.fa-footer .fl{font-size:1.25rem;font-weight:800;color:#fff;margin-bottom:8px;}
+.fa-footer .ft{font-size:13px;color:#7a90a8;line-height:1.6;max-width:240px;margin-bottom:18px;}
+.fa-footer .fgrid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:36px;}
+.fa-footer h4{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#fff;margin-bottom:12px;}
+.fa-footer a{display:block;font-size:13px;color:#7a90a8;text-decoration:none;margin-bottom:8px;transition:color .18s ease;}
+.fa-footer a:hover{color:#a8dadc;}
+.fa-footer hr{border:none;border-top:1px solid rgba(255,255,255,.08);margin:32px 0 20px;}
+.fa-footer .fb{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:12px;color:#546a7f;}
+.fa-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(168,218,220,.15);border:1px solid rgba(168,218,220,.3);color:#a8dadc;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+@media(max-width:768px){.fa-footer .fgrid{grid-template-columns:1fr 1fr!important;}.fa-footer .fb{flex-direction:column;text-align:center;}}
+@media(max-width:480px){.fa-footer .fgrid{grid-template-columns:1fr!important;}}
+</style>
+<footer class="fa-footer">
+  <div style="max-width:1100px;margin:0 auto;">
+    <div class="fgrid">
+      <div>
+        <div class="fl">&#x1F4BC; Financial Analyzer</div>
+        <p class="ft">A free financial analysis platform built for Indian retail investors and finance students.</p>
+        <span class="fa-badge">&#x2705; 100% Free to Use</span>
+      </div>
+      <div>
+        <h4>Tools</h4>
+        <a href="/">Stock Analyzer</a>
+        <a href="/dcf">DCF Valuation</a>
+        <a href="/financial-modelling">Financial Modelling</a>
+        <a href="/technical-analysis">Technical Analysis</a>
+        <a href="/portfolio-management">Portfolio Management</a>
+        <a href="/performance-analytics">Performance Analytics</a>
+        <a href="/strategy-optimization">Strategy Optimization</a>
+      </div>
+      <div>
+        <h4>Resources</h4>
+        <a href="https://screener.in" target="_blank" rel="noopener">Screener.in &#x2197;</a>
+        <a href="https://nseindia.com" target="_blank" rel="noopener">NSE India &#x2197;</a>
+        <a href="https://bseindia.com" target="_blank" rel="noopener">BSE India &#x2197;</a>
+        <a href="https://moneycontrol.com" target="_blank" rel="noopener">Money Control &#x2197;</a>
+      </div>
+      <div>
+        <h4>Account</h4>
+        <a href="/login">Sign In</a>
+        <a href="/login">Create Account</a>
+      </div>
+    </div>
+    <hr>
+    <div class="fb">
+      <span>&copy; 2025 Financial Analyzer. All rights reserved.</span>
+      <span>Made with &#x2764;&#xFE0F; for Indian investors</span>
+      <span>Always verify data before investing.</span>
+    </div>
+  </div>
+</footer>
+<!-- =============== FOOTER END =============== -->
 
 </body>
 </html>
