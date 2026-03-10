@@ -1,16 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <title>Strategy Optimization — Financial Analyzer</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- ── SEO Meta Tags ── -->
+  <title>Strategy Optimization — Investment Strategy Builder India</title>
+  <meta name="description" content="Build and backtest investment strategies for Indian stocks. Optimize entry/exit rules, position sizing and risk management parameters.">
+  <meta name="keywords" content="investment strategy India, strategy backtesting, stock strategy optimization, entry exit rules, position sizing, risk management">
+  <meta name="author" content="Financial Analyzer">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://financial-analyzer-m63v.onrender.com/strategy-optimization">
 
-  <!-- SB Admin 2 — Font Awesome + Nunito -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/startbootstrap-sb-admin-2/4.1.4/css/sb-admin-2.min.css" rel="stylesheet">
+  <!-- Open Graph (WhatsApp, LinkedIn previews) -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Strategy Optimization — Investment Strategy Builder">
+  <meta property="og:description" content="Build, backtest and optimize investment strategies for Indian stocks.">
+  <meta property="og:url" content="https://financial-analyzer-m63v.onrender.com/strategy-optimization">
+  <meta property="og:site_name" content="Financial Analyzer">
+  <meta property="og:image" content="https://financial-analyzer-m63v.onrender.com/static/og-image.png">
 
-  <style>
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Strategy Optimization — Investment Strategy Builder">
+  <meta name="twitter:description" content="Build, backtest and optimize investment strategies for Indian stocks.">
+
+  <!-- Structured Data (Google Rich Results) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Strategy Optimization — Investment Strategy Builder",
+    "description": "Build, backtest and optimize investment strategies for Indian stocks.",
+    "url": "https://financial-analyzer-m63v.onrender.com/strategy-optimization",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Web, Android",
+    "offers": {"@type": "Offer", "price": "0", "priceCurrency": "INR"}
+  }
+  </script>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
 body { font-family: Arial, sans-serif; }
 .section-card {
     background: white;
@@ -68,6 +98,7 @@ th {
     color: white;
 }
 </style>
+
 <style>
 /* Mobile-responsive table wrapper */
 .table-responsive {
@@ -103,47 +134,20 @@ button, .btn, a[class*="btn"] {
 }
 </style>
 
-  <style>
-    /* ── Financial Analyzer overrides ── */
-    .sidebar { background: linear-gradient(180deg, #457b9d 0%, #2c5f7e 100%) !important; }
-    .sidebar .nav-item .nav-link { color: rgba(255,255,255,0.8) !important; font-family: 'Manrope', sans-serif; font-weight: 600; }
-    .sidebar .nav-item.active .nav-link { color: #fff !important; background: rgba(255,255,255,0.15) !important; border-radius: 8px; }
-    .sidebar .nav-item .nav-link:hover { color: #fff !important; background: rgba(255,255,255,0.1) !important; border-radius: 8px; }
-    .sidebar-brand { background: rgba(0,0,0,0.15) !important; font-family: 'Manrope', sans-serif; font-weight: 800; }
-    .sidebar-brand-text { font-size: 1rem; }
-    .topbar { font-family: 'Manrope', sans-serif; }
-    .topbar .navbar-nav .nav-link { font-weight: 600; }
-    h1,h2,h3,h4,h5,h6 { font-family: 'Manrope', sans-serif; }
-    body { font-family: 'Manrope', sans-serif; }
-    /* Page heading bar */
-    .page-heading { border-left: 4px solid #457b9d; padding-left: 1rem; margin-bottom: 1.5rem; }
-    .page-heading h1 { font-size: 1.5rem; font-weight: 800; color: #2c5f7e; margin: 0; }
-    /* User avatar in topbar */
-    ._uavatar { width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid #457b9d; }
-    /* Sidebar divider */
-    .sidebar-divider { border-top: 1px solid rgba(255,255,255,0.15); }
-    .sidebar-heading { color: rgba(255,255,255,0.5); font-size:0.65rem; font-weight:700; letter-spacing:0.1em; }
-    /* Content wrapper bg */
-    #content-wrapper { background-color: #f8f9fc; }
-  </style>
-</head>
-
-<body id="page-top">
-  <script type="module">
+<script type="module">
   import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import {getAuth,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   const auth=getAuth(initializeApp({apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",authDomain:"financial-analyzer-afb07.firebaseapp.com",projectId:"financial-analyzer-afb07",storageBucket:"financial-analyzer-afb07.firebasestorage.app",messagingSenderId:"572544893192",appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"}));
   document.documentElement.style.visibility="hidden";
-  let _resolved=false;
-  const _t=setTimeout(()=>{if(!_resolved) window.location.href="/login?next="+encodeURIComponent(location.pathname+location.search);},3000);
   onAuthStateChanged(auth,user=>{
-    _resolved=true; clearTimeout(_t);
     if(user){
       document.documentElement.style.visibility="visible";
-      document.querySelectorAll("._uname").forEach(e=>e.textContent=user.displayName||user.email);
-      document.querySelectorAll("._uavatar").forEach(e=>{if(user.photoURL){e.src=user.photoURL;e.style.display="inline-block";}});
+      const n=document.getElementById("_uname"); if(n) n.textContent=user.displayName||user.email;
+      const a=document.getElementById("_uavatar"); if(a&&user.photoURL){a.src=user.photoURL;a.style.display="inline-block";}
+      const mn=document.getElementById("_mName"); if(mn) mn.textContent=user.displayName||user.email;
+      const ma=document.getElementById("_mAvatar"); if(ma&&user.photoURL){ma.src=user.photoURL;ma.style.display="inline-block";}
     } else {
-      window.location.href="/login?next="+encodeURIComponent(location.pathname+location.search);
+      window.location.href="/login?next="+encodeURIComponent(window.location.pathname+window.location.search);
     }
   });
 </script>
@@ -153,130 +157,161 @@ button, .btn, a[class*="btn"] {
   const _a=getAuth(initializeApp({apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",authDomain:"financial-analyzer-afb07.firebaseapp.com",projectId:"financial-analyzer-afb07",storageBucket:"financial-analyzer-afb07.firebasestorage.app",messagingSenderId:"572544893192",appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"}));
   window._signOut=()=>signOut(_a).then(()=>{fetch("/auth/logout",{method:"POST"});window.location.href="/login";});
 </script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ── Consistent navbar across all pages ── */
+  nav {
+    font-family: 'Manrope', sans-serif !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1000 !important;
+    margin-bottom: 0 !important;
+  }
+  nav a, nav button, nav span {
+    font-family: 'Manrope', sans-serif !important;
+  }
+  /* Logo */
+  nav .text-xl { font-weight: 800 !important; letter-spacing: -0.3px !important; }
+  /* Nav links */
+  nav .nav-link { font-size: 13px !important; font-weight: 600 !important; letter-spacing: 0.01em !important; }
+  /* Page content starts right below sticky nav */
+  body { padding-top: 0 !important; margin-top: 0 !important; }
+</style>
+</head>
 
-  <div id="wrapper">
+<body class="bg-gray-100 min-h-screen">
 
-    <!-- ══ SIDEBAR ══ -->
-    <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
-
-      <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/">
-        <div class="sidebar-brand-icon"><i class="fas fa-chart-pie"></i></div>
-        <div class="sidebar-brand-text mx-2">Financial Analyzer</div>
-      </a>
-
-      <hr class="sidebar-divider my-0">
-      <div class="sidebar-heading mt-2 px-3">Tools</div>
+<!-- NAVBAR -->
+<!-- ================= MOBILE-RESPONSIVE NAVBAR ================= -->
+<nav class="text-white shadow-md" style="background-color:#457b9d;">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center h-16">
       
-            <li class="nav-item ">
-                <a class="nav-link" href="/">
-                    <i class="fas fa-fw fa-home"></i>
-                    <span>Home</span>
-                </a>
-            </li>
-            <li class="nav-item ">
-                <a class="nav-link" href="/dcf">
-                    <i class="fas fa-fw fa-calculator"></i>
-                    <span>DCF Valuation</span>
-                </a>
-            </li>
-            <li class="nav-item ">
-                <a class="nav-link" href="/financial-modelling">
-                    <i class="fas fa-fw fa-chart-line"></i>
-                    <span>Financial Modelling</span>
-                </a>
-            </li>
-            <li class="nav-item ">
-                <a class="nav-link" href="/technical-analysis">
-                    <i class="fas fa-fw fa-chart-area"></i>
-                    <span>Technical Analysis</span>
-                </a>
-            </li>
-            <li class="nav-item ">
-                <a class="nav-link" href="/portfolio-management">
-                    <i class="fas fa-fw fa-briefcase"></i>
-                    <span>Portfolio</span>
-                </a>
-            </li>
-            <li class="nav-item ">
-                <a class="nav-link" href="/performance-analytics">
-                    <i class="fas fa-fw fa-tachometer-alt"></i>
-                    <span>Performance</span>
-                </a>
-            </li>
-            <li class="nav-item active">
-                <a class="nav-link" href="/strategy-optimization">
-                    <i class="fas fa-fw fa-chess"></i>
-                    <span>Strategy</span>
-                </a>
-            </li>
-      <hr class="sidebar-divider d-none d-md-block">
-
-      <div class="text-center d-none d-md-inline">
-        <button class="rounded-circle border-0" id="sidebarToggle"></button>
+      <!-- Logo -->
+      <div class="flex-shrink-0 mr-4">
+        <a href="/" class="text-xl font-bold">💼 Financial Analyzer</a>
       </div>
-    </ul>
-    <!-- ══ END SIDEBAR ══ -->
 
-    <!-- Content Wrapper -->
-    <div id="content-wrapper" class="d-flex flex-column">
-      <div id="content">
+      <!-- Desktop Menu -->
+      <div class="hidden lg:flex space-x-1">
+        <a href="/" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Home
+        </a>
+        <a href="/dcf" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          DCF
+        </a>
+        <a href="/financial-modelling" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Modelling
+        </a>
+        <a href="/technical-analysis" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Technical
+        </a>
+        <a href="/portfolio-management" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Portfolio
+        </a>
+        <a href="/performance-analytics" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Performance
+        </a>
+        <a href="/strategy-optimization" 
+           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
+          Strategy
+        </a>
+      </div>
 
-        <!-- ══ TOPBAR ══ -->
-        <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
+      <!-- User chip — far right -->
+      <div class="hidden lg:flex items-center gap-2 ml-auto">
+        <img id="_uavatar" style="display:none;width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.4);" src="" alt=""/>
+        <span id="_uname" style="font-size:11px;font-weight:600;color:#fff;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:16px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+        <button onclick="_signOut()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:16px;padding:4px 12px;font-size:11px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;min-height:0;">Sign out</button>
+      </div>
 
-          <!-- Sidebar toggle (mobile) -->
-          <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
-            <i class="fa fa-bars"></i>
-          </button>
+      <!-- Mobile menu button -->
+      <div class="lg:hidden ml-auto">
+        <button id="mobile-menu-btn" type="button" 
+                class="inline-flex items-center justify-center p-2 rounded-md hover:bg-white hover:bg-opacity-20 focus:outline-none">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            <path id="close-icon" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
 
-          <!-- Page title in topbar -->
-          <span class="d-none d-sm-inline-block font-weight-bold text-primary ml-2">
-            <i class="fas fa-chess mr-1"></i> Strategy Optimization
-          </span>
+  <!-- Mobile Menu -->
+  <div id="mobile-menu" class="hidden lg:hidden">
+    <div class="px-2 pt-2 pb-3 space-y-1">
+      <a href="/" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        🏠 Home
+      </a>
+      <a href="/dcf" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📊 DCF Valuation
+      </a>
+      <a href="/financial-modelling" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📈 Financial Modelling
+      </a>
+      <a href="/technical-analysis" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📉 Technical Analysis
+      </a>
+      <a href="/portfolio-management" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        💼 Portfolio Management
+      </a>
+      <a href="/performance-analytics" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        📊 Performance Analytics
+      </a>
+      <a href="/strategy-optimization" 
+         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
+        🎯 Strategy Optimization
+      </a>
+      <!-- Mobile auth -->
+      <div class="border-t border-white border-opacity-20 mt-2 pt-2 px-3 py-2">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <img id="_mAvatar" style="display:none;width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,0.5);" src="" alt=""/>
+          <span id="_mName" style="font-size:13px;font-weight:600;color:#fff;"></span>
+        </div>
+        <button onclick="_signOut()" style="width:100%;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:8px;padding:8px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;">Sign out</button>
+      </div>
+    </div>
+  </div>
+</nav>
 
-          <!-- Right side -->
-          <ul class="navbar-nav ml-auto">
+<script>
+// Mobile menu toggle
+document.addEventListener('DOMContentLoaded', function() {
+  const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+  const mobileMenu = document.getElementById('mobile-menu');
+  const menuIcon = document.getElementById('menu-icon');
+  const closeIcon = document.getElementById('close-icon');
 
-            <!-- Login button (shown when not signed in) — home only -->
-            <li class="nav-item" id="_loginBtn" style="display:none;align-items:center;">
-              <a class="btn btn-primary btn-sm px-3" href="/login">
-                <i class="fas fa-sign-in-alt mr-1"></i> Sign In
-              </a>
-            </li>
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener('click', function() {
+      mobileMenu.classList.toggle('hidden');
+      menuIcon.classList.toggle('hidden');
+      closeIcon.classList.toggle('hidden');
+    });
+  }
 
-            <!-- User dropdown (shown when signed in) -->
-            <li class="nav-item dropdown no-arrow" id="_userSection" style="display:none;align-items:center;">
-              <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
-                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                <span class="_uname d-none d-lg-inline text-gray-600 small mr-2"></span>
-                <img class="_uavatar" src="" alt="" style="display:none;">
-                <i class="fas fa-user-circle fa-lg text-gray-400 _uavatar-fallback"></i>
-              </a>
-              <div class="dropdown-menu dropdown-menu-right shadow animated--grow-in" aria-labelledby="userDropdown">
-                <div class="dropdown-header d-flex align-items-center py-2">
-                  <img class="_uavatar mr-2" src="" alt="" style="display:none;width:36px;height:36px;">
-                  <div>
-                    <div class="font-weight-bold _uname small"></div>
-                    <div class="text-muted" style="font-size:11px;">Signed in</div>
-                  </div>
-                </div>
-                <div class="dropdown-divider"></div>
-                <a class="dropdown-item" href="#" onclick="_signOut(); return false;">
-                  <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>Sign Out
-                </a>
-              </div>
-            </li>
-
-          </ul>
-        </nav>
-        <!-- ══ END TOPBAR ══ -->
-
-        <!-- ══ PAGE CONTENT ══ -->
-        <div class="container-fluid">
-          <div class="page-heading">
-            <h1><i class="fas fa-chess mr-2"></i>Strategy Optimization</h1>
-          </div>
-          
+  // Highlight active page
+  const currentPath = window.location.pathname;
+  document.querySelectorAll('.nav-link, #mobile-menu a').forEach(link => {
+    if (link.getAttribute('href') === currentPath) {
+      link.classList.add('bg-white', 'bg-opacity-20', 'font-semibold');
+    }
+  });
+});
+</script>
 <!-- =============== NAVBAR END =============== -->
 
 
@@ -1155,36 +1190,6 @@ function hideError() {
 // Set default end date to today
 document.getElementById('endDate').value = new Date().toISOString().split('T')[0];
 </script>
-        </div>
-        <!-- ══ END PAGE CONTENT ══ -->
-
-      </div>
-
-      <!-- Footer -->
-      <footer class="sticky-footer bg-white mt-auto">
-        <div class="container my-auto">
-          <div class="copyright text-center my-auto">
-            <span>Financial Analyzer &copy; 2026</span>
-          </div>
-        </div>
-      </footer>
-
-    </div>
-    <!-- End Content Wrapper -->
-
-  </div>
-  <!-- End Wrapper -->
-
-  <!-- Scroll to Top -->
-  <a class="scroll-to-top rounded" href="#page-top">
-    <i class="fas fa-angle-up"></i>
-  </a>
-
-  <!-- Bootstrap + SB Admin JS via CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/startbootstrap-sb-admin-2/4.1.4/js/sb-admin-2.min.js"></script>
 
 </body>
 </html>
