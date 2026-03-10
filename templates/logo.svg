@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2c5f7a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5a9dbf;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bar4g" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c0e4f0;stop-opacity:0.9" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softglow">
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Main background rounded square -->
+  <rect width="200" height="200" rx="48" fill="url(#bg)"/>
+  <!-- Inner border glow -->
+  <rect x="3" y="3" width="194" height="194" rx="46" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+
+  <!-- Bar chart: 4 rising bars -->
+  <rect x="22"  y="134" width="28" height="48" rx="7" fill="rgba(255,255,255,0.20)"/>
+  <rect x="58"  y="110" width="28" height="72" rx="7" fill="rgba(255,255,255,0.38)"/>
+  <rect x="94"  y="82"  width="28" height="100" rx="7" fill="rgba(255,255,255,0.58)"/>
+  <rect x="130" y="50"  width="28" height="132" rx="7" fill="url(#bar4g)" filter="url(#softglow)"/>
+
+  <!-- Trend line connecting bar tops -->
+  <polyline points="36,132  72,108  108,80  144,48"
+            fill="none" stroke="#a8dadc" stroke-width="4.5"
+            stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+  <!-- Peak dot -->
+  <circle cx="144" cy="48" r="6.5" fill="#a8dadc" filter="url(#glow)"/>
+
+  <!-- Rupee badge overlay (top-left pill) -->
+  <rect x="14" y="14" width="76" height="54" rx="16"
+        fill="rgba(0,0,0,0.22)" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+
+  <!-- ₹ symbol hand-drawn in SVG -->
+  <!-- Top horizontal bar -->
+  <line x1="24" y1="27" x2="78" y2="27" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <!-- Second horizontal bar -->
+  <line x1="24" y1="39" x2="78" y2="39" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <!-- Vertical stroke -->
+  <line x1="30" y1="27" x2="30" y2="60" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <!-- P-curve arch -->
+  <path d="M30,27 Q78,27 78,33 Q78,39 30,39" fill="none" stroke="white" stroke-width="4.5" stroke-linecap="round"/>
+  <!-- Diagonal slash bottom-right -->
+  <line x1="40" y1="39" x2="80" y2="62" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.92"/>
+</svg>

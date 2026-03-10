@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Server Error — Financial Analyzer</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* == Playfair Display for brand and headings == */
+body { font-family: 'Manrope', sans-serif !important; }
+h1 { font-family: 'Playfair Display', serif !important; font-weight: 800 !important; letter-spacing: -0.4px !important; }
+h2 { font-family: 'Playfair Display', serif !important; font-weight: 700 !important; letter-spacing: -0.3px !important; }
+.brand-name { font-family: 'Playfair Display', serif !important; font-weight: 700 !important; font-size: 20px !important; color: #fff !important; letter-spacing: -0.3px !important; line-height: 1; }
+.nav-logo-wrap { display: flex !important; align-items: center !important; gap: 9px !important; text-decoration: none !important; transition: opacity 0.2s ease; }
+.nav-logo-wrap:hover { opacity: 0.88 !important; }
+</style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 <!-- ================= MOBILE-RESPONSIVE NAVBAR ================= -->
@@ -14,7 +24,7 @@
       
       <!-- Logo -->
       <div class="flex-shrink-0">
-        <a href="/" class="text-xl font-bold">💼 Financial Analyzer</a>
+        <a href="/" class="nav-logo-wrap"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" width="34" height="34" style="flex-shrink:0;"><defs><linearGradient id="lgb" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#2c5f7a"/><stop offset="100%" style="stop-color:#5a9dbf"/></linearGradient></defs><rect width="56" height="56" rx="12" fill="url(#lgb)"/><rect x="7" y="38" width="8" height="12" rx="2" fill="rgba(255,255,255,0.25)"/><rect x="18" y="30" width="8" height="20" rx="2" fill="rgba(255,255,255,0.45)"/><rect x="29" y="21" width="8" height="29" rx="2" fill="rgba(255,255,255,0.65)"/><rect x="40" y="13" width="8" height="37" rx="2" fill="#ffffff"/><polyline points="11,37 22,29 33,20 44,12" fill="none" stroke="#a8dadc" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="44" cy="12" r="2.5" fill="#a8dadc"/><rect x="3" y="3" width="21" height="18" rx="5" fill="rgba(0,0,0,0.25)"/><line x1="7" y1="7" x2="21" y2="7" stroke="white" stroke-width="2.2" stroke-linecap="round"/><line x1="7" y1="12" x2="21" y2="12" stroke="white" stroke-width="2.2" stroke-linecap="round"/><line x1="9" y1="7" x2="9" y2="19" stroke="white" stroke-width="2.2" stroke-linecap="round"/><path d="M9,7 Q21,7 21,10 Q21,13 9,13" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round"/><line x1="13" y1="12" x2="22" y2="20" stroke="white" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/></svg><span class="brand-name">Financial Analyzer</span></a>
       </div>
 
       <!-- Desktop Menu -->
