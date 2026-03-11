@@ -94,7 +94,14 @@ def run_historical_fs(file):
     dividend_amt = val("Dividend Amount")
     dividend_per_share = [round(dividend_amt[i]/equity_shares[i], 2) if equity_shares[i] else 0 for i in range(n)]
     payout_ratio = [round((dividend_per_share[i]/eps[i])*100, 2) if eps[i] else 0 for i in range(n)]
-    retained_earnings = [round(1 - payout_ratio[i], 2) if eps[i] > dividend_per_share[i] else 0 for i in range(n)]
+    # FIX 1: retained earnings % = (EPS - DPS) / EPS * 100
+    retained_earnings_pct = [
+        round(((eps[i] - dividend_per_share[i]) / eps[i]) * 100, 2)
+        if eps[i] and eps[i] > dividend_per_share[i]
+        else 0
+        for i in range(n)
+    ]
+    retained_earnings = retained_earnings_pct  # alias for downstream compatibility
 
     income_statement = [
         ("Sales", sales), ("Sales Growth %", sales_growth),
@@ -111,7 +118,7 @@ def run_historical_fs(file):
         ("EPS", eps), ("EPS Growth %", eps_growth),
         ("Dividend per Share", dividend_per_share),
         ("Dividend Payout %", payout_ratio),
-        ("Retained Earnings", retained_earnings),
+        ("Retained Earnings %", retained_earnings_pct),
     ]
 
     # ======================================================
@@ -356,10 +363,16 @@ def run_ratio_analysis(file):
     # SalesExpenses%Sales, Depreciation%Sales
     
     # 4. RETURN & COVERAGE RATIOS
-    # ROCE = (EBITDA - Depreciation) / (Equity + Reserves + Borrowings)
+    # FIX 2: ROCE = EBIT / Capital Employed (CFA standard)
+    # Capital Employed = Total Assets - Current Liabilities (Other Liabilities proxy)
+    total_assets_ra = get_hist_values("Total Assets")
+    other_liab_ra   = get_hist_values("Other Liabilities")
+    capital_employed = [
+        total_assets_ra[i] - other_liab_ra[i] for i in range(n)
+    ]
     roce = [
-        round((ebit[i]/(equity[i] + reserves[i] + borrowings[i]))*100, 2) 
-        if (equity[i] + reserves[i] + borrowings[i]) else 0 
+        round((ebit[i] / capital_employed[i]) * 100, 2)
+        if capital_employed[i] else 0
         for i in range(n)
     ]
     
@@ -372,9 +385,14 @@ def run_ratio_analysis(file):
         for i in range(n)
     ]
     
-    # Self Sustained Growth Rate = Retained Earnings% × ROE%
+    # FIX 3: SSGR = (Retained Earnings% / 100) × ROE%
+    # retained_earnings[i] is now e.g. 60.0 (meaning 60%)
+    # ROE is also in % — result is in %
+    retained_earnings_ra = get_hist_values("Retained Earnings %")
     self_sustained_growth = [
-        round((retained_earnings[i] * roe[i])/100, 2) if isinstance(retained_earnings[i], (int, float)) else 0
+        round((retained_earnings_ra[i] / 100) * roe[i], 2)
+        if isinstance(retained_earnings_ra[i], (int, float)) and isinstance(roe[i], (int, float))
+        else 0
         for i in range(n)
     ]
     
@@ -486,7 +504,7 @@ def run_ratio_analysis(file):
         
         # RETURN & COVERAGE RATIOS
         ("ROCE", roce),
-        ("Retained Earnings%", retained_earnings),
+        ("Retained Earnings %", retained_earnings_ra),
         ("Return on Equity%", roe),
         ("Self Sustained Growth Rate", self_sustained_growth),
         ("Interest Coverage Ratio", interest_coverage),
@@ -975,15 +993,26 @@ def run_fcff(file):
 # ===============================
 # WACC (WEIGHTED AVERAGE COST OF CAPITAL) FUNCTION
 # ===============================
-def run_wacc(file, cost_of_equity=13.0):
+def run_wacc(file, beta=None, risk_free_rate=7.1, equity_risk_premium=5.5, cost_of_equity_override=None):
     """
     Calculate Weighted Average Cost of Capital (WACC)
     Formula: WACC = (E/V × Re) + (D/V × Rd × (1 - Tax Rate))
-    
+    Cost of Equity via CAPM: Re = Rf + Beta * (Rm - Rf)
+
     Parameters:
     - file: Excel file path
-    - cost_of_equity: Cost of Equity (Re) in percentage (default 13%)
+    - beta: Stock beta (from yfinance or user input). Default 1.0 if not provided.
+    - risk_free_rate: 10Y G-Sec yield in % (default 7.1%)
+    - equity_risk_premium: India ERP in % (default 5.5%)
+    - cost_of_equity_override: If set, skips CAPM and uses this value directly
     """
+    # FIX 4: CAPM-based cost of equity
+    if cost_of_equity_override is not None:
+        cost_of_equity = cost_of_equity_override
+    elif beta is not None:
+        cost_of_equity = round(risk_free_rate + beta * equity_risk_premium, 2)
+    else:
+        cost_of_equity = round(risk_free_rate + 1.0 * equity_risk_premium, 2)  # beta=1 default
     
     # Read Balance Sheet & P&L
     bs_df = pd.read_excel(file, engine="openpyxl", sheet_name="Balance Sheet & P&L", header=None)
@@ -1029,28 +1058,30 @@ def run_wacc(file, cost_of_equity=13.0):
     equity_capital = bs_val("Equity Share Capital")
     reserves = bs_val("Reserves")
     
-    # Calculate Market Value of Equity (E) for each year
-    # For latest year: use current market cap
-    # For historical years: estimate using book value ratio
-    market_equity = []
-    
-    # Calculate book value of equity for each year
+    # FIX 5: Use actual historical price × shares for market cap
     book_equity = [equity_capital[i] + reserves[i] for i in range(n)]
-    
-    # Market-to-Book ratio from latest year
-    if current_mcap and book_equity[-1]:
-        mtb_ratio = current_mcap / book_equity[-1]
-    else:
-        mtb_ratio = 1.0  # Default
-    
-    # Estimate market equity for all years using MTB ratio
+
+    # Try to get historical prices from row 89 (PRICE row in Screener Excel)
+    num_shares_row = find_row(bs_df, "Adjusted Equity Shares in Cr")
+    market_equity = []
+    PRICE_ROW = 89
+
     for i in range(n):
-        if i == n - 1 and current_mcap:
-            # Use actual market cap for latest year
-            market_equity.append(current_mcap)
-        else:
-            # Estimate using book value × MTB ratio
-            market_equity.append(round(book_equity[i] * mtb_ratio, 2))
+        try:
+            price  = fmt(bs_df.iloc[PRICE_ROW, START_COL + i]) if PRICE_ROW < bs_df.shape[0] else None
+            shares = fmt(bs_df.iloc[num_shares_row, START_COL + i]) if num_shares_row is not None else None
+            if price and shares and price > 0 and shares > 0:
+                market_equity.append(round(price * shares, 2))
+            elif i == n - 1 and current_mcap:
+                market_equity.append(current_mcap)
+            else:
+                # Fallback: book value × 1.5 (conservative estimate)
+                market_equity.append(round(book_equity[i] * 1.5, 2))
+        except Exception:
+            if i == n - 1 and current_mcap:
+                market_equity.append(current_mcap)
+            else:
+                market_equity.append(round(book_equity[i] * 1.5, 2))
     
     # Market Value of Debt (D) - use book value as proxy
     market_debt = borrowings
@@ -1100,7 +1131,14 @@ def run_wacc(file, cost_of_equity=13.0):
         wacc.append(wacc_value)
     
     # Build the output structure
+    capm_beta  = beta if beta is not None else 1.0
     wacc_data = [
+        ("Cost of Equity Method", ["CAPM" if cost_of_equity_override is None else "Override"]*n),
+        ("Risk-Free Rate (%)", [risk_free_rate]*n),
+        ("Beta Used", [round(capm_beta,2)]*n),
+        ("Equity Risk Premium (%)", [equity_risk_premium]*n),
+        ("Cost of Equity Re (%)", [cost_of_equity]*n),
+        ("", [""]*n),
         ("Market Value of Equity (E)", market_equity),
         ("Market Value of Debt (D)", market_debt),
         ("Total Value (V = E + D)", total_value),
@@ -1122,6 +1160,7 @@ def run_wacc(file, cost_of_equity=13.0):
         "current_wacc": wacc[-1],
         "avg_wacc": round(sum(wacc) / len(wacc), 2),
         "cost_of_equity_used": cost_of_equity,
+        "capm_components": {"beta": capm_beta, "risk_free_rate": risk_free_rate, "equity_risk_premium": equity_risk_premium},
         "avg_tax_rate": avg_tax_rate,
         "current_market_cap": current_mcap,
         "formula": "WACC = (E/V × Re) + (D/V × Rd × (1 - Tax Rate))"
@@ -1147,7 +1186,7 @@ def run_terminal_value_dcf(file, cost_of_equity=13.0, growth_rate=4.0, forecast_
     import numpy as np
     
     # Get WACC first
-    wacc_result = run_wacc(file, cost_of_equity)
+    wacc_result = run_wacc(file, cost_of_equity_override=cost_of_equity)
     current_wacc = wacc_result["current_wacc"]
     wacc_decimal = current_wacc / 100
     
@@ -1639,18 +1678,61 @@ def run_scenario_analysis(file, forecast_years=5):
     
     # Store results for each scenario
     scenario_results = {}
-    
+
+    # FIX 6: Get base FCFF first — then apply scenario multipliers
+    try:
+        base_fcff_result = run_fcff(file)
+        base_fcff_values = None
+        for label, vals in base_fcff_result["fcff_data"]:
+            if label == "FCFF (Free Cash Flow to Firm)":
+                base_fcff_values = vals
+                break
+        last_base_fcff = base_fcff_values[-1] if base_fcff_values else 0
+    except Exception:
+        last_base_fcff = 0
+
+    # Scenario FCFF multipliers — Bull/Bear actually change the cash flow
+    scenario_fcff_multiplier = {"bull": 1.30, "base": 1.00, "bear": 0.60}
+
     # Run DCF for each scenario
     for scenario_key, params in scenarios.items():
         try:
             # Run Terminal Value DCF with scenario parameters
             dcf_result = run_terminal_value_dcf(
                 file,
-                cost_of_equity=params["cost_of_equity"],
+                cost_of_equity_override=params["cost_of_equity"],
                 growth_rate=params["terminal_growth"],
                 forecast_years=forecast_years
             )
-            
+
+            # Apply FCFF multiplier to scenario valuation
+            fcff_adj = scenario_fcff_multiplier.get(scenario_key, 1.0)
+            if fcff_adj != 1.0 and last_base_fcff != 0:
+                try:
+                    wacc_d = dcf_result["wacc_used"] / 100
+                    g_d    = params["terminal_growth"] / 100
+                    adj_last_fcff = last_base_fcff * fcff_adj
+                    forecasted = [adj_last_fcff * ((1 + g_d) ** i) for i in range(1, forecast_years + 1)]
+                    discounted = [fcf / ((1 + wacc_d) ** i) for i, fcf in enumerate(forecasted, 1)]
+                    tv    = (forecasted[-1] * (1 + g_d)) / (wacc_d - g_d)
+                    pv_tv = tv / ((1 + wacc_d) ** forecast_years)
+                    ev    = round(sum(discounted) + pv_tv, 2)
+                    vs    = dcf_result["valuation_summary"]
+                    net_debt = vs.get("less_net_debt", 0)
+                    equity_val = round(ev - net_debt, 2)
+                    shares = vs.get("shares_outstanding") or 1
+                    vps = round(equity_val / shares, 2) if shares else 0
+                    cmp = vs.get("current_market_price") or 0
+                    updown = round(((vps / cmp) - 1) * 100, 2) if cmp else 0
+                    dcf_result["valuation_summary"].update({
+                        "enterprise_value": ev, "equity_value": equity_val,
+                        "value_per_share": vps, "upside_downside": updown,
+                        "fcff_scenario_multiplier": fcff_adj,
+                    })
+                    dcf_result["terminal_value_breakdown"]["terminal_value"] = round(tv, 2)
+                except Exception:
+                    pass  # keep original if adjustment fails
+
             # Get WACC for this scenario
             wacc_used = dcf_result["wacc_used"]
             
@@ -1762,4 +1844,336 @@ def run_scenario_analysis(file, forecast_years=5):
         "overall_recommendation": overall_recommendation,
         "overall_rationale": overall_rationale,
         "risk_reward": risk_reward
+    }
+
+
+# ===============================
+# ROIC (RETURN ON INVESTED CAPITAL)
+# ===============================
+def run_roic(file):
+    """
+    ROIC = NOPAT / Invested Capital
+    NOPAT = EBIT × (1 - effective tax rate)
+    Invested Capital = Total Equity + Borrowings - Cash & Bank
+
+    Interpretation:
+    - ROIC > 25%: Exceptional — strong competitive moat
+    - 15–25%: Good — above cost of capital
+    - 10–15%: Fair — average business
+    - < 10%: Poor — may be destroying value
+    """
+    historical = run_historical_fs(file)
+    years = historical["years"]
+    n = len(years)
+
+    def gv(label):
+        for lbl, vals in historical["income_statement"] + historical["balance_sheet"]:
+            if lbl == label:
+                return vals
+        return [0] * n
+
+    ebitda       = gv("EBITDA")
+    depreciation = gv("Depreciation")
+    tax          = gv("Tax")
+    ebt          = gv("EBT")
+    equity       = gv("Equity Share Capital")
+    reserves     = gv("Reserves")
+    borrowings   = gv("Borrowings")
+    cash_bank    = gv("Cash & Bank")
+    sales        = gv("Sales")
+
+    nopat_list, invested_capital_list, roic_list = [], [], []
+
+    for i in range(n):
+        ebit = ebitda[i] - depreciation[i]
+
+        # Effective tax rate (capped 0–50%)
+        if ebt[i] and ebt[i] > 0:
+            tax_rate = min(max(abs(tax[i] / ebt[i]), 0), 0.5)
+        else:
+            tax_rate = 0.30
+
+        nopat = round(ebit * (1 - tax_rate), 2)
+
+        invested_capital = round(
+            equity[i] + reserves[i] + borrowings[i] - cash_bank[i], 2
+        )
+
+        roic = round((nopat / invested_capital) * 100, 2) if invested_capital else 0
+
+        nopat_list.append(nopat)
+        invested_capital_list.append(invested_capital)
+        roic_list.append(roic)
+
+    roic_change = [""] + [
+        round(roic_list[i] - roic_list[i - 1], 2) for i in range(1, n)
+    ]
+
+    # ROIC vs implicit cost of capital (WACC ~11% default)
+    wacc_benchmark = 11.0
+    value_creation = [
+        round(roic_list[i] - wacc_benchmark, 2) for i in range(n)
+    ]
+
+    def classify(r):
+        if r > 25:   return "Exceptional ✅"
+        if r > 15:   return "Good ✅"
+        if r > 10:   return "Fair ⚠️"
+        return "Poor ❌"
+
+    latest_roic = roic_list[-1] if roic_list else 0
+    avg_roic    = round(sum(roic_list) / n, 2) if n else 0
+
+    return {
+        "years": years,
+        "roic_data": [
+            ("NOPAT (₹ Cr)",          nopat_list),
+            ("Invested Capital (₹ Cr)", invested_capital_list),
+            ("",                        [""]*n),
+            ("ROIC %",                  roic_list),
+            ("ROIC Change (pp)",        roic_change),
+            ("Value Creation vs WACC",  value_creation),
+        ],
+        "summary": {
+            "latest_roic":       latest_roic,
+            "avg_roic":          avg_roic,
+            "classification":    classify(latest_roic),
+            "wacc_benchmark":    wacc_benchmark,
+        },
+        "interpretation": {
+            "exceptional": "> 25% — Competitive moat likely",
+            "good":        "15–25% — Above cost of capital",
+            "fair":        "10–15% — Average business",
+            "poor":        "< 10%  — May be destroying value",
+        }
+    }
+
+
+# ===============================
+# PIOTROSKI F-SCORE
+# ===============================
+def run_piotroski(file):
+    """
+    9 binary signals summing to score 0–9.
+    8–9: Strong buy signal
+    5–7: Average / neutral
+    0–4: Weak / avoid
+
+    Signals:
+    Profitability (4): ROA positive, CFO positive, ROA improving, earnings quality (CFO > NP)
+    Leverage (3):      D/E falling, no equity dilution, current ratio improving
+    Efficiency (2):    Gross margin improving, asset turnover improving
+    """
+    historical = run_historical_fs(file)
+    years = historical["years"]
+    n     = len(years)
+
+    def gv(label):
+        for lbl, vals in historical["income_statement"] + historical["balance_sheet"]:
+            if lbl == label:
+                return vals
+        return [0] * n
+
+    net_profit   = gv("Net Profit")
+    gross_margin = gv("Gross Margin %")
+    sales        = gv("Sales")
+    equity       = gv("Equity Share Capital")
+    reserves     = gv("Reserves")
+    borrowings   = gv("Borrowings")
+    receivables  = gv("Receivables")
+    inventory    = gv("Inventory")
+    cash_bank    = gv("Cash & Bank")
+
+    # Get total assets from balance sheet
+    total_assets = gv("Total Assets")
+
+    # Try to get CFO from cash flow section
+    cf_cfo = [0] * n
+    for lbl, vals in historical.get("cash_flow", []):
+        if lbl == "Cash from Operating Activities":
+            cf_cfo = vals
+            break
+
+    score_rows = []
+
+    for i in range(1, n):  # need prior year for deltas
+        ta   = total_assets[i]   or 1
+        ta_p = total_assets[i-1] or 1
+
+        roa_cur  = net_profit[i]   / ta
+        roa_prev = net_profit[i-1] / ta_p
+
+        eq_cur  = equity[i]   + reserves[i]
+        eq_prev = equity[i-1] + reserves[i-1]
+        de_cur  = borrowings[i]   / eq_cur  if eq_cur  else 0
+        de_prev = borrowings[i-1] / eq_prev if eq_prev else 0
+
+        # Current ratio approximation
+        cur_assets_cur  = receivables[i]   + inventory[i]   + cash_bank[i]
+        cur_assets_prev = receivables[i-1] + inventory[i-1] + cash_bank[i-1]
+        cr_cur  = cur_assets_cur  / (borrowings[i]   + 1)
+        cr_prev = cur_assets_prev / (borrowings[i-1] + 1)
+
+        at_cur  = sales[i]   / ta
+        at_prev = sales[i-1] / ta_p
+
+        # ── 9 Signals ──────────────────────────────────────────
+        f1 = 1 if roa_cur > 0                        else 0  # ROA positive
+        f2 = 1 if cf_cfo[i] > 0                      else 0  # CFO positive
+        f3 = 1 if roa_cur > roa_prev                 else 0  # ROA improving
+        f4 = 1 if cf_cfo[i] > net_profit[i]          else 0  # Earnings quality
+        f5 = 1 if de_cur < de_prev                   else 0  # D/E falling
+        f6 = 1 if eq_cur >= eq_prev                  else 0  # No dilution
+        f7 = 1 if cr_cur > cr_prev                   else 0  # Liquidity improving
+        f8 = 1 if gross_margin[i] > gross_margin[i-1] else 0 # Gross margin rising
+        f9 = 1 if at_cur > at_prev                   else 0  # Asset turnover rising
+
+        total = f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + f9
+
+        if total >= 8:    grade = "Strong ✅"
+        elif total >= 5:  grade = "Average ⚠️"
+        else:             grade = "Weak ❌"
+
+        score_rows.append({
+            "year":                   years[i],
+            "f1_roa_positive":        f1,
+            "f2_cfo_positive":        f2,
+            "f3_roa_improving":       f3,
+            "f4_earnings_quality":    f4,
+            "f5_debt_falling":        f5,
+            "f6_no_dilution":         f6,
+            "f7_liquidity_improving": f7,
+            "f8_gross_margin_rising": f8,
+            "f9_asset_turnover":      f9,
+            "total":                  total,
+            "grade":                  grade,
+        })
+
+    latest_score = score_rows[-1]["total"] if score_rows else 0
+    latest_grade = score_rows[-1]["grade"] if score_rows else "N/A"
+
+    return {
+        "years":        [r["year"] for r in score_rows],
+        "scores":       score_rows,
+        "total_scores": [r["total"] for r in score_rows],
+        "grades":       [r["grade"] for r in score_rows],
+        "summary": {
+            "latest_score": latest_score,
+            "latest_grade": latest_grade,
+            "signal_definitions": {
+                "F1": "ROA > 0 (profitable)",
+                "F2": "CFO > 0 (cash generative)",
+                "F3": "ROA improved YoY",
+                "F4": "CFO > Net Profit (quality earnings)",
+                "F5": "Debt/Equity falling",
+                "F6": "No equity dilution",
+                "F7": "Current ratio improving",
+                "F8": "Gross margin improving",
+                "F9": "Asset turnover improving",
+            },
+            "grading": {"8-9": "Strong — Institutional buy signal",
+                        "5-7": "Average — Hold / neutral",
+                        "0-4": "Weak — Avoid / short signal"},
+        }
+    }
+
+
+# ===============================
+# DUPONT ANALYSIS (3-FACTOR ROE)
+# ===============================
+def run_dupont(file):
+    """
+    DuPont decomposes ROE into 3 drivers:
+    ROE = Net Profit Margin × Asset Turnover × Financial Leverage (Equity Multiplier)
+
+    This tells you WHY ROE is high or low:
+    - High margin  → quality/pricing power (e.g. luxury brands)
+    - High turnover → efficiency (e.g. retail, FMCG)
+    - High leverage → financial risk (e.g. banks, NBFCs)
+    """
+    historical = run_historical_fs(file)
+    years = historical["years"]
+    n     = len(years)
+
+    def gv(label):
+        for lbl, vals in historical["income_statement"] + historical["balance_sheet"]:
+            if lbl == label:
+                return vals
+        return [0] * n
+
+    net_profit   = gv("Net Profit")
+    net_margin   = gv("Net Margins")        # already in %
+    sales        = gv("Sales")
+    total_assets = gv("Total Assets")
+    equity       = gv("Equity Share Capital")
+    reserves     = gv("Reserves")
+
+    # Factor 1: Net Profit Margin (already computed)
+    # Factor 2: Asset Turnover = Sales / Total Assets
+    asset_turnover = [
+        round(sales[i] / total_assets[i], 4) if total_assets[i] else 0
+        for i in range(n)
+    ]
+
+    # Factor 3: Equity Multiplier = Total Assets / Total Equity
+    total_equity = [equity[i] + reserves[i] for i in range(n)]
+    equity_multiplier = [
+        round(total_assets[i] / total_equity[i], 4) if total_equity[i] else 0
+        for i in range(n)
+    ]
+
+    # DuPont ROE = (Net Margin / 100) × Asset Turnover × Equity Multiplier × 100
+    roe_dupont = [
+        round((net_margin[i] / 100) * asset_turnover[i] * equity_multiplier[i] * 100, 2)
+        for i in range(n)
+    ]
+
+    # Actual ROE for cross-check
+    roe_actual = [
+        round((net_profit[i] / total_equity[i]) * 100, 2) if total_equity[i] else 0
+        for i in range(n)
+    ]
+
+    # Identify dominant driver for latest year
+    latest = n - 1
+    nm = net_margin[latest]
+    at = asset_turnover[latest]
+    em = equity_multiplier[latest]
+
+    # Normalise each factor relative to typical benchmark
+    nm_score = nm / 10        # 10% net margin = benchmark
+    at_score = at / 1.0       # 1.0 asset turnover = benchmark
+    em_score = em / 2.0       # 2.0 equity multiplier = benchmark
+
+    dominant = max(
+        ("Profit Margins", nm_score),
+        ("Asset Efficiency", at_score),
+        ("Financial Leverage", em_score),
+        key=lambda x: x[1]
+    )[0]
+
+    return {
+        "years": years,
+        "dupont_data": [
+            ("Net Profit Margin %",     net_margin),
+            ("Asset Turnover (x)",      [round(v, 2) for v in asset_turnover]),
+            ("Equity Multiplier (x)",   [round(v, 2) for v in equity_multiplier]),
+            ("",                        [""]*n),
+            ("ROE via DuPont %",        roe_dupont),
+            ("ROE Actual % (verify)",   roe_actual),
+        ],
+        "summary": {
+            "latest_net_margin":      nm,
+            "latest_asset_turnover":  round(at, 2),
+            "latest_equity_mult":     round(em, 2),
+            "latest_roe_dupont":      roe_dupont[latest],
+            "latest_roe_actual":      roe_actual[latest],
+            "dominant_roe_driver":    dominant,
+            "interpretation": (
+                "ROE is primarily driven by " + dominant + ". "
+                + ("Strong pricing power — sustainable ROE." if dominant == "Profit Margins"
+                   else "High efficiency — ROE resilient." if dominant == "Asset Efficiency"
+                   else "Leverage-driven ROE — monitor debt risk.")
+            )
+        }
     }
