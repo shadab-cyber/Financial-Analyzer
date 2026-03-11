@@ -378,23 +378,24 @@ h2 { font-family: 'Playfair Display', serif !important; font-weight: 700 !import
           <label style="display:block;font-weight:700;font-size:14px;color:#1d3557;margin-bottom:10px;">
             Upload Screener.in Excel File <span style="color:var(--brand);font-weight:500;font-size:12px;">(.xlsx &mdash; single file)</span>
           </label>
-          <div class="file-drop" id="dropZone">
-            <div style="margin-bottom:10px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" width="44" height="44">
-  <rect x="6" y="34" width="7" height="12" rx="2" fill="#457b9d" opacity="0.4"/>
-  <rect x="16" y="26" width="7" height="20" rx="2" fill="#457b9d" opacity="0.6"/>
-  <rect x="26" y="18" width="7" height="28" rx="2" fill="#457b9d" opacity="0.8"/>
-  <rect x="36" y="10" width="7" height="36" rx="2" fill="#1d3557"/>
-  <polyline points="9.5,33 19.5,25 29.5,17 39.5,9" fill="none" stroke="#457b9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="9.5" cy="33" r="1.5" fill="#457b9d"/>
-  <circle cx="39.5" cy="9" r="2" fill="#1d3557"/>
-  <circle cx="14" cy="42" r="6" fill="none" stroke="#457b9d" stroke-width="2.5"/>
-  <line x1="18.2" y1="46.2" x2="22" y2="50" stroke="#457b9d" stroke-width="2.5" stroke-linecap="round"/>
-</svg></div>
+          <!-- Most reliable cross-browser upload: label wraps hidden input -->
+          <input type="file" id="fileInput" name="files" accept=".xlsx,.xls" required style="display:none;">
+          <label id="dropZone" class="file-drop" for="fileInput" style="display:block;cursor:pointer;">
+            <div style="margin-bottom:12px;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" width="48" height="48">
+                <rect x="6" y="34" width="7" height="12" rx="2" fill="#457b9d" opacity="0.4"/>
+                <rect x="16" y="26" width="7" height="20" rx="2" fill="#457b9d" opacity="0.6"/>
+                <rect x="26" y="18" width="7" height="28" rx="2" fill="#457b9d" opacity="0.8"/>
+                <rect x="36" y="10" width="7" height="36" rx="2" fill="#1d3557"/>
+                <polyline points="9.5,33 19.5,25 29.5,17 39.5,9" fill="none" stroke="#457b9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="9.5" cy="33" r="1.5" fill="#457b9d"/>
+                <circle cx="39.5" cy="9" r="2" fill="#1d3557"/>
+              </svg>
+            </div>
             <p style="font-weight:700;color:#1d3557;font-size:15px;margin-bottom:4px;">Click to upload or drag &amp; drop</p>
             <p style="font-size:13px;color:#9ca3af;">.xlsx files from screener.in only</p>
-            <div id="fileNameDisplay" style="display:none;margin-top:10px;background:var(--brand-light);color:var(--brand);font-size:13px;font-weight:600;padding:6px 14px;border-radius:20px;"></div>
-            <input type="file" id="fileInput" name="files" accept=".xlsx,.xls" required style="display:none;">
-          </div>
+            <div id="fileNameDisplay" style="display:none;margin-top:12px;background:var(--brand-light);color:var(--brand);font-size:13px;font-weight:600;padding:6px 16px;border-radius:20px;"></div>
+          </label>
           <p style="font-size:12px;color:#9ca3af;margin-top:8px;">Download from screener.in &rarr; company page &rarr; Excel button. Contains 10 years of annual data.</p>
         </div>
         <button type="submit" id="submitBtn" class="btn-primary">&#x1F50D; Analyze Financials</button>
@@ -461,13 +462,43 @@ document.addEventListener('DOMContentLoaded', function() {
   const cp=window.location.pathname;
   document.querySelectorAll('.nav-link,#mobile-menu a').forEach(l=>{if(l.getAttribute('href')===cp)l.classList.add('bg-white','bg-opacity-20','font-semibold');});
 
-  // File drop zone
-  const dropZone=document.getElementById('dropZone'),fileInput=document.getElementById('fileInput'),fnDisplay=document.getElementById('fileNameDisplay');
-  dropZone.addEventListener('click',()=>fileInput.click());
-  fileInput.addEventListener('change',()=>{if(fileInput.files.length>0){fnDisplay.textContent='\u2705 '+fileInput.files[0].name;fnDisplay.style.display='inline-block';}});
-  dropZone.addEventListener('dragover',(e)=>{e.preventDefault();dropZone.classList.add('drag-over');});
-  dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
-  dropZone.addEventListener('drop',(e)=>{e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files.length>0){const dt=e.dataTransfer;const input=fileInput;const list=dt.files;fileInput.files=list;fnDisplay.textContent='\u2705 '+list[0].name;fnDisplay.style.display='inline-block';}});
+  // ── File upload — label[for] opens picker; drag/drop patches input.files ──
+  const fileInput = document.getElementById('fileInput');
+  const dropZone  = document.getElementById('dropZone');
+  const fnDisplay = document.getElementById('fileNameDisplay');
+
+  function showFileName(name) {
+    fnDisplay.textContent = '\u2705 ' + name;
+    fnDisplay.style.display = 'inline-block';
+  }
+
+  // Native picker result
+  fileInput.addEventListener('change', function() {
+    if (this.files && this.files.length > 0) showFileName(this.files[0].name);
+  });
+
+  // Drag visual feedback
+  dropZone.addEventListener('dragenter', function(e) { e.preventDefault(); this.classList.add('drag-over'); });
+  dropZone.addEventListener('dragover',  function(e) { e.preventDefault(); this.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', function(e) { e.preventDefault(); this.classList.remove('drag-over'); });
+
+  // Drop — must prevent default to stop browser opening the file, then patch input
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.classList.remove('drag-over');
+    var files = e.dataTransfer ? e.dataTransfer.files : null;
+    if (files && files.length > 0) {
+      try {
+        var dt = new DataTransfer();
+        dt.items.add(files[0]);
+        fileInput.files = dt.files;
+      } catch(ex) {
+        console.warn('DataTransfer not supported:', ex);
+      }
+      showFileName(files[0].name);
+    }
+  });
 
   // Smooth scroll
   document.querySelectorAll('a[href^="#"]').forEach(a=>{a.addEventListener('click',function(e){const t=document.querySelector(this.getAttribute('href'));if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth',block:'start'});}});});
