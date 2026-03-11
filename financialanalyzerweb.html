@@ -1,219 +1,138 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta name="google-site-verification" content="FB64gQD8n2AMwKpuVh9tRPkyViEq8AQaLbbVvre-1IM" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Financial Analyzer — Annual Report</title>
+  <title>Stock Financial Analyzer &mdash; Screener.in Excel Analysis Tool</title>
+  <meta name="description" content="Analyze any Indian stock instantly. Upload Screener.in Excel to get 10 years of P&L, Balance Sheet and Cash Flow data in seconds. Free stock analysis tool.">
+  <meta name="keywords" content="stock analyzer, financial analysis India, screener.in excel, P&L analysis, balance sheet analysis, cash flow, Indian stocks">
+  <meta name="author" content="Financial Analyzer">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://financial-analyzer-m63v.onrender.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Stock Financial Analyzer &mdash; Free Indian Stock Analysis">
+  <meta property="og:description" content="Upload Screener.in Excel and get instant 10-year financial analysis of any Indian stock.">
+  <meta property="og:url" content="https://financial-analyzer-m63v.onrender.com/">
+  <meta property="og:site_name" content="Financial Analyzer">
+  <meta property="og:image" content="https://financial-analyzer-m63v.onrender.com/static/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Stock Financial Analyzer &mdash; Free Indian Stock Analysis">
+  <meta name="twitter:description" content="Upload Screener.in Excel and get instant 10-year financial analysis of any Indian stock.">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Stock Financial Analyzer","description":"Upload Screener.in Excel and get instant 10-year financial analysis.","url":"https://financial-analyzer-m63v.onrender.com/","applicationCategory":"FinanceApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}</script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script type="module">
+  import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {getAuth,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  const _ah=getAuth(initializeApp({apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",authDomain:"financial-analyzer-afb07.firebaseapp.com",projectId:"financial-analyzer-afb07",storageBucket:"financial-analyzer-afb07.firebasestorage.app",messagingSenderId:"572544893192",appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"}));
+  onAuthStateChanged(_ah,user=>{
+    const lb=document.getElementById("_loginBtn"),uc=document.getElementById("_userChip"),un=document.getElementById("_uname"),ua=document.getElementById("_uavatar");
+    if(user){if(lb)lb.style.display="none";if(uc)uc.style.display="flex";if(un)un.textContent=user.displayName||user.email;if(ua&&user.photoURL){ua.src=user.photoURL;ua.style.display="inline-block";}const mlb=document.getElementById("_mLoginBtn");if(mlb)mlb.style.display="none";const mur=document.getElementById("_mUserRow");if(mur)mur.style.display="block";const mn=document.getElementById("_mName");if(mn)mn.textContent=user.displayName||user.email;const ma=document.getElementById("_mAvatar");if(ma&&user.photoURL){ma.src=user.photoURL;ma.style.display="inline-block";}}else{if(lb)lb.style.display="inline-flex";if(uc)uc.style.display="none";const mlb2=document.getElementById("_mLoginBtn");if(mlb2)mlb2.style.display="block";const mur2=document.getElementById("_mUserRow");if(mur2)mur2.style.display="none";}
+  });
+  window._signOut=()=>signOut(_ah).then(()=>{fetch("/auth/logout",{method:"POST"});location.reload();});
+</script>
 
 <style>
-/* Mobile-responsive table wrapper */
-.table-responsive {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-/* Ensure tables don't break layout on mobile */
-table {
-    min-width: 600px;
-}
-
-/* Stack cards on mobile */
-@media (max-width: 768px) {
-    .grid { grid-template-columns: 1fr !important; }
-    .section-card { padding: 16px; }
-    .metric-card { padding: 12px; }
-    h1 { font-size: 1.75rem !important; }
-    h2 { font-size: 1.25rem !important; }
-    .section-title { font-size: 1.25rem !important; }
-}
-
-/* Touch-friendly buttons */
-button, .btn, a[class*="btn"] {
-    min-height: 44px;
-    min-width: 44px;
-}
-
-/* Improved mobile padding */
-@media (max-width: 640px) {
-    body { padding: 0 !important; }
-    .max-w-7xl { padding-left: 1rem; padding-right: 1rem; }
-}
-
-/* ── ANDROID DARK THEME ── */
-body.android-app {
-    background-color: #0D1024 !important;
-    padding: 0 !important;
-}
-
-body.android-app nav {
-    display: none !important;
-}
-
-body.android-app .bg-white {
-    background-color: #1E2340 !important;
-    border: 1px solid #2E3660 !important;
-}
-
-body.android-app h1,
-body.android-app h2,
-body.android-app h3 {
-    color: #FFFFFF !important;
-}
-
-body.android-app p,
-body.android-app label,
-body.android-app .text-gray-800,
-body.android-app .text-gray-700,
-body.android-app .text-gray-600,
-body.android-app .text-gray-500 {
-    color: #94A3B8 !important;
-}
-
-body.android-app input[type="file"] {
-    background-color: #252B50 !important;
-    border-color: #2E3660 !important;
-    color: #FFFFFF !important;
-}
-
-body.android-app button[type="submit"] {
-    background-color: #4F8EF7 !important;
-    border: none !important;
-}
-
-body.android-app button[type="submit"]:hover {
-    background-color: #3a7ae0 !important;
-}
-
-body.android-app .bg-blue-50 {
-    background-color: #1A2744 !important;
-    border-color: #2E3660 !important;
-}
-
-body.android-app .text-blue-800,
-body.android-app .text-blue-700,
-body.android-app .text-blue-600 {
-    color: #4F8EF7 !important;
-}
-
-body.android-app .bg-gradient-to-r {
-    background: #252B50 !important;
-    border-color: #2E3660 !important;
-}
-
-body.android-app .bg-gray-50 {
-    background-color: #252B50 !important;
-    border-color: #2E3660 !important;
-}
-
-body.android-app .text-gray-900 {
-    color: #FFFFFF !important;
-}
-
-body.android-app .bg-blue-100 {
-    background-color: rgba(79,142,247,0.15) !important;
-}
-
-body.android-app .text-blue-700 {
-    color: #4F8EF7 !important;
-}
-
-body.android-app .bg-green-100 {
-    background-color: rgba(34,197,94,0.15) !important;
-}
-
-body.android-app .text-green-700 {
-    color: #22C55E !important;
-}
-
-body.android-app .bg-yellow-50 {
-    background-color: #2a2410 !important;
-    border-color: #4a3f10 !important;
-}
-
-body.android-app .text-yellow-800,
-body.android-app .text-yellow-700,
-body.android-app .text-yellow-600 {
-    color: #fbbf24 !important;
-}
-
-body.android-app .bg-red-50 {
-    background-color: #2a1010 !important;
-    border-color: #4a1010 !important;
-}
-
-body.android-app .text-red-700 {
-    color: #EF4444 !important;
-}
-
-body.android-app .animate-pulse {
-    color: #4F8EF7 !important;
-}
-
-body.android-app .bg-gray-200 {
-    background-color: #2E3660 !important;
-}
-
-body.android-app .bg-blue-600 {
-    background-color: #4F8EF7 !important;
-}
-
-body.android-app .shadow-2xl,
-body.android-app .shadow {
-    box-shadow: 0 4px 24px rgba(0,0,0,0.5) !important;
-}
+:root{--brand:#457b9d;--brand-dark:#2c5f7a;--brand-light:#eaf4fb;--accent:#e63946;--text-main:#1d3557;--text-muted:#6b7280;}
+*{box-sizing:border-box;}
+body{font-family:'Manrope',sans-serif;background:#f0f4f8;padding-top:0!important;margin-top:0!important;}
+nav{font-family:'Manrope',sans-serif!important;position:sticky!important;top:0!important;z-index:1000!important;box-shadow:0 2px 12px rgba(0,0,0,.15)!important;}
+nav .text-xl{font-weight:800!important;letter-spacing:-.3px!important;}
+.nav-link{font-size:13px!important;font-weight:600!important;letter-spacing:.01em!important;transition:all .2s ease!important;border-radius:8px!important;}
+.nav-link:hover{background:rgba(255,255,255,.2)!important;transform:translateY(-1px);}
+.hero{background:linear-gradient(135deg,#1d3557 0%,#457b9d 60%,#6aafcf 100%);position:relative;overflow:hidden;padding:72px 24px 80px;text-align:center;}
+.hero::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");}
+.hero-badge{display:inline-block;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 14px;border-radius:20px;margin-bottom:20px;}
+.hero h1{font-size:clamp(2rem,5vw,3.2rem);font-weight:800;color:#fff;line-height:1.15;margin-bottom:18px;letter-spacing:-.5px;}
+.hero h1 span{color:#a8dadc;}
+.hero p{font-size:1.05rem;color:rgba(255,255,255,.85);max-width:580px;margin:0 auto 32px;line-height:1.7;font-weight:500;}
+.hero-stats{display:flex;justify-content:center;gap:40px;flex-wrap:wrap;margin-top:40px;}
+.hero-stat .num{font-size:2rem;font-weight:800;color:#a8dadc;display:block;line-height:1;}
+.hero-stat .lbl{font-size:12px;font-weight:600;opacity:.75;text-transform:uppercase;letter-spacing:.05em;margin-top:4px;color:#fff;}
+.hero-cta{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--brand-dark);font-weight:700;font-size:15px;padding:12px 28px;border-radius:50px;text-decoration:none;box-shadow:0 4px 20px rgba(0,0,0,.2);transition:all .25s ease;margin-right:12px;}
+.hero-cta:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,.3);color:var(--brand-dark);text-decoration:none;}
+.hero-cta-outline{display:inline-flex;align-items:center;gap:8px;background:transparent;color:#fff;font-weight:700;font-size:15px;padding:12px 28px;border-radius:50px;border:2px solid rgba(255,255,255,.5);text-decoration:none;transition:all .25s ease;}
+.hero-cta-outline:hover{background:rgba(255,255,255,.1);border-color:#fff;transform:translateY(-2px);color:#fff;text-decoration:none;}
+.section-tag{display:inline-block;background:var(--brand-light);color:var(--brand);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:4px 12px;border-radius:20px;margin-bottom:12px;}
+.section-h{font-size:1.9rem;font-weight:800;color:var(--text-main);letter-spacing:-.4px;margin-bottom:10px;}
+.section-sub{color:var(--text-muted);font-size:1rem;max-width:520px;margin:0 auto;line-height:1.65;}
+.tool-card{background:#fff;border-radius:16px;padding:28px 24px;border:1px solid #e2e8f0;text-decoration:none;display:block;transition:all .3s cubic-bezier(.4,0,.2,1);position:relative;overflow:hidden;cursor:pointer;}
+.tool-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--brand),#6aafcf);transform:scaleX(0);transform-origin:left;transition:transform .3s ease;}
+.tool-card:hover{transform:translateY(-6px);box-shadow:0 20px 40px rgba(69,123,157,.15);border-color:var(--brand);text-decoration:none;}
+.tool-card:hover::before{transform:scaleX(1);}
+.tool-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:16px;transition:transform .3s ease;}
+.tool-card:hover .tool-icon{transform:scale(1.1) rotate(-3deg);}
+.tool-card h3{font-size:1.05rem;font-weight:700;color:var(--text-main);margin-bottom:8px;}
+.tool-card p{font-size:.875rem;color:var(--text-muted);line-height:1.6;margin-bottom:16px;}
+.tool-arrow{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;color:var(--brand);transition:gap .2s ease;}
+.tool-card:hover .tool-arrow{gap:8px;}
+.upload-card{background:#fff;border-radius:20px;padding:40px;box-shadow:0 4px 30px rgba(0,0,0,.08);border:1px solid #e2e8f0;}
+.file-drop{border:2px dashed #cbd5e1;border-radius:12px;padding:32px;text-align:center;transition:all .25s ease;cursor:pointer;background:#f8fafc;}
+.file-drop:hover,.file-drop.drag-over{border-color:var(--brand);background:var(--brand-light);}
+.btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,var(--brand),var(--brand-dark));color:#fff;font-weight:700;font-size:15px;padding:14px 28px;border-radius:12px;border:none;cursor:pointer;transition:all .25s ease;box-shadow:0 4px 14px rgba(69,123,157,.35);width:100%;font-family:'Manrope',sans-serif;}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(69,123,157,.45);background:linear-gradient(135deg,#3a6a8a,#22506a);}
+.btn-primary:disabled{opacity:.65;cursor:not-allowed;transform:none;}
+.step-card{background:#fff;border-radius:16px;padding:24px;text-align:center;border:1px solid #e2e8f0;transition:all .3s ease;}
+.step-card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(69,123,157,.12);}
+.step-num{width:44px;height:44px;background:linear-gradient(135deg,var(--brand),#6aafcf);color:#fff;font-weight:800;font-size:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;}
+footer{background:#1d3557;color:#a8b8cc;padding:60px 24px 32px;margin-top:80px;}
+.footer-logo{font-size:1.3rem;font-weight:800;color:#fff;margin-bottom:10px;}
+.footer-tagline{font-size:13.5px;color:#7a90a8;line-height:1.6;max-width:260px;margin-bottom:24px;}
+.footer-col h4{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#fff;margin-bottom:14px;}
+.footer-col a{display:block;font-size:13.5px;color:#7a90a8;text-decoration:none;margin-bottom:9px;transition:color .2s ease;}
+.footer-col a:hover{color:#a8dadc;}
+.footer-divider{border:none;border-top:1px solid rgba(255,255,255,.08);margin:36px 0 24px;}
+.footer-bottom{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;font-size:12.5px;color:#546a7f;}
+.badge-free{display:inline-flex;align-items:center;gap:5px;background:rgba(168,218,220,.15);border:1px solid rgba(168,218,220,.3);color:#a8dadc;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeInUp .6s ease forwards;}
+.d1{animation-delay:.1s;opacity:0;}.d2{animation-delay:.2s;opacity:0;}.d3{animation-delay:.3s;opacity:0;}.d4{animation-delay:.4s;opacity:0;}
+.table-responsive{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+table{min-width:600px;}
+@media(max-width:768px){.tool-grid{grid-template-columns:1fr!important;}.step-grid{grid-template-columns:1fr!important;}.footer-grid{grid-template-columns:1fr!important;}.hero-stats{gap:24px;}.hero{padding:48px 16px 56px;}.upload-card{padding:24px 16px;}}
+@media(max-width:640px){body{padding:0!important;}.footer-bottom{flex-direction:column;text-align:center;}}
+button,.btn,a[class*="btn"]{min-height:44px;}
 </style>
-
+<style>
+/* == Playfair Display for brand and headings == */
+body { font-family: 'Manrope', sans-serif !important; }
+h1 { font-family: 'Playfair Display', serif !important; font-weight: 800 !important; letter-spacing: -0.4px !important; }
+h2 { font-family: 'Playfair Display', serif !important; font-weight: 700 !important; letter-spacing: -0.3px !important; }
+.brand-name { font-family: 'Playfair Display', serif !important; font-weight: 700 !important; font-size: 20px !important; color: #fff !important; letter-spacing: -0.3px !important; line-height: 1; }
+.nav-logo-wrap { display: flex !important; align-items: center !important; gap: 9px !important; text-decoration: none !important; transition: opacity 0.2s ease; }
+.nav-logo-wrap:hover { opacity: 0.88 !important; }
+</style>
 </head>
+<body>
 
-<body class="bg-gray-100 min-h-screen p-6">
-
-<!-- ================= MOBILE-RESPONSIVE NAVBAR ================= -->
-<nav class="text-white shadow-md mb-8" style="background-color:#457b9d;">
+<!-- NAVBAR -->
+<nav class="text-white shadow-md" style="background-color:#457b9d;">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="flex justify-between items-center h-16">
-      
-      <!-- Logo -->
-      <div class="flex-shrink-0">
-        <a href="/" class="text-xl font-bold">💼 Financial Analyzer</a>
+    <div class="flex items-center h-16">
+      <div class="flex-shrink-0 mr-4">
+        <a href="/" class="nav-logo-wrap"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="36" height="36" style="flex-shrink:0;"><rect width="100" height="100" rx="22" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.28)" stroke-width="2"/><line x1="18" y1="20" x2="18" y2="80" stroke="white" stroke-width="10" stroke-linecap="round"/><line x1="18" y1="20" x2="50" y2="20" stroke="white" stroke-width="10" stroke-linecap="round"/><line x1="18" y1="50" x2="44" y2="50" stroke="white" stroke-width="9" stroke-linecap="round"/><line x1="58" y1="80" x2="80" y2="20" stroke="white" stroke-width="9.5" stroke-linecap="round"/><line x1="102" y1="80" x2="80" y2="20" stroke="white" stroke-width="9.5" stroke-linecap="round"/><polyline points="64,59 80,42 96,59" fill="none" stroke="#a8dadc" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="brand-name">Financial Analyzer</span></a>
       </div>
-
-      <!-- Desktop Menu -->
-      <div class="hidden lg:flex space-x-2">
-        <a href="/" 
-           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
-          Home
-        </a>
-        <a href="/dcf" 
-           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
-          DCF
-        </a>
-        <a href="/financial-modelling" 
-           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
-          Modelling
-        </a>
-        <a href="/technical-analysis" 
-           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
-          Technical
-        </a>
-        <a href="/portfolio-management" 
-           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
-          Portfolio
-        </a>
-        <a href="/performance-analytics" 
-           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
-          Performance
-        </a>
-        <a href="/strategy-optimization" 
-           class="nav-link px-3 py-2 rounded-lg text-sm hover:bg-white hover:bg-opacity-20 transition">
-          Strategy
-        </a>
+      <div class="hidden lg:flex space-x-1">
+        <a href="/" class="nav-link px-3 py-2 rounded-lg text-sm transition">Home</a>
+        <a href="/dcf" class="nav-link px-3 py-2 rounded-lg text-sm transition">DCF</a>
+        <a href="/financial-modelling" class="nav-link px-3 py-2 rounded-lg text-sm transition">Modelling</a>
+        <a href="/technical-analysis" class="nav-link px-3 py-2 rounded-lg text-sm transition">Technical</a>
+        <a href="/portfolio-management" class="nav-link px-3 py-2 rounded-lg text-sm transition">Portfolio</a>
+        <a href="/performance-analytics" class="nav-link px-3 py-2 rounded-lg text-sm transition">Performance</a>
+        <a href="/strategy-optimization" class="nav-link px-3 py-2 rounded-lg text-sm transition">Strategy</a>
       </div>
-
-      <!-- Mobile menu button -->
-      <div class="lg:hidden">
-        <button id="mobile-menu-btn" type="button" 
-                class="inline-flex items-center justify-center p-2 rounded-md hover:bg-white hover:bg-opacity-20 focus:outline-none">
+      <div class="hidden lg:flex items-center gap-2 ml-auto">
+        <a id="_loginBtn" href="/login" style="display:none;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:16px;padding:4px 14px;font-size:12px;font-weight:600;color:#fff;text-decoration:none;">Sign In</a>
+        <div id="_userChip" style="display:none;align-items:center;gap:6px;">
+          <img id="_uavatar" style="display:none;width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,.4);" src="" alt=""/>
+          <span id="_uname" style="font-size:11px;font-weight:600;color:#fff;background:rgba(255,255,255,.15);padding:3px 10px;border-radius:16px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          <button onclick="_signOut()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:16px;padding:4px 12px;font-size:11px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;min-height:0;">Sign out</button>
+        </div>
+      </div>
+      <div class="lg:hidden ml-auto">
+        <button id="mobile-menu-btn" type="button" class="inline-flex items-center justify-center p-2 rounded-md hover:bg-white hover:bg-opacity-20">
           <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
             <path id="close-icon" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -222,318 +141,432 @@ body.android-app .shadow {
       </div>
     </div>
   </div>
-
-  <!-- Mobile Menu -->
   <div id="mobile-menu" class="hidden lg:hidden">
     <div class="px-2 pt-2 pb-3 space-y-1">
-      <a href="/" 
-         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
-        🏠 Home
-      </a>
-      <a href="/dcf" 
-         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
-        📊 DCF Valuation
-      </a>
-      <a href="/financial-modelling" 
-         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
-        📈 Financial Modelling
-      </a>
-      <a href="/technical-analysis" 
-         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
-        📉 Technical Analysis
-      </a>
-      <a href="/portfolio-management" 
-         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
-        💼 Portfolio Management
-      </a>
-      <a href="/performance-analytics" 
-         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
-        📊 Performance Analytics
-      </a>
-      <a href="/strategy-optimization" 
-         class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">
-        🎯 Strategy Optimization
-      </a>
+      <a href="/" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F3E0; Home</a>
+      <a href="/dcf" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F4CA; DCF Valuation</a>
+      <a href="/financial-modelling" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F4C8; Financial Modelling</a>
+      <a href="/technical-analysis" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F4C9; Technical Analysis</a>
+      <a href="/portfolio-management" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F4BC; Portfolio Management</a>
+      <a href="/performance-analytics" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F4CA; Performance Analytics</a>
+      <a href="/strategy-optimization" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F3AF; Strategy Optimization</a>
+      <div class="border-t border-white border-opacity-20 mt-2 pt-2">
+        <a id="_mLoginBtn" href="/login" style="display:none;" class="block px-3 py-2 rounded-md text-base font-semibold hover:bg-white hover:bg-opacity-20 transition">&#x1F510; Sign In</a>
+        <div id="_mUserRow" style="display:none;" class="px-3 py-2">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <img id="_mAvatar" style="display:none;width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,.5);" src="" alt=""/>
+            <span id="_mName" style="font-size:13px;font-weight:600;color:#fff;"></span>
+          </div>
+          <button onclick="_signOut()" style="width:100%;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:8px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;">Sign out</button>
+        </div>
+      </div>
     </div>
   </div>
 </nav>
 
-<script>
-// Mobile menu toggle
-document.addEventListener('DOMContentLoaded', function() {
-  const mobileMenuBtn = document.getElementById('mobile-menu-btn');
-  const mobileMenu = document.getElementById('mobile-menu');
-  const menuIcon = document.getElementById('menu-icon');
-  const closeIcon = document.getElementById('close-icon');
-
-  if (mobileMenuBtn) {
-    mobileMenuBtn.addEventListener('click', function() {
-      mobileMenu.classList.toggle('hidden');
-      menuIcon.classList.toggle('hidden');
-      closeIcon.classList.toggle('hidden');
-    });
-  }
-
-  // Highlight active page
-  const currentPath = window.location.pathname;
-  document.querySelectorAll('.nav-link, #mobile-menu a').forEach(link => {
-    if (link.getAttribute('href') === currentPath) {
-      link.classList.add('bg-white', 'bg-opacity-20', 'font-semibold');
-    }
-  });
-});
-</script>
-<!-- =============== NAVBAR END =============== -->
-
-<script>
-// Android App Detection
-(function() {
-  var isAndroid = 
-    window.location.search.indexOf('app=android') !== -1 ||
-    (navigator.userAgent.indexOf('Android') !== -1 && 
-     navigator.userAgent.indexOf('wv') !== -1 &&
-     navigator.userAgent.indexOf('FinancialAnalyzer') !== -1);
-  if (isAndroid) {
-    document.body.classList.add('android-app');
-  }
-})();
-</script>
-
-
-<div class="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-5xl mx-auto">
-
-  <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">
-    📊 Stock Financial Analyzer
-    <p class="text-sm font-normal text-gray-500 mt-1">Upload 5–8 Annual Report PDFs (one per year) — extracts all 3 financial statements automatically</p>
-  </h1>
-
-  <!-- Upload Form -->
-  <form id="analyzeForm" enctype="multipart/form-data" class="space-y-4">
-
-    <!-- Info box -->
-    <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-      <p class="font-semibold mb-1">📋 How to get your Annual Report PDF:</p>
-      <ol class="list-decimal list-inside space-y-1 text-blue-700">
-        <li>Go to <strong>bseindia.com</strong> or the company's official website</li>
-        <li>Search for the company → go to <strong>Annual Reports</strong> section</li>
-        <li>Download the latest <strong>Annual Report PDF</strong></li>
-        <li>Upload 5–8 annual report PDFs (one per year) — all statements auto-extracted ✅</li>
-      </ol>
-      <p class="mt-2 text-xs text-blue-600">💡 Annual reports from BSE/company websites are text-based PDFs — they work instantly without OCR.</p>
+<!-- HERO -->
+<section class="hero">
+  <div style="position:relative;z-index:1;">
+    <div class="hero-badge fade-up">&#x1F1EE;&#x1F1F3; Built for Indian Retail Investors</div>
+    <h1 class="fade-up d1">Smart Financial Analysis<br><span>Without the Complexity</span></h1>
+    <p class="fade-up d2">Upload your Screener.in Excel file and instantly unlock 10 years of P&amp;L, Balance Sheet, and Cash Flow data &mdash; with valuation tools, portfolio tracking, and strategy analysis all in one place.</p>
+    <div class="fade-up d3">
+      <a href="#analyze" class="hero-cta">&#x1F50D; Analyze a Stock</a>
+      <a href="#tools" class="hero-cta-outline">Explore Tools</a>
     </div>
-
-    <div>
-      <label class="block font-semibold mb-1 text-gray-700">
-        Upload Annual Report PDFs <span class="text-blue-600 font-normal text-sm">(5 to 8 files — one per year)</span>
-      </label>
-      <input type="file" name="files" accept="application/pdf" multiple
-        class="w-full border border-gray-300 p-3 rounded-lg focus:ring focus:ring-blue-200" required />
-      <p class="text-xs text-gray-400 mt-1">Select 5 to 8 annual report PDFs (one per year). Supported: BSE filings, company website annual reports, Screener.in exports</p>
+    <div class="hero-stats fade-up d4">
+      <div class="hero-stat"><span class="num">10</span><span class="lbl">Years of Data</span></div>
+      <div class="hero-stat"><span class="num">6+</span><span class="lbl">Analysis Tools</span></div>
+      <div class="hero-stat"><span class="num">100%</span><span class="lbl">Free to Use</span></div>
+      <div class="hero-stat"><span class="num">3</span><span class="lbl">Financial Statements</span></div>
     </div>
+  </div>
+</section>
 
-    <button type="submit" id="submitBtn"
-      class="w-full bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition font-semibold shadow-md">
-      🔍 Analyze Annual Reports
-    </button>
-  </form>
+<!-- TOOLS OVERVIEW -->
+<section id="tools" style="padding:72px 24px 0;">
+  <div style="max-width:1100px;margin:0 auto;">
+    <div style="text-align:center;margin-bottom:48px;">
+      <span class="section-tag">Our Tools</span>
+      <h2 class="section-h">Everything you need to invest smarter</h2>
+      <p class="section-sub">A comprehensive suite of financial analysis tools designed specifically for the Indian equity market &mdash; from fundamental screening to advanced strategy backtesting.</p>
+    </div>
+    <div class="tool-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;">
 
-  <!-- Results Section -->
-  <div id="result" class="mt-10 hidden">
-    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl shadow-lg border border-blue-100">
+      <a href="/" class="tool-card">
+        <div class="tool-icon" style="background:#eff8ff;padding:4px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" width="44" height="44">
+  <rect x="6" y="34" width="7" height="12" rx="2" fill="#457b9d" opacity="0.4"/>
+  <rect x="16" y="26" width="7" height="20" rx="2" fill="#457b9d" opacity="0.6"/>
+  <rect x="26" y="18" width="7" height="28" rx="2" fill="#457b9d" opacity="0.8"/>
+  <rect x="36" y="10" width="7" height="36" rx="2" fill="#1d3557"/>
+  <polyline points="9.5,33 19.5,25 29.5,17 39.5,9" fill="none" stroke="#457b9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="9.5" cy="33" r="1.5" fill="#457b9d"/>
+  <circle cx="39.5" cy="9" r="2" fill="#1d3557"/>
+  <circle cx="14" cy="42" r="6" fill="none" stroke="#457b9d" stroke-width="2.5"/>
+  <line x1="18.2" y1="46.2" x2="22" y2="50" stroke="#457b9d" stroke-width="2.5" stroke-linecap="round"/>
+</svg></div>
+        <h3>Stock Financial Analyzer</h3>
+        <p>Upload a Screener.in Excel file and extract a full decade of financial data &mdash; P&amp;L trends, balance sheet health, and cash flow patterns in one clean, readable view. No formulas. No manual work.</p>
+        <span class="tool-arrow">Analyze now &rarr;</span>
+      </a>
 
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-          📈 Analysis Results
-        </h2>
-        <span id="statusBadge"
-          class="hidden text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full">
-          ✅ Completed
-        </span>
-      </div>
+      <a href="/dcf" class="tool-card">
+        <div class="tool-icon" style="background:#f0fdf4;padding:4px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" width="44" height="44">
+  <polygon points="8,8 44,8 32,24 32,44 20,44 20,24" fill="#16a34a" opacity="0.15" stroke="#16a34a" stroke-width="2" stroke-linejoin="round"/>
+  <line x1="13" y1="14" x2="39" y2="14" stroke="#16a34a" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <line x1="17" y1="19" x2="35" y2="19" stroke="#16a34a" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <circle cx="26" cy="42" r="8" fill="#16a34a" opacity="0.12" stroke="#16a34a" stroke-width="2"/>
+  <text x="26" y="47" font-family="sans-serif" font-size="11" font-weight="900" fill="#16a34a" text-anchor="middle">₹</text>
+  <polyline points="22,32 26,44 30,32" fill="none" stroke="#16a34a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
+</svg></div>
+        <h3>DCF Valuation</h3>
+        <p>Estimate the intrinsic value of any Indian stock using Discounted Cash Flow analysis. Upload annual report PDFs, set your growth assumptions, and get a fair-value range backed by real financial data.</p>
+        <span class="tool-arrow">Value a stock &rarr;</span>
+      </a>
 
-      <!-- Result Cards Container -->
-      <div id="resultCards" class="space-y-8"></div>
+      <a href="/financial-modelling" class="tool-card">
+        <div class="tool-icon" style="background:#fff7ed;padding:4px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" width="44" height="44">
+  <rect x="6" y="6" width="40" height="40" rx="4" fill="#fff7ed" stroke="#ea7c1f" stroke-width="1.8"/>
+  <rect x="6" y="6" width="40" height="11" rx="4" fill="#ea7c1f" opacity="0.15"/>
+  <line x1="6" y1="17" x2="46" y2="17" stroke="#ea7c1f" stroke-width="1.2" opacity="0.4"/>
+  <line x1="22" y1="6" x2="22" y2="46" stroke="#ea7c1f" stroke-width="1.2" opacity="0.3"/>
+  <rect x="9" y="9" width="10" height="5" rx="1.5" fill="#ea7c1f" opacity="0.25"/>
+  <line x1="9" y1="22" x2="19" y2="22" stroke="#ea7c1f" stroke-width="1.8" stroke-linecap="round" opacity="0.6"/>
+  <line x1="9" y1="28" x2="19" y2="28" stroke="#ea7c1f" stroke-width="1.8" stroke-linecap="round" opacity="0.5"/>
+  <line x1="9" y1="34" x2="19" y2="34" stroke="#ea7c1f" stroke-width="1.8" stroke-linecap="round" opacity="0.4"/>
+  <line x1="9" y1="40" x2="19" y2="40" stroke="#ea7c1f" stroke-width="1.8" stroke-linecap="round" opacity="0.3"/>
+  <line x1="25" y1="22" x2="43" y2="22" stroke="#ea7c1f" stroke-width="2" stroke-linecap="round"/>
+  <line x1="25" y1="28" x2="39" y2="28" stroke="#ea7c1f" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <line x1="25" y1="34" x2="41" y2="34" stroke="#ea7c1f" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <line x1="25" y1="40" x2="37" y2="40" stroke="#ea7c1f" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+</svg></div>
+        <h3>Financial Modelling</h3>
+        <p>Build dynamic 3-statement financial models with scenario analysis and projections. Ideal for students, analysts, and serious investors who want to stress-test assumptions before committing capital.</p>
+        <span class="tool-arrow">Build a model &rarr;</span>
+      </a>
+
+      <a href="/technical-analysis" class="tool-card">
+        <div class="tool-icon" style="background:#fdf4ff;padding:4px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" width="44" height="44">
+  <line x1="10" y1="6" x2="10" y2="46" stroke="#9333ea" stroke-width="1.5" stroke-linecap="round" opacity="0.2"/>
+  <line x1="10" y1="12" x2="10" y2="24" stroke="#9333ea" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="7" y="24" width="6" height="12" rx="1.5" fill="#9333ea" opacity="0.8"/>
+  <line x1="10" y1="36" x2="10" y2="42" stroke="#9333ea" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="22" y1="6" x2="22" y2="46" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round" opacity="0.2"/>
+  <line x1="22" y1="8" x2="22" y2="18" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="19" y="18" width="6" height="16" rx="1.5" fill="#16a34a" opacity="0.8"/>
+  <line x1="22" y1="34" x2="22" y2="44" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="34" y1="6" x2="34" y2="46" stroke="#e11d48" stroke-width="1.5" stroke-linecap="round" opacity="0.2"/>
+  <line x1="34" y1="10" x2="34" y2="20" stroke="#e11d48" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="31" y="20" width="6" height="14" rx="1.5" fill="#e11d48" opacity="0.8"/>
+  <line x1="34" y1="34" x2="34" y2="42" stroke="#e11d48" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="46" y1="6" x2="46" y2="46" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round" opacity="0.2"/>
+  <line x1="46" y1="6" x2="46" y2="14" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="43" y="14" width="6" height="18" rx="1.5" fill="#16a34a"/>
+  <line x1="46" y1="32" x2="46" y2="40" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/>
+  <polyline points="10,28 22,26 34,27 46,23" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3,2"/>
+</svg></div>
+        <h3>Technical Analysis</h3>
+        <p>Study price action and momentum indicators for any NSE/BSE listed stock. Get visual signals on moving averages, RSI, MACD, and volume trends to time your entries and exits with more confidence.</p>
+        <span class="tool-arrow">Read charts &rarr;</span>
+      </a>
+
+      <a href="/portfolio-management" class="tool-card">
+        <div class="tool-icon" style="background:#fff1f2;padding:4px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" width="44" height="44">
+  <path d="M26,26 L26,8 A18,18 0 0,1 44,26 Z" fill="#e11d48" opacity="0.75"/>
+  <path d="M26,26 L44,26 A18,18 0 0,1 14.5,40.6 Z" fill="#457b9d" opacity="0.8"/>
+  <path d="M26,26 L14.5,40.6 A18,18 0 0,1 26,8 Z" fill="#16a34a" opacity="0.7"/>
+  <circle cx="26" cy="26" r="8" fill="white"/>
+  <circle cx="26" cy="26" r="5" fill="none" stroke="#1d3557" stroke-width="1.5"/>
+  <rect x="18" y="38" width="16" height="10" rx="3" fill="#1d3557" opacity="0.1" stroke="#1d3557" stroke-width="1.5"/>
+  <path d="M22,38 L22,36 Q22,34 24,34 L28,34 Q30,34 30,36 L30,38" fill="none" stroke="#1d3557" stroke-width="1.5" stroke-linecap="round"/>
+</svg></div>
+        <h3>Portfolio Management</h3>
+        <p>Track all your Indian equity holdings in one place. Understand your sector diversification, analyse weighted returns, and measure risk metrics like beta and Sharpe ratio for data-driven rebalancing.</p>
+        <span class="tool-arrow">Manage portfolio &rarr;</span>
+      </a>
+
+      <a href="/performance-analytics" class="tool-card">
+        <div class="tool-icon" style="background:#f0f9ff;padding:4px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" width="44" height="44">
+  <path d="M8,34 A20,20 0 0,1 44,34" fill="none" stroke="#e2e8f0" stroke-width="7" stroke-linecap="round"/>
+  <path d="M8,34 A20,20 0 0,1 26,14" fill="none" stroke="#16a34a" stroke-width="7" stroke-linecap="round" opacity="0.6"/>
+  <path d="M26,14 A20,20 0 0,1 44,34" fill="none" stroke="#f59e0b" stroke-width="7" stroke-linecap="round" opacity="0.5"/>
+  <path d="M8,34 A20,20 0 0,1 16,18" fill="none" stroke="#16a34a" stroke-width="7" stroke-linecap="round"/>
+  <line x1="26" y1="34" x2="36" y2="18" stroke="#1d3557" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="26" cy="34" r="4" fill="#1d3557"/>
+  <circle cx="26" cy="34" r="2" fill="white"/>
+  <line x1="12" y1="36" x2="14" y2="34" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="26" y1="15" x2="26" y2="17" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="40" y1="36" x2="38" y2="34" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="26" y="46" font-family="sans-serif" font-size="7" font-weight="700" fill="#457b9d" text-anchor="middle">PERFORMANCE</text>
+</svg></div>
+        <h3>Performance Analytics</h3>
+        <p>Measure how your portfolio truly stacks up. Compare risk-adjusted returns against Nifty 50, visualise drawdown periods, and identify which holdings are driving &mdash; or dragging &mdash; your overall performance.</p>
+        <span class="tool-arrow">See performance &rarr;</span>
+      </a>
+
+      <a href="/strategy-optimization" class="tool-card">
+        <div class="tool-icon" style="background:#f5f3ff;padding:4px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" width="44" height="44">
+  <circle cx="26" cy="26" r="20" fill="none" stroke="#7c3aed" stroke-width="2" opacity="0.2"/>
+  <circle cx="26" cy="26" r="14" fill="none" stroke="#7c3aed" stroke-width="2" opacity="0.35"/>
+  <circle cx="26" cy="26" r="8"  fill="none" stroke="#7c3aed" stroke-width="2" opacity="0.55"/>
+  <circle cx="26" cy="26" r="3.5" fill="#7c3aed"/>
+  <line x1="26" y1="6"  x2="26" y2="11" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <line x1="26" y1="41" x2="26" y2="46" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <line x1="6"  y1="26" x2="11" y2="26" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <line x1="41" y1="26" x2="46" y2="26" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <polyline points="38,8 44,8 44,14" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="28" y1="24" x2="44" y2="8" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/>
+</svg></div>
+        <h3>Strategy Optimization</h3>
+        <p>Design, backtest, and refine your investment strategies using historical Indian market data. Test momentum or rule-based approaches with transaction costs factored in &mdash; before risking real capital.</p>
+        <span class="tool-arrow">Optimise strategy &rarr;</span>
+      </a>
 
     </div>
   </div>
-</div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section style="padding:72px 24px 0;">
+  <div style="max-width:900px;margin:0 auto;">
+    <div style="text-align:center;margin-bottom:48px;">
+      <span class="section-tag">How It Works</span>
+      <h2 class="section-h">Start analyzing in 3 simple steps</h2>
+      <p class="section-sub">Get from zero to a full financial picture in under a minute.</p>
+    </div>
+    <div class="step-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">
+      <div class="step-card">
+        <div class="step-num">1</div>
+        <h3 style="font-weight:700;color:#1d3557;margin-bottom:8px;font-size:1rem;">Download from Screener.in</h3>
+        <p style="font-size:13.5px;color:#6b7280;line-height:1.6;">Go to screener.in, search your company, scroll to financials, and click the Excel button to download the .xlsx file.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">2</div>
+        <h3 style="font-weight:700;color:#1d3557;margin-bottom:8px;font-size:1rem;">Upload the File</h3>
+        <p style="font-size:13.5px;color:#6b7280;line-height:1.6;">Drop your downloaded Excel file into the analyzer below. Our system reads the "Data Sheet" tab and extracts all key numbers automatically.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">3</div>
+        <h3 style="font-weight:700;color:#1d3557;margin-bottom:8px;font-size:1rem;">Read Your Analysis</h3>
+        <p style="font-size:13.5px;color:#6b7280;line-height:1.6;">Instantly see 10 years of P&amp;L, Balance Sheet, and Cash Flow data in a clean format &mdash; no spreadsheet skills required.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- UPLOAD / ANALYZER -->
+<section id="analyze" style="padding:72px 24px 0;">
+  <div style="max-width:760px;margin:0 auto;">
+    <div style="text-align:center;margin-bottom:40px;">
+      <span class="section-tag">Stock Analyzer</span>
+      <h2 class="section-h">&#x1F4CA; Analyze a Stock Now</h2>
+      <p class="section-sub">Upload your Screener.in Excel file and get 10 years of financial data instantly.</p>
+    </div>
+    <div class="upload-card">
+      <div style="background:linear-gradient(135deg,#eff8ff,#e0f0ff);border:1px solid #bde0ff;border-radius:14px;padding:20px;margin-bottom:24px;">
+        <p style="font-weight:700;font-size:14px;color:#1d4e89;margin-bottom:8px;">&#x1F4CB; How to get the Excel file from Screener.in:</p>
+        <ol style="list-style:decimal;padding-left:20px;font-size:13.5px;color:#2563ab;line-height:1.9;">
+          <li>Go to <strong>screener.in</strong> and search for your company</li>
+          <li>Scroll down to the financial statements section</li>
+          <li>Click the <strong>Excel</strong> button (top right of financials)</li>
+          <li>Upload the downloaded <strong>.xlsx file</strong> below &#x2705;</li>
+        </ol>
+        <p style="margin-top:10px;font-size:12px;color:#3b82f6;">&#x1F4A1; The Excel contains a "Data Sheet" tab with 10 years of P&amp;L, Balance Sheet and Cash Flow data &mdash; all extracted instantly.</p>
+      </div>
+      <form id="analyzeForm" enctype="multipart/form-data">
+        <div style="margin-bottom:20px;">
+          <label style="display:block;font-weight:700;font-size:14px;color:#1d3557;margin-bottom:10px;">
+            Upload Screener.in Excel File <span style="color:var(--brand);font-weight:500;font-size:12px;">(.xlsx &mdash; single file)</span>
+          </label>
+          <!-- File input overlays the entire drop zone — works on all browsers/devices -->
+          <div style="position:relative;">
+          <input type="file" id="fileInput" name="files" accept=".xlsx,.xls" required
+            style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;font-size:0;">
+          <div class="file-drop" id="dropZone">
+            <div style="margin-bottom:12px;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" width="48" height="48">
+                <rect x="6" y="34" width="7" height="12" rx="2" fill="#457b9d" opacity="0.4"/>
+                <rect x="16" y="26" width="7" height="20" rx="2" fill="#457b9d" opacity="0.6"/>
+                <rect x="26" y="18" width="7" height="28" rx="2" fill="#457b9d" opacity="0.8"/>
+                <rect x="36" y="10" width="7" height="36" rx="2" fill="#1d3557"/>
+                <polyline points="9.5,33 19.5,25 29.5,17 39.5,9" fill="none" stroke="#457b9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="9.5" cy="33" r="1.5" fill="#457b9d"/>
+                <circle cx="39.5" cy="9" r="2" fill="#1d3557"/>
+              </svg>
+            </div>
+            <p style="font-weight:700;color:#1d3557;font-size:15px;margin-bottom:4px;">Click to upload or drag &amp; drop</p>
+            <p style="font-size:13px;color:#9ca3af;">.xlsx files from screener.in only</p>
+            <div id="fileNameDisplay" style="display:none;margin-top:12px;background:var(--brand-light);color:var(--brand);font-size:13px;font-weight:600;padding:6px 16px;border-radius:20px;"></div>
+          </div>
+          </div><!-- /drop zone wrapper -->
+          <p style="font-size:12px;color:#9ca3af;margin-top:8px;">Download from screener.in &rarr; company page &rarr; Excel button. Contains 10 years of annual data.</p>
+        </div>
+        <button type="submit" id="submitBtn" class="btn-primary">&#x1F50D; Analyze Financials</button>
+      </form>
+      <div id="result" class="mt-10 hidden">
+        <div style="background:linear-gradient(135deg,#f0f8ff,#e8f4fd);padding:28px;border-radius:18px;border:1px solid #bde0ff;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+            <h2 style="font-size:1.2rem;font-weight:800;color:#1d3557;">&#x1F4C8; Analysis Results</h2>
+            <span id="statusBadge" class="hidden" style="font-size:12px;background:#dcfce7;color:#166534;padding:4px 12px;border-radius:20px;font-weight:700;"></span>
+          </div>
+          <div id="resultCards" class="space-y-8"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div style="max-width:1100px;margin:0 auto;">
+    <div class="footer-grid" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;">
+      <div>
+        <div class="footer-logo" style="font-family:'Playfair Display',serif;font-weight:700;display:flex;align-items:center;gap:8px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="28" height="28" style="flex-shrink:0;"><rect width="100" height="100" rx="22" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.2)" stroke-width="2"/><line x1="18" y1="20" x2="18" y2="80" stroke="white" stroke-width="10" stroke-linecap="round"/><line x1="18" y1="20" x2="50" y2="20" stroke="white" stroke-width="10" stroke-linecap="round"/><line x1="18" y1="50" x2="44" y2="50" stroke="white" stroke-width="9" stroke-linecap="round"/><line x1="58" y1="80" x2="80" y2="20" stroke="white" stroke-width="9.5" stroke-linecap="round"/><line x1="102" y1="80" x2="80" y2="20" stroke="white" stroke-width="9.5" stroke-linecap="round"/><polyline points="64,59 80,42 96,59" fill="none" stroke="#a8dadc" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg> Financial Analyzer</div>
+        <p class="footer-tagline">A free, open financial analysis platform built for Indian retail investors and finance students.</p>
+        <span class="badge-free">&#x2705; 100% Free &mdash; No signup for home page</span>
+      </div>
+      <div class="footer-col">
+        <h4>Tools</h4>
+        <a href="/">Stock Analyzer</a>
+        <a href="/dcf">DCF Valuation</a>
+        <a href="/financial-modelling">Financial Modelling</a>
+        <a href="/technical-analysis">Technical Analysis</a>
+        <a href="/portfolio-management">Portfolio Management</a>
+        <a href="/performance-analytics">Performance Analytics</a>
+        <a href="/strategy-optimization">Strategy Optimization</a>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <a href="https://screener.in" target="_blank" rel="noopener">Screener.in &#x2197;</a>
+        <a href="https://nseindia.com" target="_blank" rel="noopener">NSE India &#x2197;</a>
+        <a href="https://bseindia.com" target="_blank" rel="noopener">BSE India &#x2197;</a>
+        <a href="https://moneycontrol.com" target="_blank" rel="noopener">Money Control &#x2197;</a>
+      </div>
+      <div class="footer-col">
+        <h4>Account</h4>
+        <a href="/login">Sign In</a>
+        <a href="/login">Create Account</a>
+      </div>
+    </div>
+    <hr class="footer-divider">
+    <div class="footer-bottom">
+      <span>&copy; 2025 Financial Analyzer. All rights reserved.</span>
+      <span>Made with &#x2764;&#xFE0F; for Indian investors</span>
+      <span>Data sourced from Screener.in &mdash; always verify before investing.</span>
+    </div>
+  </div>
+</footer>
 
 <script>
-const form = document.getElementById('analyzeForm');
-const resultSection = document.getElementById('result');
-const resultCards = document.getElementById('resultCards');
-const statusBadge = document.getElementById('statusBadge');
-const submitBtn = document.getElementById('submitBtn');
+document.addEventListener('DOMContentLoaded', function() {
+  // Mobile menu
+  const btn=document.getElementById('mobile-menu-btn'),menu=document.getElementById('mobile-menu'),mi=document.getElementById('menu-icon'),ci=document.getElementById('close-icon');
+  if(btn){btn.addEventListener('click',()=>{menu.classList.toggle('hidden');mi.classList.toggle('hidden');ci.classList.toggle('hidden');});}
+  const cp=window.location.pathname;
+  document.querySelectorAll('.nav-link,#mobile-menu a').forEach(l=>{if(l.getAttribute('href')===cp)l.classList.add('bg-white','bg-opacity-20','font-semibold');});
 
-const SECTION_ICONS = {
-  'Income Statement': '💰',
-  'Balance Sheet': '🏦',
-  'Cash Flow': '💸',
-};
+  // File drop zone — input overlays zone, click handled natively
+  const dropZone=document.getElementById('dropZone'),fileInput=document.getElementById('fileInput'),fnDisplay=document.getElementById('fileNameDisplay');
 
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
+  fileInput.addEventListener('change',()=>{
+    if(fileInput.files.length>0){fnDisplay.textContent='\u2705 '+fileInput.files[0].name;fnDisplay.style.display='inline-block';}
+  });
 
-  const fileInput = form.querySelector('input[type="file"]');
-  const files = fileInput.files;
-
-  // Validate file count: 5 to 8
-  if (files.length < 5) {
-    alert(`Please upload at least 5 annual report PDFs. You selected ${files.length}.`);
-    return;
-  }
-  if (files.length > 8) {
-    alert(`Maximum 8 PDFs allowed. You selected ${files.length}. Please remove some.`);
-    return;
-  }
-
-  const fileNames = Array.from(files).map(f => f.name);
-
-  // UI: loading state
-  submitBtn.disabled = true;
-  submitBtn.textContent = '⏳ Extracting data...';
-  resultSection.classList.remove('hidden');
-  statusBadge.classList.add('hidden');
-  resultCards.innerHTML = `
-    <div class="space-y-3">
-      <div class="text-blue-600 font-medium animate-pulse">📄 Processing ${files.length} annual reports...</div>
-      <div class="space-y-1">
-        ${fileNames.map(n => `<div class="text-gray-500 text-sm flex items-center gap-2"><span class="animate-pulse">⏳</span> ${n}</div>`).join('')}
-      </div>
-      <div class="text-gray-400 text-xs mt-2">Extracting Income Statement, Balance Sheet and Cash Flow from each file...</div>
-      <div class="w-full bg-gray-200 rounded-full h-2 mt-3">
-        <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width:60%"></div>
-      </div>
-    </div>`;
-
-  const formData = new FormData(form);
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
-
-    const response = await fetch('/analyze', {
-      method: 'POST',
-      body: formData,
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-
-    const text = await response.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error('Server returned invalid response. The PDF may have taken too long to process.');
+  dropZone.addEventListener('dragover',(e)=>{e.preventDefault();e.stopPropagation();dropZone.classList.add('drag-over');});
+  dropZone.addEventListener('dragleave',(e)=>{e.stopPropagation();dropZone.classList.remove('drag-over');});
+  dropZone.addEventListener('drop',(e)=>{
+    e.preventDefault();e.stopPropagation();
+    dropZone.classList.remove('drag-over');
+    const files=e.dataTransfer.files;
+    if(files.length>0){
+      try{const dt2=new DataTransfer();dt2.items.add(files[0]);fileInput.files=dt2.files;}catch(ex){console.warn('DataTransfer assign failed',ex);}
+      fnDisplay.textContent='\u2705 '+files[0].name;
+      fnDisplay.style.display='inline-block';
     }
+  });
 
-    // Handle server-side validation errors
-    if (data.error) {
-      throw new Error(data.error);
-    }
-
-    const sections = Object.keys(data).filter(k => !data[k].error);
-    const errors   = Object.keys(data).filter(k =>  data[k].error);
-
-    if (sections.length === 0) {
-      resultCards.innerHTML = `
-        <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-5 text-yellow-800">
-          <p class="font-semibold mb-2">⚠️ No financial data could be extracted from any of the ${fileNames.length} files</p>
-          <p class="text-sm mb-3">This usually means the PDFs are image/scanned files. Try these sources instead:</p>
-          <ul class="text-sm list-disc list-inside space-y-1">
-            <li><strong>BSE India</strong> — bseindia.com → company → Annual Reports</li>
-            <li><strong>Company website</strong> → Investor Relations → Annual Reports</li>
-            <li><strong>Screener.in</strong> → company page → export PDF</li>
-          </ul>
-          <p class="text-xs mt-3 text-yellow-600">✅ These sources provide text-based PDFs that work perfectly.</p>
-        </div>`;
-      statusBadge.textContent = '⚠️ No data found';
-      statusBadge.className = 'text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full';
-      statusBadge.classList.remove('hidden');
-      return;
-    }
-
-    statusBadge.textContent = `✅ ${fileNames.length} files processed — Found: ${sections.join(', ')}`;
-    statusBadge.className = 'text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full';
-    statusBadge.classList.remove('hidden');
-    renderCards(data);
-
-  } catch (err) {
-    const msg = err.name === 'AbortError'
-      ? 'Request timed out (>2 min). The PDF is likely a scanned image. Please use a BSE/company website PDF instead.'
-      : err.message;
-    resultCards.innerHTML = `
-      <div class="bg-red-50 border border-red-200 rounded-xl p-5 text-red-700">
-        <p class="font-semibold mb-1">❌ Error</p>
-        <p class="text-sm">${msg}</p>
-      </div>`;
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = '🔍 Analyze Annual Reports';
-  }
+  // Smooth scroll
+  document.querySelectorAll('a[href^="#"]').forEach(a=>{a.addEventListener('click',function(e){const t=document.querySelector(this.getAttribute('href'));if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth',block:'start'});}});});
 });
 
-function renderCards(data) {
-  resultCards.innerHTML = '';
+const form=document.getElementById('analyzeForm'),resultSection=document.getElementById('result'),resultCards=document.getElementById('resultCards'),statusBadge=document.getElementById('statusBadge'),submitBtn=document.getElementById('submitBtn');
+const ICONS={'Income Statement':'\u1F4B0','Balance Sheet':'\u1F3E6','Cash Flow':'\u1F4B8'};
 
-  for (const section in data) {
-    const sectionData = data[section];
-    if (sectionData.error) continue;
+form.addEventListener('submit',async(e)=>{
+  e.preventDefault();
+  const fi=document.getElementById('fileInput'),files=fi.files;
+  if(!files.length){alert('Please select a Screener.in Excel file (.xlsx).');return;}
+  const file=files[0];
+  if(!file.name.match(/\.xlsx?$/i)){alert('Please upload a .xlsx file downloaded from screener.in');return;}
+  submitBtn.disabled=true;submitBtn.innerHTML='\u23F3 Analyzing...';
+  resultSection.classList.remove('hidden');statusBadge.classList.add('hidden');
+  resultCards.innerHTML='<div style="color:#457b9d;font-weight:700;" class="animate-pulse">&#x1F4CA; Reading: <strong>'+file.name+'</strong></div><div style="color:#9ca3af;font-size:14px;margin-top:8px;">Extracting 10 years of financial data...</div><div style="background:#e2e8f0;border-radius:99px;height:8px;margin-top:16px;"><div style="background:linear-gradient(90deg,#457b9d,#6aafcf);height:8px;border-radius:99px;width:40%;"></div></div>';
+  const formData=new FormData(form);
+  let poll=null;
+  function stop(){if(poll){clearInterval(poll);poll=null;}submitBtn.disabled=false;submitBtn.innerHTML='&#x1F50D; Analyze Financials';}
+  function err(msg){resultCards.innerHTML='<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:14px;padding:20px;color:#991b1b;"><p style="font-weight:700;margin-bottom:6px;">&#x274C; Error</p><p style="font-size:14px;">'+msg+'</p></div>';stop();}
+  function prog(job){const pct=job.percent||0;resultCards.innerHTML='<div style="color:#457b9d;font-weight:700;">&#x1F4C4; Processing...</div><div style="color:#6b7280;font-size:14px;margin-top:6px;">'+( job.progress||'Working...')+'</div><div style="background:#e2e8f0;border-radius:99px;height:10px;margin-top:12px;"><div style="background:linear-gradient(90deg,#457b9d,#6aafcf);height:10px;border-radius:99px;width:'+pct+'%;transition:width .5s ease;"></div></div><div style="font-size:12px;color:#9ca3af;margin-top:6px;">'+pct+'% complete</div>';}
+  try{
+    const res=await fetch('/analyze',{method:'POST',body:formData}),data=await res.json();
+    if(data.error){err(data.error);return;}
+    const jid=data.job_id;if(!jid){err('Server did not return a job ID.');return;}
+    let sc=0;
+    poll=setInterval(async()=>{
+      try{
+        const r=await fetch('/analyze/status/'+jid),job=await r.json();
+        if(job.status==='queued'||job.status==='processing'){sc=0;prog(job);return;}
+        if(job.status==='error'){err(job.error||'Processing failed.');return;}
+        if(job.status==='done'){
+          stop();const result=job.result||{};const secs=Object.keys(result);
+          if(!secs.length){resultCards.innerHTML='<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:14px;padding:20px;color:#92400e;">&#x26A0;&#xFE0F; No financial data found. Ensure this is a Screener.in Excel export.</div>';statusBadge.textContent='\u26A0\uFE0F No data found';statusBadge.style.background='#fef3c7';statusBadge.style.color='#92400e';statusBadge.classList.remove('hidden');return;}
+          statusBadge.textContent='\u2705 '+file.name+' \u2014 Found: '+secs.join(', ');statusBadge.classList.remove('hidden');renderCards(result);return;
+        }
+        sc++;if(sc>20)err('Processing stalled.');
+      }catch(pe){sc++;if(sc>10)err('Connection lost after retries.');}
+    },3000);
+  }catch(e2){err(e2.message||'Upload failed.');}
+});
 
-    const icon = SECTION_ICONS[section] || '📌';
-
-    // Count non-empty fields
-    const filledFields = Object.entries(sectionData)
-      .filter(([k, v]) => k !== 'Statement' && v !== null && !(Array.isArray(v) && v.length === 0)).length;
-    const totalFields = Object.keys(sectionData).filter(k => k !== 'Statement').length;
-
-    const block = document.createElement('div');
-    block.className = "bg-white p-6 rounded-2xl shadow border border-gray-200";
-    block.innerHTML = `
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-bold text-blue-700 flex items-center gap-2">
-          ${icon} ${section}
-        </h3>
-        <span class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full">
-          ${filledFields}/${totalFields} fields
-        </span>
-      </div>`;
-
-    const grid = document.createElement('div');
-    grid.className = "grid md:grid-cols-2 lg:grid-cols-3 gap-4";
-
-    for (const key in sectionData) {
-      if (key === 'Statement') continue;
-      const value = sectionData[key];
-      const isEmpty = value === null || value === undefined || value === '' ||
-                      (Array.isArray(value) && value.length === 0);
-      if (isEmpty) continue; // skip empty fields — cleaner UI
-
-      const card = document.createElement('div');
-      card.className = "bg-gray-50 p-4 rounded-xl border hover:shadow-md transition";
-      card.innerHTML = `
-        <div class="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">${key}</div>
-        <div class="text-gray-900 text-sm leading-relaxed">${formatValue(value)}</div>`;
+function renderCards(data){
+  resultCards.innerHTML='';
+  for(const sec in data){
+    const sd=data[sec];
+    if(sd.error){const eb=document.createElement('div');eb.style.cssText='background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:16px;color:#991b1b;font-size:14px;margin-bottom:12px;';eb.innerHTML='<strong>'+sec+':</strong> '+sd.error;resultCards.appendChild(eb);continue;}
+    const icon={'Income Statement':'\uD83D\uDCB0','Balance Sheet':'\uD83C\uDFE6','Cash Flow':'\uD83D\uDCB8'}[sec]||'\uD83D\uDCCC';
+    const years=sd['Years']||[];
+    const block=document.createElement('div');
+    block.style.cssText='background:#fff;border-radius:16px;padding:24px;border:1px solid #e2e8f0;margin-bottom:16px;transition:box-shadow .2s;';
+    block.onmouseenter=()=>block.style.boxShadow='0 6px 20px rgba(0,0,0,.08)';
+    block.onmouseleave=()=>block.style.boxShadow='';
+    block.innerHTML='<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;"><h3 style="font-size:1.1rem;font-weight:800;color:#1d3557;">'+icon+' '+sec+'</h3><div style="display:flex;flex-wrap:wrap;gap:4px;">'+years.map(y=>'<span style="font-size:11px;background:#f1f5f9;color:#64748b;padding:3px 8px;border-radius:6px;font-family:monospace;">'+y+'</span>').join('') +'</div></div>';
+    const grid=document.createElement('div');
+    grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;';
+    for(const key in sd){
+      if(['Statement','Years'].includes(key))continue;
+      const val=sd[key];
+      const empty=val===null||val===undefined||val===''||(Array.isArray(val)&&!val.length);
+      if(empty)continue;
+      const isArr=Array.isArray(val)&&val.length>1;
+      const card=document.createElement('div');
+      card.style.cssText='background:#f8fafc;padding:16px;border-radius:12px;border:1px solid #e2e8f0;transition:box-shadow .2s;'+( isArr?'grid-column:1/-1;':'')+'';
+      card.onmouseenter=()=>card.style.boxShadow='0 4px 14px rgba(0,0,0,.08)';
+      card.onmouseleave=()=>card.style.boxShadow='';
+      card.innerHTML='<div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">'+key+'</div><div style="color:#1d3557;font-size:14px;">'+fmtVal(val,years)+'</div>';
       grid.appendChild(card);
     }
-
-    block.appendChild(grid);
-    resultCards.appendChild(block);
+    block.appendChild(grid);resultCards.appendChild(block);
   }
 }
 
-function formatValue(value) {
-  if (Array.isArray(value)) {
-    if (value.length === 0) return '<span class="text-gray-400 text-xs">—</span>';
-    return `<div class="flex flex-wrap gap-1">
-      ${value.map(v => `<span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-mono font-semibold">${v}</span>`).join('')}
-    </div>`;
+function fmtVal(v,years){
+  if(Array.isArray(v)){
+    if(!v.length)return'<span style="color:#9ca3af;font-size:12px;">\u2014</span>';
+    return'<div style="display:flex;flex-wrap:wrap;gap:8px;">'+v.map((n,i)=>{const yr=years&&years[i]?years[i]:'';const neg=typeof n==='number'&&n<0;const s=neg?'background:#fef2f2;color:#dc2626;border:1px solid #fecaca;':'background:#eff8ff;color:#1e40af;border:1px solid #bde0ff;';return'<div style="'+s+'border-radius:10px;padding:8px 12px;text-align:center;min-width:68px;transition:transform .2s;" onmouseenter="this.style.transform='scale(1.05)'" onmouseleave="this.style.transform=''"><div style="font-size:10px;color:#9ca3af;margin-bottom:2px;">'+yr+'</div><div style="font-weight:700;font-size:13px;font-family:monospace;">'+( n===null||n===undefined?'\u2014':n)+'</div></div>';}).join('')+ '</div>';
   }
-  if (value === null || value === '' || value === undefined)
-    return '<span class="text-gray-400 text-xs">—</span>';
-  return `<span class="font-bold text-gray-800 text-base">${value}</span>`;
+  if(v===null||v===''||v===undefined)return'<span style="color:#9ca3af;font-size:12px;">\u2014</span>';
+  const neg=typeof v==='number'&&v<0;
+  return'<span style="font-weight:700;font-size:16px;color:'+(neg?'#dc2626':'#1d3557')+';">'+v+'</span>';
 }
 </script>
-
 </body>
 </html>
