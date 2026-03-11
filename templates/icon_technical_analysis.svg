@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="16" fill="#fdf4ff"/>
+  <line x1="12" y1="8" x2="12" y2="56" stroke="#9333ea" stroke-width="1.5" stroke-linecap="round" opacity="0.18"/>
+  <line x1="12" y1="14" x2="12" y2="28" stroke="#9333ea" stroke-width="2" stroke-linecap="round"/>
+  <rect x="8.5" y="28" width="7" height="16" rx="2" fill="#9333ea" opacity="0.8"/>
+  <line x1="12" y1="44" x2="12" y2="52" stroke="#9333ea" stroke-width="2" stroke-linecap="round"/>
+  <line x1="26" y1="8" x2="26" y2="56" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round" opacity="0.18"/>
+  <line x1="26" y1="10" x2="26" y2="22" stroke="#16a34a" stroke-width="2" stroke-linecap="round"/>
+  <rect x="22.5" y="22" width="7" height="20" rx="2" fill="#16a34a" opacity="0.8"/>
+  <line x1="26" y1="42" x2="26" y2="52" stroke="#16a34a" stroke-width="2" stroke-linecap="round"/>
+  <line x1="40" y1="8" x2="40" y2="56" stroke="#e11d48" stroke-width="1.5" stroke-linecap="round" opacity="0.18"/>
+  <line x1="40" y1="12" x2="40" y2="24" stroke="#e11d48" stroke-width="2" stroke-linecap="round"/>
+  <rect x="36.5" y="24" width="7" height="18" rx="2" fill="#e11d48" opacity="0.8"/>
+  <line x1="40" y1="42" x2="40" y2="52" stroke="#e11d48" stroke-width="2" stroke-linecap="round"/>
+  <line x1="54" y1="8" x2="54" y2="56" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round" opacity="0.18"/>
+  <line x1="54" y1="8" x2="54" y2="18" stroke="#16a34a" stroke-width="2" stroke-linecap="round"/>
+  <rect x="50.5" y="18" width="7" height="22" rx="2" fill="#16a34a"/>
+  <line x1="54" y1="40" x2="54" y2="50" stroke="#16a34a" stroke-width="2" stroke-linecap="round"/>
+  <polyline points="12,36 26,32 40,34 54,28" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4,2.5"/>
+</svg>
