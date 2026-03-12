@@ -9,11 +9,33 @@ def fmt(v):
     return float(v)
 
 def find_row(df, label):
+    """Find a row by label — exact match first, then partial (handles Screener variations)."""
+    if df.empty:
+        return None
+    label_l = label.strip().lower()
+    # Pass 1: exact match
     for i in range(df.shape[0]):
         val = df.iloc[i, 0]
-        if isinstance(val, str) and val.strip().lower() == label.lower():
+        if isinstance(val, str) and val.strip().lower() == label_l:
+            return i
+    # Pass 2: substring match (minor label differences across Screener versions)
+    for i in range(df.shape[0]):
+        val = df.iloc[i, 0]
+        if isinstance(val, str) and label_l in val.strip().lower():
             return i
     return None
+
+
+def _read_cf_sheet(file):
+    """Try multiple possible Cash Flow sheet names from Screener exports."""
+    for name in ("Cash Flow Data", "Cash Flow Statement", "Cash Flows",
+                 "Cashflow", "Cash flow", "Cash Flow"):
+        try:
+            return pd.read_excel(file, engine="openpyxl",
+                                 sheet_name=name, header=None)
+        except Exception:
+            continue
+    return pd.DataFrame()
 
 
 # ===============================
@@ -25,7 +47,7 @@ def run_historical_fs(file):
     # READ SHEETS
     # ===============================
     bs_df = pd.read_excel(file, engine="openpyxl", sheet_name="Balance Sheet & P&L", header=None)
-    cf_df = pd.read_excel(file, engine="openpyxl", sheet_name="Cash Flow Data", header=None)
+    cf_df = _read_cf_sheet(file)
 
     # ===============================
     # YEARS (B16 onward)
@@ -858,9 +880,9 @@ def run_fcff(file):
     
     # Read Balance Sheet & P&L for Interest and Tax data
     bs_df = pd.read_excel(file, engine="openpyxl", sheet_name="Balance Sheet & P&L", header=None)
-    
+
     # Read Cash Flow Data for CFO and CAPEX
-    cf_df = pd.read_excel(file, engine="openpyxl", sheet_name="Cash Flow Data", header=None)
+    cf_df = _read_cf_sheet(file)
     
     YEAR_ROW_BS = 15
     START_COL = 1
@@ -1061,14 +1083,14 @@ def run_wacc(file, beta=None, risk_free_rate=7.1, equity_risk_premium=5.5, cost_
     # FIX 5: Use actual historical price × shares for market cap
     book_equity = [equity_capital[i] + reserves[i] for i in range(n)]
 
-    # Try to get historical prices from row 89 (PRICE row in Screener Excel)
+    # Dynamically find PRICE row (do not hardcode row 89 — it varies by Screener export)
     num_shares_row = find_row(bs_df, "Adjusted Equity Shares in Cr")
+    PRICE_ROW = find_row(bs_df, "Price") or find_row(bs_df, "Market Price") or find_row(bs_df, "Share Price")
     market_equity = []
-    PRICE_ROW = 89
 
     for i in range(n):
         try:
-            price  = fmt(bs_df.iloc[PRICE_ROW, START_COL + i]) if PRICE_ROW < bs_df.shape[0] else None
+            price  = fmt(bs_df.iloc[PRICE_ROW, START_COL + i]) if PRICE_ROW is not None else None
             shares = fmt(bs_df.iloc[num_shares_row, START_COL + i]) if num_shares_row is not None else None
             if price and shares and price > 0 and shares > 0:
                 market_equity.append(round(price * shares, 2))
@@ -1191,9 +1213,12 @@ def run_terminal_value_dcf(file, cost_of_equity=13.0, growth_rate=4.0, forecast_
     current_wacc = wacc_result["current_wacc"]
     wacc_decimal = current_wacc / 100
     
-    # Validate growth rate
+    # Clamp growth rate to be safely below WACC (never raise — just fix it)
+    if current_wacc <= 0:
+        current_wacc = 12.0   # sensible default if WACC calculation failed
+        wacc_decimal = current_wacc / 100
     if growth_rate >= current_wacc:
-        raise ValueError(f"Growth rate ({growth_rate}%) must be less than WACC ({current_wacc}%)")
+        growth_rate = round(current_wacc * 0.4, 2)   # cap at 40% of WACC
     
     growth_decimal = growth_rate / 100
     
@@ -1208,8 +1233,14 @@ def run_terminal_value_dcf(file, cost_of_equity=13.0, growth_rate=4.0, forecast_
             fcff_values = values
             break
     
-    if fcff_values is None:
-        raise ValueError("Could not find FCFF values")
+    if fcff_values is None or all(v == 0 for v in fcff_values):
+        # FCFF could not be computed — return informative error dict
+        return {
+            "error": "Could not calculate FCFF from this Excel file. "
+                     "Ensure your Screener Excel has a 'Cash Flow Data' sheet.",
+            "years": historical_years,
+            "fcff_data": [],
+        }
     
     n_historical = len(fcff_values)
     
@@ -1476,11 +1507,14 @@ def run_altman_zscore(file):
     # Metadata
     num_shares_in_cr = val("Adjusted Equity Shares in Cr")  # Adjusted shares per year
     
-    # Get historical stock prices (Row 89 - PRICE row)
+    # Dynamically find PRICE row instead of hardcoding row 89
+    PRICE_ROW_ALT = find_row(bs_df, "Price") or find_row(bs_df, "Market Price") or find_row(bs_df, "Share Price")
     stock_prices = []
-    price_row = 89
     for i in range(n):
-        price = fmt(bs_df.iloc[price_row, START_COL + i])
+        try:
+            price = fmt(bs_df.iloc[PRICE_ROW_ALT, START_COL + i]) if PRICE_ROW_ALT is not None else 0
+        except Exception:
+            price = 0
         stock_prices.append(price)
     
     # ===============================
