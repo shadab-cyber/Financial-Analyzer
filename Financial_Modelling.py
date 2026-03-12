@@ -741,132 +741,244 @@ def run_common_size_statement(file):
 # ===============================
 def run_forecasting(file, forecast_years=5):
     """
-    Forecast Sales, EBITDA, and EPS using linear regression
-    (replicates Excel's FORECAST function)
-    forecast_years: number of years to forecast into the future
+    Forecast Sales, EBITDA, Net Profit, and EPS using a mean-reversion model.
+
+    Method:
+    - Sales growth: weighted CAGR (recent 3Y weighted 2x vs older history)
+      that mean-reverts toward long-run GDP (7% nominal) by year 5.
+    - EBITDA margin: reverts from current margin toward its own 5-year average.
+    - Net Profit and EPS derived from forecasted EBITDA × historical effective tax rate.
+    - Caps: sales growth capped at 50% / -30%, margin capped at 60% / 0%.
+
+    This avoids the straight-line extrapolation flaw of linear regression and
+    reflects real analyst practice (mean-reversion DCF modelling).
     """
-    
+    import numpy as np
+
     # Get Historical FS data
     historical_data = run_historical_fs(file)
     years = historical_data["years"]
     n = len(years)
-    
-    # Helper function to get values from historical data
+
     def get_hist_values(label):
         for item_label, values in historical_data["income_statement"]:
             if item_label == label:
                 return values
+        for item_label, values in historical_data.get("balance_sheet", []):
+            if item_label == label:
+                return values
         return [0] * n
-    
-    # Get historical data for forecasting
-    sales = get_hist_values("Sales")
-    ebitda = get_hist_values("EBITDA")
-    eps = get_hist_values("EPS")
-    
-    # Prepare data for linear regression
-    # Year weights: 1, 2, 3, ..., n
-    year_weights = list(range(1, n + 1))
-    
-    # Import numpy for linear regression calculation
-    import numpy as np
-    
-    # Manual linear regression calculation (to avoid sklearn dependency)
-    def linear_regression_forecast(x_values, y_values, future_x):
-        """
-        Calculate linear regression and forecast
-        y = mx + b
-        """
-        x = np.array(x_values)
-        y = np.array(y_values)
-        
-        # Calculate slope (m) and intercept (b)
-        n_points = len(x)
-        m = (n_points * np.sum(x * y) - np.sum(x) * np.sum(y)) / (n_points * np.sum(x ** 2) - np.sum(x) ** 2)
-        b = (np.sum(y) - m * np.sum(x)) / n_points
-        
-        # Forecast future values
-        forecasted = [round(m * xi + b, 2) for xi in future_x]
-        
-        return forecasted, m, b
-    
-    # Generate future year weights
-    future_year_weights = list(range(n + 1, n + forecast_years + 1))
-    
-    # Forecast Sales
-    sales_forecast, sales_slope, sales_intercept = linear_regression_forecast(year_weights, sales, future_year_weights)
-    
-    # Forecast EBITDA
-    ebitda_forecast, ebitda_slope, ebitda_intercept = linear_regression_forecast(year_weights, ebitda, future_year_weights)
-    
-    # Forecast EPS
-    eps_forecast, eps_slope, eps_intercept = linear_regression_forecast(year_weights, eps, future_year_weights)
-    
-    # Calculate growth rates
-    sales_growth = [""] + [round(((sales_forecast[i] / sales_forecast[i-1]) - 1) * 100, 2) for i in range(1, forecast_years)]
-    ebitda_growth = [""] + [round(((ebitda_forecast[i] / ebitda_forecast[i-1]) - 1) * 100, 2) for i in range(1, forecast_years)]
-    eps_growth = [""] + [round(((eps_forecast[i] / eps_forecast[i-1]) - 1) * 100, 2) for i in range(1, forecast_years)]
+
+    sales           = get_hist_values("Sales")
+    ebitda          = get_hist_values("EBITDA")
+    net_profit      = get_hist_values("Net Profit")
+    eps             = get_hist_values("EPS")
+    depreciation    = get_hist_values("Depreciation")
+    interest        = get_hist_values("Interest")
+    tax             = get_hist_values("Tax")
+    ebt             = get_hist_values("EBT")
+    equity_shares   = get_hist_values("No. of Equity Shares")
+
+    # ─── Sales Growth: Weighted CAGR ──────────────────────────────────────────
+    # Use last 3Y CAGR (weight=2) blended with full-history CAGR (weight=1)
+    def safe_cagr(start, end, periods):
+        if start and end and start > 0 and periods > 0:
+            return (end / start) ** (1 / periods) - 1
+        return 0.0
+
+    # Use only positive sales values
+    valid_sales = [(i, s) for i, s in enumerate(sales) if s > 0]
+    if len(valid_sales) >= 4:
+        cagr_3y   = safe_cagr(valid_sales[-4][1], valid_sales[-1][1], 3)
+        cagr_full = safe_cagr(valid_sales[0][1],  valid_sales[-1][1], len(valid_sales) - 1)
+    elif len(valid_sales) >= 2:
+        cagr_3y   = safe_cagr(valid_sales[-2][1], valid_sales[-1][1], 1)
+        cagr_full = cagr_3y
+    else:
+        cagr_3y = cagr_full = 0.07
+
+    blended_growth = (2 * cagr_3y + 1 * cagr_full) / 3
+    blended_growth = max(-0.30, min(0.50, blended_growth))  # cap ±50%/-30%
+
+    # Long-run mean reversion target: 7% nominal GDP
+    LT_GROWTH = 0.07
+
+    # ─── EBITDA margin: revert toward 5Y mean ────────────────────────────────
+    valid_ebitda_margins = [
+        ebitda[i] / sales[i] for i in range(n)
+        if sales[i] > 0 and ebitda[i] > 0
+    ]
+    current_margin  = valid_ebitda_margins[-1] if valid_ebitda_margins else 0.15
+    avg_margin_5y   = (sum(valid_ebitda_margins[-5:]) / len(valid_ebitda_margins[-5:])
+                       if len(valid_ebitda_margins) >= 2 else current_margin)
+    # Reversion speed: 30% per year toward 5Y average
+    REVERSION_SPEED = 0.30
+
+    # ─── Tax rate: 5Y average of profitable years ────────────────────────────
+    tax_rates = []
+    for i in range(n):
+        if ebt[i] > 0 and tax[i] >= 0:
+            r = min(max(tax[i] / ebt[i], 0), 0.50)
+            tax_rates.append(r)
+    avg_tax_rate = sum(tax_rates) / len(tax_rates) if tax_rates else 0.25
+
+    # ─── Depreciation as % of last sales ─────────────────────────────────────
+    dep_ratios = [depreciation[i] / sales[i] for i in range(n) if sales[i] > 0]
+    avg_dep_ratio = sum(dep_ratios[-3:]) / len(dep_ratios[-3:]) if dep_ratios else 0.04
+
+    # ─── Interest: keep flat at last year value ───────────────────────────────
+    last_interest = interest[-1] if interest else 0
+
+    # ─── Shares: use last known value ────────────────────────────────────────
+    last_shares = equity_shares[-1] if equity_shares and equity_shares[-1] else 1
+
+    # ─── Generate forecasts year by year ─────────────────────────────────────
+    last_sales = valid_sales[-1][1] if valid_sales else 1
+
+    sales_forecast, ebitda_forecast, np_forecast, eps_forecast = [], [], [], []
+    margin_t = current_margin
+
+    for yr in range(1, forecast_years + 1):
+        # Sales growth: linearly mean-reverts from blended_growth → LT_GROWTH
+        t_weight = (yr - 1) / max(forecast_years - 1, 1)  # 0 → 1 over forecast window
+        growth_t = blended_growth * (1 - t_weight) + LT_GROWTH * t_weight
+        growth_t = max(-0.30, min(0.50, growth_t))
+
+        s_t = round(last_sales * (1 + growth_t) ** yr, 2)
+        sales_forecast.append(s_t)
+
+        # EBITDA margin: partial reversion toward avg_margin_5y
+        margin_t = margin_t + REVERSION_SPEED * (avg_margin_5y - margin_t)
+        margin_t = max(0.0, min(0.60, margin_t))
+        eb_t = round(s_t * margin_t, 2)
+        ebitda_forecast.append(eb_t)
+
+        # Net Profit: EBITDA - Dep - Interest, taxed at avg_tax_rate
+        dep_t    = round(s_t * avg_dep_ratio, 2)
+        ebit_t   = eb_t - dep_t
+        ebt_t    = ebit_t - last_interest
+        tax_t    = round(max(ebt_t, 0) * avg_tax_rate, 2)
+        np_t     = round(ebt_t - tax_t, 2)
+        np_forecast.append(np_t)
+        eps_t    = round(np_t / last_shares, 2) if last_shares else 0
+        eps_forecast.append(eps_t)
+
+    # ─── Growth rates for output ──────────────────────────────────────────────
+    def growth_series(vals):
+        out = [""]
+        for i in range(1, len(vals)):
+            if vals[i-1] and vals[i-1] != 0:
+                out.append(round(((vals[i] / vals[i-1]) - 1) * 100, 2))
+            else:
+                out.append("")
+        return out
+
+    sales_growth_fc  = growth_series(sales_forecast)
+    ebitda_growth_fc = growth_series(ebitda_forecast)
+    eps_growth_fc    = growth_series(eps_forecast)
+
+    # ─── EBITDA margins for output ────────────────────────────────────────────
+    ebitda_margins_fc = [
+        round((ebitda_forecast[i] / sales_forecast[i]) * 100, 2) if sales_forecast[i] else 0
+        for i in range(forecast_years)
+    ]
+
+    # ─── Methodology note ────────────────────────────────────────────────────
+    method_note = (
+        f"Blended CAGR: {round(blended_growth*100,1)}% "
+        f"(3Y CAGR {round(cagr_3y*100,1)}% × 2 + Full-history CAGR {round(cagr_full*100,1)}% × 1) / 3. "
+        f"Mean-reverts to {round(LT_GROWTH*100,0):.0f}% by Year {forecast_years}. "
+        f"EBITDA margin {round(current_margin*100,1)}% → reverts to 5Y avg {round(avg_margin_5y*100,1)}% "
+        f"at {round(REVERSION_SPEED*100,0):.0f}% speed/yr. "
+        f"Tax rate {round(avg_tax_rate*100,1)}% (5Y avg profitable years)."
+    )
+
+    # ─── Sales growth rates ───────────────────────────────────────────────────
+    sales_growth = [""] + [
+        round(((sales[i] / sales[i-1]) - 1) * 100, 2) if sales[i-1] else 0
+        for i in range(1, n)
+    ]
+    ebitda_growth = [""] + [
+        round(((ebitda[i] / ebitda[i-1]) - 1) * 100, 2) if ebitda[i-1] else 0
+        for i in range(1, n)
+    ]
+    eps_growth = [""] + [
+        round(((eps[i] / eps[i-1]) - 1) * 100, 2) if eps[i-1] else 0
+        for i in range(1, n)
+    ]
     
     # Generate future years (dates)
     # Extract the last year and add years sequentially
-    from datetime import datetime, timedelta
+    from datetime import datetime
+    try:
+        from dateutil.relativedelta import relativedelta
+        _use_relativedelta = True
+    except ImportError:
+        _use_relativedelta = False
     last_year_str = years[-1]  # e.g., "Mar-24"
-    
-    # Parse last year
     last_date = datetime.strptime(last_year_str + "-01", "%b-%y-%d")
-    
     forecast_year_labels = []
     for i in range(1, forecast_years + 1):
-        future_date = last_date + timedelta(days=365 * i)
+        if _use_relativedelta:
+            future_date = last_date + relativedelta(years=i)
+        else:
+            # Fallback: add 366 days per year to handle leap years
+            from datetime import timedelta
+            future_date = last_date + timedelta(days=int(365.25 * i))
         forecast_year_labels.append(future_date.strftime("%b-%y"))
     
-    # Combine historical + forecasted data
+    # ─── Build combined output ────────────────────────────────────────────────
     all_years = years + forecast_year_labels
-    
-    # Create historical + forecasted combined series
-    historical_sales = sales + [""] * forecast_years
-    forecasted_sales = [""] * n + sales_forecast
-    
-    historical_ebitda = ebitda + [""] * forecast_years
-    forecasted_ebitda = [""] * n + ebitda_forecast
-    
-    historical_eps = eps + [""] * forecast_years
-    forecasted_eps = [""] * n + eps_forecast
-    
-    # Prepare the output data structure
-    forecasting_data = {
+
+    return {
         "years": all_years,
         "forecast_years_count": forecast_years,
         "historical_years_count": n,
-        
-        # Sales data
+        "methodology": method_note,
+
+        # Sales
         "sales": {
-            "historical": sales,
-            "forecasted": sales_forecast,
-            "growth": sales_growth,
-            "slope": round(sales_slope, 2),
-            "intercept": round(sales_intercept, 2)
+            "historical":   sales,
+            "forecasted":   sales_forecast,
+            "growth":       sales_growth_fc,
+            "hist_growth":  sales_growth,
         },
-        
-        # EBITDA data
+
+        # EBITDA
         "ebitda": {
-            "historical": ebitda,
-            "forecasted": ebitda_forecast,
-            "growth": ebitda_growth,
-            "slope": round(ebitda_slope, 2),
-            "intercept": round(ebitda_intercept, 2)
+            "historical":   ebitda,
+            "forecasted":   ebitda_forecast,
+            "growth":       ebitda_growth_fc,
+            "hist_growth":  ebitda_growth,
+            "margins_pct":  ebitda_margins_fc,
         },
-        
-        # EPS data
+
+        # Net Profit
+        "net_profit": {
+            "historical":   net_profit,
+            "forecasted":   np_forecast,
+        },
+
+        # EPS
         "eps": {
-            "historical": eps,
-            "forecasted": eps_forecast,
-            "growth": eps_growth,
-            "slope": round(eps_slope, 2),
-            "intercept": round(eps_intercept, 2)
-        }
+            "historical":   eps,
+            "forecasted":   eps_forecast,
+            "growth":       eps_growth_fc,
+            "hist_growth":  eps_growth,
+        },
+
+        # Assumptions used
+        "assumptions": {
+            "blended_growth_rate_pct": round(blended_growth * 100, 2),
+            "cagr_3y_pct":             round(cagr_3y * 100, 2),
+            "cagr_full_history_pct":   round(cagr_full * 100, 2),
+            "long_run_growth_target_pct": round(LT_GROWTH * 100, 1),
+            "current_ebitda_margin_pct":  round(current_margin * 100, 2),
+            "target_ebitda_margin_pct":   round(avg_margin_5y * 100, 2),
+            "avg_tax_rate_pct":           round(avg_tax_rate * 100, 2),
+            "avg_dep_ratio_pct":          round(avg_dep_ratio * 100, 2),
+        },
     }
-    
-    return forecasting_data
 
 
 # ===============================
@@ -1028,13 +1140,61 @@ def run_wacc(file, beta=None, risk_free_rate=7.1, equity_risk_premium=5.5, cost_
     - equity_risk_premium: India ERP in % (default 5.5%)
     - cost_of_equity_override: If set, skips CAPM and uses this value directly
     """
-    # FIX 4: CAPM-based cost of equity
+    # CAPM-based cost of equity — auto-fetches beta from yfinance if not provided
+    beta_source = "user_provided"
     if cost_of_equity_override is not None:
         cost_of_equity = cost_of_equity_override
-    elif beta is not None:
-        cost_of_equity = round(risk_free_rate + beta * equity_risk_premium, 2)
+        beta_used = beta or 1.0
+        beta_source = "overridden"
     else:
-        cost_of_equity = round(risk_free_rate + 1.0 * equity_risk_premium, 2)  # beta=1 default
+        # Try to resolve beta: user arg → yfinance → default 1.0
+        beta_used = None
+        if beta is not None:
+            beta_used = beta
+            beta_source = "user_provided"
+        else:
+            # Auto-fetch from yfinance using ticker from Excel meta row
+            try:
+                import yfinance as yf
+            except ImportError:
+                yf = None
+            # Try to read ticker from meta rows of Excel (rows 0-15, col 0 label / col 1 value)
+            _ticker_beta = None
+            try:
+                import pandas as _pd2
+                _bs = _pd2.read_excel(file, engine="openpyxl",
+                                      sheet_name="Balance Sheet & P&L", header=None)
+                for _r in range(15):
+                    _lbl = str(_bs.iloc[_r, 0]).lower() if not _pd2.isna(_bs.iloc[_r, 0]) else ""
+                    if "ticker" in _lbl or "symbol" in _lbl or "bse" in _lbl or "nse" in _lbl:
+                        _ticker_val = str(_bs.iloc[_r, 1]).strip()
+                        if _ticker_val and _ticker_val.lower() not in ("nan", "none", ""):
+                            # Normalise: add .NS for NSE if no exchange suffix
+                            if "." not in _ticker_val:
+                                _ticker_val = _ticker_val + ".NS"
+                            _ticker_beta = _ticker_val
+                            break
+            except Exception:
+                pass
+
+            if yf is not None and _ticker_beta:
+                try:
+                    _info = yf.Ticker(_ticker_beta).fast_info
+                    _beta_yf = getattr(_info, "beta", None)
+                    if _beta_yf is None:
+                        _info2 = yf.Ticker(_ticker_beta).info
+                        _beta_yf = _info2.get("beta", None)
+                    if _beta_yf and 0.1 <= float(_beta_yf) <= 5.0:
+                        beta_used = round(float(_beta_yf), 3)
+                        beta_source = f"yfinance ({_ticker_beta})"
+                except Exception:
+                    pass
+
+            if beta_used is None:
+                beta_used = 1.0
+                beta_source = "default (beta=1.0 — add Ticker row to Excel for auto-fetch)"
+
+        cost_of_equity = round(risk_free_rate + beta_used * equity_risk_premium, 2)
     
     # Read Balance Sheet & P&L
     bs_df = pd.read_excel(file, engine="openpyxl", sheet_name="Balance Sheet & P&L", header=None)
@@ -1155,9 +1315,9 @@ def run_wacc(file, beta=None, risk_free_rate=7.1, equity_risk_premium=5.5, cost_
     # Build the output structure
     capm_beta  = beta if beta is not None else 1.0
     wacc_data = [
-        ("Cost of Equity Method", ["CAPM" if cost_of_equity_override is None else "Override"]*n),
+        ("Cost of Equity Method", [beta_source]*n),
         ("Risk-Free Rate (%)", [risk_free_rate]*n),
-        ("Beta Used", [round(capm_beta,2)]*n),
+        ("Beta Used", [round(beta_used,3)]*n),
         ("Equity Risk Premium (%)", [equity_risk_premium]*n),
         ("Cost of Equity Re (%)", [cost_of_equity]*n),
         ("", [""]*n),
@@ -1182,7 +1342,7 @@ def run_wacc(file, beta=None, risk_free_rate=7.1, equity_risk_premium=5.5, cost_
         "current_wacc": wacc[-1],
         "avg_wacc": round(sum(wacc) / len(wacc), 2),
         "cost_of_equity_used": cost_of_equity,
-        "capm_components": {"beta": capm_beta, "risk_free_rate": risk_free_rate, "equity_risk_premium": equity_risk_premium},
+        "capm_components": {"beta": beta_used, "beta_source": beta_source, "risk_free_rate": risk_free_rate, "equity_risk_premium": equity_risk_premium},
         "avg_tax_rate": avg_tax_rate,
         "current_market_cap": current_mcap,
         "formula": "WACC = (E/V × Re) + (D/V × Rd × (1 - Tax Rate))"
@@ -1272,15 +1432,20 @@ def run_terminal_value_dcf(file, cost_of_equity=13.0, growth_rate=4.0, forecast_
         future_years = list(range(n_historical + 1, n_historical + forecast_years + 1))
         forecasted_fcff = [round(m * yr + b, 2) for yr in future_years]
     
-    # Generate forecast year labels
-    from datetime import datetime, timedelta
+    # Generate forecast year labels (leap-year safe)
+    from datetime import datetime
+    try:
+        from dateutil.relativedelta import relativedelta as _rd
+        _rdok = True
+    except ImportError:
+        from datetime import timedelta as _td
+        _rdok = False
     last_year_str = historical_years[-1]
     last_date = datetime.strptime(last_year_str + "-01", "%b-%y-%d")
-    
     forecast_year_labels = []
     for i in range(1, forecast_years + 1):
-        future_date = last_date + timedelta(days=365 * i)
-        forecast_year_labels.append(future_date.strftime("%b-%y"))
+        fd = last_date + (_rd(years=i) if _rdok else _td(days=int(365.25*i)))
+        forecast_year_labels.append(fd.strftime("%b-%y"))
     
     # =====================================================
     # TERMINAL VALUE CALCULATION
@@ -1419,6 +1584,61 @@ def run_terminal_value_dcf(file, cost_of_equity=13.0, growth_rate=4.0, forecast_
         "upside_downside": upside_downside
     }
     
+    # ──────────────────────────────────────────────────────────────
+    # MONTE CARLO SIMULATION (1000 runs)
+    # Varies: WACC ±1.5%, Growth rate ±1%, FCFF terminal ±15%
+    # Gives a realistic valuation range rather than a point estimate
+    # ──────────────────────────────────────────────────────────────
+    mc_vps_list = []
+    try:
+        _mc_runs = 1000
+        _rng = np.random.default_rng(seed=42)
+        _base_vps = valuation_summary.get("value_per_share", 0) or 0
+        _shares_mc = valuation_summary.get("shares_outstanding") or 1
+        _net_debt_mc = valuation_summary.get("less_net_debt", 0) or 0
+
+        for _ in range(_mc_runs):
+            # Sample from normal distributions around base assumptions
+            _w  = max(wacc_decimal + _rng.normal(0, 0.015), 0.04)   # WACC ± 1.5%
+            _g  = min(growth_decimal + _rng.normal(0, 0.01),         # growth ± 1%
+                      _w - 0.005)                                     # must stay < WACC
+            _g  = max(_g, 0.01)
+            _tf = fcff_terminal_year * (1 + _rng.normal(0, 0.15))    # FCFF ± 15%
+
+            _tv_mc = (_tf * (1 + _g)) / (_w - _g)
+            _pv_tv_mc = _tv_mc / ((1 + _w) ** forecast_years)
+            _pv_fcff_mc = sum(
+                forecasted_fcff[i] / ((1 + _w) ** (i + 1))
+                for i in range(forecast_years)
+            )
+            _ev_mc = _pv_fcff_mc + _pv_tv_mc
+            _eq_mc = _ev_mc - _net_debt_mc
+            _vps_mc = _eq_mc / _shares_mc if _shares_mc else 0
+            mc_vps_list.append(_vps_mc)
+
+        mc_arr = sorted(mc_vps_list)
+        mc_results = {
+            "simulations":       _mc_runs,
+            "p10_value_per_share": round(mc_arr[int(_mc_runs * 0.10)], 2),
+            "p25_value_per_share": round(mc_arr[int(_mc_runs * 0.25)], 2),
+            "p50_value_per_share": round(mc_arr[int(_mc_runs * 0.50)], 2),
+            "p75_value_per_share": round(mc_arr[int(_mc_runs * 0.75)], 2),
+            "p90_value_per_share": round(mc_arr[int(_mc_runs * 0.90)], 2),
+            "mean_value_per_share": round(sum(mc_arr) / _mc_runs, 2),
+            "std_value_per_share":  round(float(np.std(mc_arr)), 2),
+            "bear_case_p10":       round(mc_arr[int(_mc_runs * 0.10)], 2),
+            "base_case_p50":       round(mc_arr[int(_mc_runs * 0.50)], 2),
+            "bull_case_p90":       round(mc_arr[int(_mc_runs * 0.90)], 2),
+            "interpretation": (
+                f"Monte Carlo ({_mc_runs} runs): "
+                f"10th–90th percentile value range = "
+                f"₹{round(mc_arr[int(_mc_runs*0.10)],0):.0f} – "
+                f"₹{round(mc_arr[int(_mc_runs*0.90)],0):.0f} per share."
+            )
+        }
+    except Exception:
+        mc_results = {"error": "Monte Carlo simulation failed", "simulations": 0}
+
     return {
         "historical_years": historical_years,
         "forecast_years": forecast_year_labels,
@@ -1427,6 +1647,7 @@ def run_terminal_value_dcf(file, cost_of_equity=13.0, growth_rate=4.0, forecast_
         "terminal_value_breakdown": terminal_value_breakdown,
         "valuation_summary": valuation_summary,
         "sensitivity_analysis": sensitivity_results,
+        "monte_carlo": mc_results,
         "wacc_used": current_wacc,
         "growth_rate_used": growth_rate,
         "cost_of_equity_used": cost_of_equity
@@ -1726,8 +1947,36 @@ def run_scenario_analysis(file, forecast_years=5):
     except Exception:
         last_base_fcff = 0
 
-    # Scenario FCFF multipliers — Bull/Bear actually change the cash flow
-    scenario_fcff_multiplier = {"bull": 1.30, "base": 1.00, "bear": 0.60}
+    # Scenario FCFF multipliers — derived from company's own growth volatility
+    # Bull = base + 1 std dev of historical FCFF growth
+    # Bear = base - 1.5 std dev (asymmetric — downturns are larger than upturns)
+    try:
+        import numpy as _np2
+        _fcff_vals_clean = [v for v in (base_fcff_values or []) if v and v != 0]
+        if len(_fcff_vals_clean) >= 3:
+            _fcff_growths = [
+                (_fcff_vals_clean[i] / _fcff_vals_clean[i-1]) - 1
+                for i in range(1, len(_fcff_vals_clean))
+                if _fcff_vals_clean[i-1] > 0
+            ]
+            if _fcff_growths:
+                _std = float(_np2.std(_fcff_growths))
+                _std = max(0.10, min(0.40, _std))   # floor 10%, cap 40%
+                _bull_mult = round(1.0 + _std, 2)
+                _bear_mult = round(1.0 - _std * 1.5, 2)
+                _bear_mult = max(0.40, _bear_mult)  # bear floor: 40% of base
+            else:
+                _bull_mult, _bear_mult = 1.25, 0.65
+        else:
+            _bull_mult, _bear_mult = 1.25, 0.65
+    except Exception:
+        _bull_mult, _bear_mult = 1.30, 0.60
+
+    scenario_fcff_multiplier = {
+        "bull": _bull_mult,
+        "base": 1.00,
+        "bear": _bear_mult,
+    }
 
     # Run DCF for each scenario
     for scenario_key, params in scenarios.items():
