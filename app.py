@@ -517,8 +517,11 @@ def _excel_upload_route(run_fn, extra_params=None):
         return jsonify(result)
 
     except Exception as e:
-        app.logger.error(f'{run_fn.__name__} error: {e}')
-        return err(f'{run_fn.__name__} failed', 500)
+        import traceback
+        tb = traceback.format_exc()
+        app.logger.error(f'{run_fn.__name__} error: {e}\n{tb}')
+        # Return full traceback in response so browser console shows the real error
+        return jsonify({'error': str(e), 'traceback': tb, 'function': run_fn.__name__}), 500
     finally:
         cleanup(path)
 
