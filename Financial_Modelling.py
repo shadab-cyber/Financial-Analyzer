@@ -1170,7 +1170,7 @@ def run_wacc(file, beta=None, risk_free_rate=7.1, equity_risk_premium=5.5, cost_
 # ===============================
 # TERMINAL VALUE & DCF VALUATION FUNCTION
 # ===============================
-def run_terminal_value_dcf(file, cost_of_equity=13.0, growth_rate=4.0, forecast_years=5):
+def run_terminal_value_dcf(file, cost_of_equity=13.0, growth_rate=4.0, forecast_years=5, cost_of_equity_override=None):
     """
     Calculate Terminal Value and complete DCF Valuation
     Uses Gordon Growth Model: TV = FCFF(n) × (1 + g) / (WACC - g)
@@ -1186,7 +1186,8 @@ def run_terminal_value_dcf(file, cost_of_equity=13.0, growth_rate=4.0, forecast_
     import numpy as np
     
     # Get WACC first
-    wacc_result = run_wacc(file, cost_of_equity_override=cost_of_equity)
+    _coe = cost_of_equity_override if cost_of_equity_override is not None else cost_of_equity
+    wacc_result = run_wacc(file, cost_of_equity_override=_coe)
     current_wacc = wacc_result["current_wacc"]
     wacc_decimal = current_wacc / 100
     
