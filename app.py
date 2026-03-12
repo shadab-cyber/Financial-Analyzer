@@ -12,7 +12,9 @@ from datetime import datetime, timedelta
 
 from Financial_Modelling import (
     run_historical_fs, run_ratio_analysis, run_common_size_statement,
-    run_forecasting, run_fcff, run_wacc, run_terminal_value_dcf, run_scenario_analysis
+    run_forecasting, run_fcff, run_wacc, run_terminal_value_dcf,
+    run_altman_zscore, run_scenario_analysis,
+    run_roic, run_piotroski, run_dupont
 )
 from Technical_Analysis import run_technical_analysis
 from Portfolio_Management import run_portfolio_analysis, fetch_price_for_symbol
@@ -544,16 +546,49 @@ def fcff():
 
 @app.route('/financial-modelling/wacc/upload', methods=['POST'])
 def wacc():
-    return _excel_upload_route(run_wacc)
+    # Accept CAPM inputs from the form (all optional — sensible defaults)
+    beta     = request.form.get('beta')
+    rf       = request.form.get('risk_free_rate')
+    erp      = request.form.get('equity_risk_premium')
+    coe_ovr  = request.form.get('cost_of_equity_override')
+    params = {}
+    if beta:    params['beta']                    = float(beta)
+    if rf:      params['risk_free_rate']          = float(rf)
+    if erp:     params['equity_risk_premium']     = float(erp)
+    if coe_ovr: params['cost_of_equity_override'] = float(coe_ovr)
+    return _excel_upload_route(run_wacc, params)
 
 @app.route('/financial-modelling/terminal-value/upload', methods=['POST'])
 def terminal_value():
-    return _excel_upload_route(run_terminal_value_dcf)
+    params = {}
+    coe      = request.form.get('cost_of_equity')
+    growth   = request.form.get('growth_rate')
+    fc_years = request.form.get('forecast_years')
+    if coe:      params['cost_of_equity'] = float(coe)
+    if growth:   params['growth_rate']    = float(growth)
+    if fc_years: params['forecast_years'] = int(fc_years)
+    return _excel_upload_route(run_terminal_value_dcf, params)
 
 @app.route('/financial-modelling/scenario-analysis/upload', methods=['POST'])
 def scenario_analysis():
     years = int(request.form.get('forecast_years', 5))
     return _excel_upload_route(run_scenario_analysis, {'forecast_years': years})
+
+@app.route('/financial-modelling/altman-zscore/upload', methods=['POST'])
+def altman_zscore():
+    return _excel_upload_route(run_altman_zscore)
+
+@app.route('/financial-modelling/roic/upload', methods=['POST'])
+def roic():
+    return _excel_upload_route(run_roic)
+
+@app.route('/financial-modelling/piotroski/upload', methods=['POST'])
+def piotroski():
+    return _excel_upload_route(run_piotroski)
+
+@app.route('/financial-modelling/dupont/upload', methods=['POST'])
+def dupont():
+    return _excel_upload_route(run_dupont)
 
 
 # =============================================================================
