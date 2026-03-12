@@ -62,13 +62,11 @@ logging.basicConfig(
 )
 
 # Upload folders
-UPLOAD_FOLDER_ANALYZER = 'uploads'
-UPLOAD_FOLDER_DCF      = 'uploads_dcf'
+import tempfile as _tempfile
+UPLOAD_FOLDER_ANALYZER = _tempfile.gettempdir()   # /tmp — always exists, no permissions issues
+UPLOAD_FOLDER_DCF      = _tempfile.gettempdir()
 ALLOWED_EXTENSIONS_PDF  = {'pdf'}
 ALLOWED_EXTENSIONS_EXCEL = {'xlsx', 'xls'}
-
-os.makedirs(UPLOAD_FOLDER_ANALYZER, exist_ok=True)
-os.makedirs(UPLOAD_FOLDER_DCF,      exist_ok=True)
 
 app.config['UPLOAD_FOLDER_ANALYZER'] = UPLOAD_FOLDER_ANALYZER
 app.config['UPLOAD_FOLDER_DCF']      = UPLOAD_FOLDER_DCF
@@ -82,9 +80,15 @@ def allowed_pdf(filename):
 def allowed_excel(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS_EXCEL
 
-def save_temp_file(file, folder: str) -> str:
-    filename = secure_filename(file.filename)
-    path = os.path.join(folder, filename)
+def save_temp_file(file, folder: str = None) -> str:
+    """Save uploaded file to a guaranteed-unique temp path.
+    Uses tempfile.mkstemp so it works on any server (Render, Heroku, etc.)
+    regardless of working directory or folder permissions.
+    """
+    import tempfile
+    suffix = os.path.splitext(secure_filename(file.filename or 'upload.xlsx'))[1] or '.xlsx'
+    fd, path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)          # close the OS file descriptor; we'll write via Flask
     file.save(path)
     return path
 
