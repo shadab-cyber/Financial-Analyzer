@@ -1,4 +1,10 @@
 import pandas as pd
+import numpy as np
+try:
+    from dateutil.relativedelta import relativedelta
+    _HAS_RELATIVEDELTA = True
+except ImportError:
+    _HAS_RELATIVEDELTA = False
 
 # ===============================
 # HELPERS
