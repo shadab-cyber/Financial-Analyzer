@@ -44,6 +44,32 @@ def _read_cf_sheet(file):
     return pd.DataFrame()
 
 
+def _find_year_row(df, start_col=1, min_dates=3):
+    """
+    Auto-detect which row contains the year/date headers.
+    Scans every row and returns the first one with >= min_dates date-like values.
+    Falls back to YEAR_ROW=15 if nothing found.
+    """
+    for row_idx in range(min(df.shape[0], 40)):
+        date_count = 0
+        for col in range(start_col, df.shape[1]):
+            val = df.iloc[row_idx, col]
+            if pd.isna(val):
+                continue
+            # Accept datetime objects or strings that parse as dates
+            if hasattr(val, 'year'):
+                date_count += 1
+            elif isinstance(val, str):
+                try:
+                    pd.to_datetime(val)
+                    date_count += 1
+                except Exception:
+                    pass
+            if date_count >= min_dates:
+                return row_idx
+    return 15  # safe default
+
+
 # ===============================
 # MAIN FUNCTION
 # ===============================
@@ -56,9 +82,9 @@ def run_historical_fs(file):
     cf_df = _read_cf_sheet(file)
 
     # ===============================
-    # YEARS (B16 onward)
+    # YEARS — auto-detected row (handles different Screener export formats)
     # ===============================
-    YEAR_ROW = 15
+    YEAR_ROW = _find_year_row(bs_df)
     START_COL = 1
 
     years = []
@@ -305,7 +331,7 @@ def run_ratio_analysis(file):
     
     # Read Balance Sheet for CFO data
     bs_df = pd.read_excel(file, engine="openpyxl", sheet_name="Balance Sheet & P&L", header=None)
-    YEAR_ROW = 15
+    YEAR_ROW = _find_year_row(bs_df)
     START_COL = 1
     
     # Helper function to get values from historical data
@@ -576,7 +602,7 @@ def run_common_size_statement(file):
     
     # Read Balance Sheet & P&L for data
     bs_df = pd.read_excel(file, engine="openpyxl", sheet_name="Balance Sheet & P&L", header=None)
-    YEAR_ROW = 15
+    YEAR_ROW = _find_year_row(bs_df)
     START_COL = 1
     
     # Get years
@@ -1002,7 +1028,7 @@ def run_fcff(file):
     # Read Cash Flow Data for CFO and CAPEX
     cf_df = _read_cf_sheet(file)
     
-    YEAR_ROW_BS = 15
+    YEAR_ROW_BS = _find_year_row(bs_df)
     START_COL = 1
     
     # Get years from Balance Sheet (these are the main years we'll use)
@@ -1205,7 +1231,7 @@ def run_wacc(file, beta=None, risk_free_rate=7.1, equity_risk_premium=5.5, cost_
     # Read Balance Sheet & P&L
     bs_df = pd.read_excel(file, engine="openpyxl", sheet_name="Balance Sheet & P&L", header=None)
     
-    YEAR_ROW = 15
+    YEAR_ROW = _find_year_row(bs_df)
     START_COL = 1
     
     # Get years
@@ -1692,7 +1718,7 @@ def run_altman_zscore(file):
     bs_df = pd.read_excel(file, engine="openpyxl", sheet_name="Balance Sheet & P&L", header=None)
     
     # Get years
-    YEAR_ROW = 15
+    YEAR_ROW = _find_year_row(bs_df)
     START_COL = 1
     
     years = []
