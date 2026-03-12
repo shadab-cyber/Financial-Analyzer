@@ -526,6 +526,38 @@ def _excel_upload_route(run_fn, extra_params=None):
         cleanup(path)
 
 
+
+
+@app.route('/financial-modelling/terminal-value/debug', methods=['POST'])
+def terminal_value_debug():
+    """Debug endpoint — returns full Python traceback so we can see the real error."""
+    import traceback
+    path = None
+    try:
+        file = request.files.get('file')
+        if not file:
+            return jsonify({'error': 'no file'}), 400
+        path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
+
+        cost_of_equity = float(request.form.get('cost_of_equity', 13.0))
+        growth_rate    = float(request.form.get('growth_rate', 4.0))
+        forecast_years = int(request.form.get('forecast_years', 5))
+
+        result = run_terminal_value_dcf(
+            path,
+            cost_of_equity=cost_of_equity,
+            growth_rate=growth_rate,
+            forecast_years=forecast_years,
+        )
+        return jsonify({'status': 'ok', 'keys': list(result.keys())})
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+        }), 500
+    finally:
+        cleanup(path)
+
 @app.route('/financial-modelling/upload', methods=['POST'])
 def financial_modelling():
     return _excel_upload_route(run_historical_fs)
