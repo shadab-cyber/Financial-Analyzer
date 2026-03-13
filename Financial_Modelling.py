@@ -1107,17 +1107,52 @@ def run_fcff(file):
         
         return result
     
-    # Get required components
     # From Balance Sheet & P&L
-    interest = bs_val("Interest")
-    tax = bs_val("Tax")
-    pbt = bs_val("Profit before tax")
-    sales = bs_val("Sales")
-    
+    interest  = bs_val("Interest")
+    tax       = bs_val("Tax")
+    pbt       = bs_val("Profit before tax")
+    sales     = bs_val("Sales")
+    net_profit_fcff = bs_val("Net Profit")
+    dep_fcff        = bs_val("Depreciation")
+
     # From Cash Flow Data
-    cfo = cf_val("Cash from Operating Activity")
+    cfo             = cf_val("Cash from Operating Activity")
     capex_purchased = cf_val("Fixed assets purchased")
-    capex_sold = cf_val("Fixed assets sold")
+    capex_sold      = cf_val("Fixed assets sold")
+
+    # ── CFO fallback: indirect method ────────────────────────────────────────
+    # When cash flow sheet is absent, estimate CFO via:
+    #   CFO ≈ Net Profit + Depreciation − Δ(Receivables + Inventory) + Δ(Other Liabilities)
+    # This is the simplified indirect method used in financial modelling.
+    _cfo_estimated = False
+    if all(v == 0 for v in cfo):
+        _rec   = bs_val("Receivables")
+        _inv   = bs_val("Inventory")
+        _ol    = bs_val("Other Liabilities")
+        cfo_est = []
+        for i in range(n):
+            nwc_delta = 0
+            if i > 0:
+                d_rec = _rec[i] - _rec[i-1]
+                d_inv = _inv[i] - _inv[i-1]
+                d_ol  = _ol[i]  - _ol[i-1]
+                nwc_delta = d_rec + d_inv - d_ol  # increase in NWC = cash outflow
+            cfo_est.append(round(net_profit_fcff[i] + dep_fcff[i] - nwc_delta, 2))
+        cfo = cfo_est
+        _cfo_estimated = True
+
+    # ── CAPEX fallback: ΔNet Block + Depreciation ────────────────────────────
+    # If CAPEX not in cash flow sheet, derive from balance sheet change in fixed assets.
+    if all(v == 0 for v in capex_purchased):
+        _nb = bs_val("Fixed Asset Net Block")
+        capex_bs = []
+        for i in range(n):
+            if i == 0:
+                capex_bs.append(0)
+            else:
+                # CAPEX = ΔNet Block + Depreciation  (adds back depreciation that reduced net block)
+                capex_bs.append(round(-(_nb[i] - _nb[i-1] + dep_fcff[i]), 2))
+        capex_purchased = capex_bs
     
     # Calculate Tax Rate
     # Use effective tax rate, handling edge cases
@@ -1178,7 +1213,12 @@ def run_fcff(file):
         "years": years,
         "fcff_data": fcff_data,
         "avg_tax_rate": round(avg_tax_rate * 100, 2),
-        "method": "CFO-based: FCFF = CFO + Interest × (1 - Tax Rate) - CAPEX"
+        "method": (
+            "CFO-based (estimated via Net Profit + Dep − ΔNWC): FCFF = CFO + Interest × (1-t) − CAPEX"
+            if _cfo_estimated else
+            "CFO-based (cash flow sheet): FCFF = CFO + Interest × (1-t) − CAPEX"
+        ),
+        "cfo_estimated": _cfo_estimated,
     }
 
 
@@ -1245,6 +1285,42 @@ def run_wacc(file, beta=None, risk_free_rate=7.1, equity_risk_premium=5.5, cost_
                     if _beta_yf and 0.1 <= float(_beta_yf) <= 5.0:
                         beta_used = round(float(_beta_yf), 3)
                         beta_source = f"yfinance ({_ticker_beta})"
+                except Exception:
+                    pass
+
+            # ── Beta fallback: guess ticker from filename ─────────────────
+            # Screener exports are named like "Indian_Bank.xlsx" or "IRCTC.xlsx".
+            # Extract the name, try common NSE ticker patterns, attempt yfinance.
+            if beta_used is None and yf is not None:
+                try:
+                    import os as _os
+                    _fname = _os.path.basename(str(file))
+                    _stem  = _os.path.splitext(_fname)[0]
+                    # Clean up: replace separators, strip numbers
+                    _stem  = _stem.replace("_", " ").replace("-", " ").strip()
+                    # Build candidate tickers (NSE style: uppercase, no spaces)
+                    _candidates = []
+                    _upper = _stem.upper().replace(" ", "")
+                    _candidates.append(_upper + ".NS")          # e.g. INDIANBANK.NS
+                    # Also try first word only (e.g. "Indian" → "INDIAN.NS")
+                    _first = _stem.split()[0].upper()
+                    if _first != _upper:
+                        _candidates.append(_first + ".NS")
+                    # Try BSE suffix too
+                    _candidates.append(_upper + ".BO")
+                    for _cand in _candidates:
+                        try:
+                            _info = yf.Ticker(_cand).fast_info
+                            _beta_yf2 = getattr(_info, "beta", None)
+                            if _beta_yf2 is None:
+                                _info2 = yf.Ticker(_cand).info
+                                _beta_yf2 = _info2.get("beta", None)
+                            if _beta_yf2 and 0.1 <= float(_beta_yf2) <= 5.0:
+                                beta_used = round(float(_beta_yf2), 3)
+                                beta_source = f"yfinance (filename → {_cand})"
+                                break
+                        except Exception:
+                            continue
                 except Exception:
                     pass
 
@@ -2451,9 +2527,24 @@ def run_piotroski(file):
     # Try to get CFO from cash flow section
     cf_cfo = [0] * n
     for lbl, vals in historical.get("cash_flow", []):
-        if lbl == "Cash from Operating Activities":
-            cf_cfo = vals
+        # Match the summary row, not section headers like "OPERATING ACTIVITIES"
+        if "cash from operating" in lbl.lower():
+            cf_cfo = [v if isinstance(v, (int, float)) else 0 for v in vals]
             break
+
+    # Fallback: indirect CFO = Net Profit + Depreciation − ΔNWC
+    # Trigger when sheet missing OR all zeros (template file with empty CF sheet)
+    if all(v == 0 for v in cf_cfo):
+        _dep_p   = gv("Depreciation")
+        _rec_p   = gv("Receivables")
+        _inv_p   = gv("Inventory")
+        _ol_p    = gv("Other Liabilities")
+        cf_cfo = []
+        for i in range(n):
+            nwc_d = 0
+            if i > 0:
+                nwc_d = (_rec_p[i]-_rec_p[i-1]) + (_inv_p[i]-_inv_p[i-1]) - (_ol_p[i]-_ol_p[i-1])
+            cf_cfo.append(round(net_profit[i] + _dep_p[i] - nwc_d, 2))
 
     score_rows = []
 
