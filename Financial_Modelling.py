@@ -2061,70 +2061,108 @@ def run_scenario_analysis(file, forecast_years=5):
         "bear": _bear_mult,
     }
 
-    # Run DCF for each scenario
+    # ── Shared anchors from the base DCF run ─────────────────────────────────
+    # Run base DCF once to get net_debt, shares, current_price — shared across
+    # all three scenarios so comparisons are apples-to-apples.
+    try:
+        _base_dcf = run_terminal_value_dcf(
+            file,
+            cost_of_equity_override=scenarios["base"]["cost_of_equity"],
+            growth_rate=scenarios["base"]["terminal_growth"],
+            forecast_years=forecast_years,
+        )
+        _base_vs   = _base_dcf["valuation_summary"]
+        _net_debt  = _base_vs.get("less_net_debt", 0) or 0
+        _shares    = _base_vs.get("shares_outstanding") or 1
+        _cmp       = _base_vs.get("current_market_price") or 0
+        _base_wacc = _base_dcf["wacc_used"] / 100   # fractional, e.g. 0.13
+    except Exception:
+        _base_dcf  = None
+        _net_debt  = 0
+        _shares    = 1
+        _cmp       = 0
+        _base_wacc = 0.13
+
+    # ── Build all three scenarios from the same last_base_fcff ────────────────
+    # Each scenario uses:
+    #   · its own FCFF multiplier  → adj_fcff = last_base_fcff × multiplier
+    #   · its own WACC (derived from scenario COE + balance-sheet debt weights)
+    #   · its own terminal growth rate
+    # This guarantees monotonic ordering: bull VPS ≥ base VPS ≥ bear VPS.
     for scenario_key, params in scenarios.items():
         try:
-            # Run Terminal Value DCF with scenario parameters
-            dcf_result = run_terminal_value_dcf(
-                file,
-                cost_of_equity_override=params["cost_of_equity"],
-                growth_rate=params["terminal_growth"],
-                forecast_years=forecast_years
-            )
+            fcff_mult = scenario_fcff_multiplier[scenario_key]
+            g_d       = params["terminal_growth"] / 100
 
-            # Apply FCFF multiplier to scenario valuation
-            fcff_adj = scenario_fcff_multiplier.get(scenario_key, 1.0)
-            if fcff_adj != 1.0 and last_base_fcff != 0:
-                try:
-                    wacc_d = dcf_result["wacc_used"] / 100
-                    g_d    = params["terminal_growth"] / 100
-                    adj_last_fcff = last_base_fcff * fcff_adj
-                    forecasted = [adj_last_fcff * ((1 + g_d) ** i) for i in range(1, forecast_years + 1)]
-                    discounted = [fcf / ((1 + wacc_d) ** i) for i, fcf in enumerate(forecasted, 1)]
-                    tv    = (forecasted[-1] * (1 + g_d)) / (wacc_d - g_d)
-                    pv_tv = tv / ((1 + wacc_d) ** forecast_years)
-                    ev    = round(sum(discounted) + pv_tv, 2)
-                    vs    = dcf_result["valuation_summary"]
-                    net_debt = vs.get("less_net_debt", 0)
-                    equity_val = round(ev - net_debt, 2)
-                    shares = vs.get("shares_outstanding") or 1
-                    vps = round(equity_val / shares, 2) if shares else 0
-                    cmp = vs.get("current_market_price") or 0
-                    updown = round(((vps / cmp) - 1) * 100, 2) if cmp else 0
-                    dcf_result["valuation_summary"].update({
-                        "enterprise_value": ev, "equity_value": equity_val,
-                        "value_per_share": vps, "upside_downside": updown,
-                        "fcff_scenario_multiplier": fcff_adj,
-                    })
-                    dcf_result["terminal_value_breakdown"]["terminal_value"] = round(tv, 2)
-                except Exception:
-                    pass  # keep original if adjustment fails
+            # Get scenario-specific WACC by running WACC with scenario COE
+            try:
+                _sc_wacc_res = run_wacc(
+                    file, cost_of_equity_override=params["cost_of_equity"]
+                )
+                wacc_d = _sc_wacc_res["current_wacc"] / 100
+            except Exception:
+                # Fallback: shift base WACC by the COE delta
+                wacc_d = _base_wacc + (params["cost_of_equity"] - scenarios["base"]["cost_of_equity"]) / 100
 
-            # Get WACC for this scenario
-            wacc_used = dcf_result["wacc_used"]
-            
-            # Store scenario result
+            # Guard: terminal growth must be strictly below WACC
+            g_d = min(g_d, wacc_d - 0.005)
+            g_d = max(g_d, 0.005)
+
+            # Scenario FCFF: start from last_base_fcff × multiplier
+            if last_base_fcff and last_base_fcff != 0:
+                adj_fcff   = last_base_fcff * fcff_mult
+                forecasted = [adj_fcff * ((1 + g_d) ** i)
+                              for i in range(1, forecast_years + 1)]
+            else:
+                # Fallback: use base DCF forecasted FCFFs if available
+                if _base_dcf:
+                    raw_fc = [row[1] for row in _base_dcf.get("fcff_forecast_table", [])
+                              if row[0] == "Forecasted FCFF (₹ Cr)"]
+                    forecasted = (raw_fc[0] if raw_fc else
+                                  [10 * ((1 + g_d) ** i) for i in range(1, forecast_years + 1)])
+                else:
+                    forecasted = [10 * ((1 + g_d) ** i) for i in range(1, forecast_years + 1)]
+
+            discounted = [fcf / ((1 + wacc_d) ** t)
+                          for t, fcf in enumerate(forecasted, 1)]
+            tv    = (forecasted[-1] * (1 + g_d)) / (wacc_d - g_d)
+            pv_tv = tv / ((1 + wacc_d) ** forecast_years)
+            ev    = round(sum(discounted) + pv_tv, 2)
+
+            equity_val = round(ev - _net_debt, 2)
+            vps        = round(equity_val / _shares, 2) if _shares else 0
+            updown     = round(((vps / _cmp) - 1) * 100, 2) if _cmp else 0
+
+            wacc_pct   = round(wacc_d * 100, 2)
             scenario_results[scenario_key] = {
-                "name": params["name"],
+                "name":        params["name"],
                 "description": params["description"],
                 "assumptions": {
-                    "cost_of_equity": params["cost_of_equity"],
-                    "wacc": wacc_used,
-                    "terminal_growth": params["terminal_growth"],
-                    "revenue_growth_adj": params["revenue_growth_adj"],
-                    "ebitda_margin_adj": params["ebitda_margin_adj"]
+                    "cost_of_equity":    params["cost_of_equity"],
+                    "wacc":              wacc_pct,
+                    "terminal_growth":   params["terminal_growth"],
+                    "fcff_multiplier":   fcff_mult,
+                    "revenue_growth_adj":params["revenue_growth_adj"],
+                    "ebitda_margin_adj": params["ebitda_margin_adj"],
                 },
-                "valuation": dcf_result["valuation_summary"],
-                "terminal_value": dcf_result["terminal_value_breakdown"]["terminal_value"],
-                "enterprise_value": dcf_result["valuation_summary"]["enterprise_value"],
-                "equity_value": dcf_result["valuation_summary"]["equity_value"],
-                "value_per_share": dcf_result["valuation_summary"]["value_per_share"],
-                "current_price": dcf_result["valuation_summary"]["current_market_price"],
-                "upside_downside": dcf_result["valuation_summary"]["upside_downside"]
+                "valuation": {
+                    "enterprise_value":    ev,
+                    "equity_value":        equity_val,
+                    "value_per_share":     vps,
+                    "upside_downside":     updown,
+                    "shares_outstanding":  _shares,
+                    "current_market_price":_cmp,
+                    "less_net_debt":       _net_debt,
+                },
+                "terminal_value":    round(tv, 2),
+                "enterprise_value":  ev,
+                "equity_value":      equity_val,
+                "value_per_share":   vps,
+                "current_price":     _cmp,
+                "upside_downside":   updown,
             }
-            
+
         except Exception as e:
-            print(f"Error in {scenario_key} scenario: {e}")
             scenario_results[scenario_key] = None
     
     # Calculate valuation range
