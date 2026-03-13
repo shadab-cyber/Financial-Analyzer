@@ -1717,235 +1717,260 @@ def run_terminal_value_dcf(file, cost_of_equity=13.0, growth_rate=4.0, forecast_
 # ===============================
 def run_altman_zscore(file):
     """
-    Calculate Altman Z-Score for bankruptcy risk assessment
-    
-    Z-Score Formula (Manufacturing Companies):
-    Z = 1.2*X1 + 1.4*X2 + 3.3*X3 + 0.6*X4 + 1.0*X5
-    
-    Where:
+    Calculate Altman Z-Score for bankruptcy risk assessment.
+
+    Formula (Altman 1968, manufacturing):
+        Z = 1.2·X1 + 1.4·X2 + 3.3·X3 + 0.6·X4 + 1.0·X5
+
     X1 = Working Capital / Total Assets
-    X2 = Retained Earnings / Total Assets
+    X2 = Retained Earnings (Reserves) / Total Assets
     X3 = EBIT / Total Assets
-    X4 = Market Value of Equity / Total Liabilities
+    X4 = Book Value of Equity / Total Liabilities   ← book-value fallback used
+         when historical market prices are unavailable, avoiding price-data spikes.
     X5 = Sales / Total Assets
-    
-    Interpretation:
-    - Z > 2.99: Safe Zone (Low bankruptcy risk)
-    - 1.81 < Z < 2.99: Grey Zone (Moderate risk)
-    - Z < 1.81: Distress Zone (High bankruptcy risk)
-    
-    Returns:
-    - Z-Score for each historical year
-    - Risk classification
-    - Component breakdown
+
+    IMPORTANT — sector validity:
+    - Designed for non-financial manufacturing companies.
+    - For banks / NBFCs / insurance: model is NOT valid (auto-detected, warning returned).
+    - For service companies Altman's Z''-Score (no X5) is more appropriate.
     """
-    
-    # Read Excel file
-    bs_df = pd.read_excel(file, engine="openpyxl", sheet_name="Balance Sheet & P&L", header=None)
-    
-    # Get years
-    YEAR_ROW = _find_year_row(bs_df)
+
+    bs_df = pd.read_excel(file, engine="openpyxl",
+                          sheet_name="Balance Sheet & P&L", header=None)
+
+    YEAR_ROW  = _find_year_row(bs_df)
     START_COL = 1
-    
+
     years = []
-    col = START_COL
+    col   = START_COL
     while col < bs_df.shape[1]:
-        val = bs_df.iloc[YEAR_ROW, col]
-        if pd.isna(val):
+        v = bs_df.iloc[YEAR_ROW, col]
+        if pd.isna(v):
             break
-        years.append(pd.to_datetime(val).strftime("%b-%y"))
+        years.append(pd.to_datetime(v).strftime("%b-%y"))
         col += 1
-    
+
     n = len(years)
-    
-    # Helper function
+
     def val(label):
         r = find_row(bs_df, label)
-        return [fmt(bs_df.iloc[r, START_COL + i]) if r is not None else 0 for i in range(n)]
-    
-    # ===============================
-    # EXTRACT REQUIRED DATA
-    # ===============================
-    
-    # P&L Data
-    sales = val("Sales")
-    ebitda = val("EBITDA")
+        return [fmt(bs_df.iloc[r, START_COL + i]) if r is not None else 0
+                for i in range(n)]
+
+    # ── Raw data ──────────────────────────────────────────────────────────────
+    sales        = val("Sales")
+    ebitda       = val("EBITDA")
     depreciation = val("Depreciation")
-    
-    # Balance Sheet Data
-    equity = val("Equity Share Capital")
-    reserves = val("Reserves")
-    borrowings = val("Borrowings")
-    other_liabilities = val("Other Liabilities")
+    interest     = val("Interest")
+
+    equity       = val("Equity Share Capital")
+    reserves     = val("Reserves")
+    borrowings   = val("Borrowings")
+    other_liab   = val("Other Liabilities")
     total_assets = val("Total Assets")
-    
-    receivables = val("Receivables")
-    inventory = val("Inventory")
-    cash_bank = val("Cash & Bank")
-    
-    # Metadata
-    num_shares_in_cr = val("Adjusted Equity Shares in Cr")  # Adjusted shares per year
-    
-    # Dynamically find PRICE row instead of hardcoding row 89
-    PRICE_ROW_ALT = find_row(bs_df, "Price") or find_row(bs_df, "Market Price") or find_row(bs_df, "Share Price")
+    total_liab_row = val("Total Liabilities")   # use BS row when available
+
+    receivables  = val("Receivables")
+    inventory    = val("Inventory")
+    cash_bank    = val("Cash & Bank")
+    total_curr   = val("Total Current Assets")  # preferred over component sum
+
+    num_shares   = val("Adjusted Equity Shares in Cr")
+
+    # Historical price row — must be a *data* row with per-year prices.
+    # We deliberately do NOT fall back to the meta "Current Price" for historical
+    # years; applying today's price to 5-year-old data inflates X4 by orders of
+    # magnitude and creates a discontinuity between the latest and earlier years.
+    price_row = (find_row(bs_df, "Price") or
+                 find_row(bs_df, "Market Price") or
+                 find_row(bs_df, "Share Price"))
     stock_prices = []
     for i in range(n):
-        try:
-            price = fmt(bs_df.iloc[PRICE_ROW_ALT, START_COL + i]) if PRICE_ROW_ALT is not None else 0
-        except Exception:
-            price = 0
-        stock_prices.append(price)
-    
-    # ===============================
-    # CALCULATE COMPONENTS
-    # ===============================
-    
-    z_scores = []
-    z_components = []
+        p = 0
+        if price_row is not None:
+            try:
+                p = fmt(bs_df.iloc[price_row, START_COL + i]) or 0
+            except Exception:
+                p = 0
+        stock_prices.append(p)
+    # Only treat as valid if ≥ half the years have non-zero prices
+    _price_valid = sum(1 for p in stock_prices if p > 0) >= max(1, n // 2)
+    if not _price_valid:
+        stock_prices = [0] * n   # force book-value path for all years
+
+    # ── Bank / NBFC detection ─────────────────────────────────────────────────
+    # If interest paid > 15 % of Sales in majority of years → financial sector
+    _bank_flag = sum(
+        1 for i in range(n)
+        if sales[i] > 0 and interest[i] / sales[i] > 0.15
+    ) >= max(1, n // 2 + 1)
+
+    if _bank_flag:
+        warning = (
+            "Altman Z-Score is NOT valid for banks, NBFCs, or financial companies. "
+            "The model was calibrated on manufacturing firms; applying it to financial "
+            "institutions produces meaningless results because their balance-sheet "
+            "structure (high leverage by design, interest as revenue) violates the "
+            "model assumptions. Use the CAMELS framework or NPL-based credit analysis "
+            "for banks instead."
+        )
+        return {
+            "years": years,
+            "z_scores": [None] * n,
+            "z_score_change": [""] * n,
+            "risk_classifications": ["N/A — Financial sector"] * n,
+            "z_components_detail": [],
+            "sector_warning": warning,
+            "model_valid": False,
+            "summary": {
+                "latest_year": years[-1] if years else "",
+                "latest_z_score": None,
+                "latest_risk_classification": "N/A — Financial sector",
+                "average_z_score": None,
+                "trend_direction": "N/A",
+            },
+            "interpretation": [warning],
+            "recommendations": [
+                "Use CAMELS ratings, NPA / GNPA ratios, CAR (Capital Adequacy Ratio), "
+                "NIM (Net Interest Margin), and Provision Coverage Ratio for bank analysis."
+            ],
+            "risk_zones": {
+                "safe_zone":    "> 2.99 (Low Risk) — manufacturing only",
+                "grey_zone":    "1.81 – 2.99 (Moderate Risk) — manufacturing only",
+                "distress_zone":"< 1.81 (High Risk) — manufacturing only",
+            },
+        }
+
+    # ── Equity X4: prefer market value, fall back to book value ──────────────
+    # Using book value avoids the spike that occurs when the Current Price from
+    # meta is applied to the earliest year but no price is available for later
+    # years (or vice versa), causing a factor-of-10 discontinuity in X4.
+    def _equity_value(i):
+        mve = num_shares[i] * stock_prices[i] if stock_prices[i] > 0 else 0
+        bve = equity[i] + reserves[i]          # book value fallback
+        return mve if mve > 0 else bve
+
+    # ── Main calculation ──────────────────────────────────────────────────────
+    z_scores           = []
+    z_components       = []
     risk_classifications = []
-    
+
     for i in range(n):
-        # Calculate EBIT
         ebit = ebitda[i] - depreciation[i]
-        
-        # Calculate Working Capital
-        current_assets = receivables[i] + inventory[i] + cash_bank[i]
-        current_liabilities = borrowings[i] + other_liabilities[i]
-        working_capital = current_assets - current_liabilities
-        
-        # Calculate Total Liabilities
-        total_liabilities = borrowings[i] + other_liabilities[i]
-        
-        # Calculate Market Value of Equity (use historical price for each year)
-        market_value_equity = num_shares_in_cr[i] * stock_prices[i]
-        
-        # Retained Earnings (using Reserves as proxy)
-        retained_earnings = reserves[i]
-        
-        # Calculate X components
-        X1 = working_capital / total_assets[i] if total_assets[i] else 0
-        X2 = retained_earnings / total_assets[i] if total_assets[i] else 0
-        X3 = ebit / total_assets[i] if total_assets[i] else 0
-        X4 = market_value_equity / total_liabilities if total_liabilities else 0
-        X5 = sales[i] / total_assets[i] if total_assets[i] else 0
-        
-        # Calculate Z-Score
-        z = 1.2*X1 + 1.4*X2 + 3.3*X3 + 0.6*X4 + 1.0*X5
-        
-        # Risk Classification
+
+        # Working Capital: prefer Total Current Assets row; fall back to components
+        ca = total_curr[i] if total_curr[i] > 0 else (receivables[i] + inventory[i] + cash_bank[i])
+        # Current liabilities proxy: Other Liabilities (excludes long-term borrowings)
+        cl = other_liab[i]
+        wc = ca - cl
+
+        # Total Liabilities: prefer dedicated row, else equity+res+borrow+other
+        tl = (total_liab_row[i]
+              if total_liab_row[i] > 0
+              else borrowings[i] + other_liab[i])
+        # Guard: TL must be > 0 and logically ≤ Total Assets
+        if tl <= 0 or tl > total_assets[i] * 2:
+            tl = max(total_assets[i] - (equity[i] + reserves[i]), 1)
+
+        ta = total_assets[i] if total_assets[i] > 0 else 1
+
+        X1 = round(wc    / ta, 4)
+        X2 = round(reserves[i] / ta, 4)
+        X3 = round(ebit  / ta, 4)
+        X4 = round(_equity_value(i) / tl, 4)
+        X5 = round(sales[i] / ta, 4)
+
+        # Cap individual components to prevent outlier spikes
+        # (X4 > 10 is implausible for any healthy company)
+        X4 = min(X4, 10.0)
+
+        z = round(1.2*X1 + 1.4*X2 + 3.3*X3 + 0.6*X4 + 1.0*X5, 4)
+
         if z > 2.99:
-            risk = "Safe Zone"
-            status = "Low Risk"
+            risk, status = "Safe Zone", "Low Risk"
         elif z > 1.81:
-            risk = "Grey Zone"
-            status = "Moderate Risk"
+            risk, status = "Grey Zone", "Moderate Risk"
         else:
-            risk = "Distress Zone"
-            status = "High Risk"
-        
-        z_scores.append(round(z, 4))
+            risk, status = "Distress Zone", "High Risk"
+
+        z_scores.append(z)
         risk_classifications.append(f"{risk} - {status}")
-        
         z_components.append({
-            "year": years[i],
-            "X1_working_capital_ratio": round(X1, 4),
-            "X2_retained_earnings_ratio": round(X2, 4),
-            "X3_ebit_ratio": round(X3, 4),
-            "X4_market_equity_ratio": round(X4, 4),
-            "X5_asset_turnover": round(X5, 4),
-            "z_score": round(z, 4),
-            "risk_classification": f"{risk} - {status}"
+            "year":                      years[i],
+            "X1_working_capital_ratio":  X1,
+            "X2_retained_earnings_ratio":X2,
+            "X3_ebit_ratio":             X3,
+            "X4_equity_to_liabilities":  X4,
+            "X4_equity_source":          "market" if (num_shares[i] * stock_prices[i]) > 0 else "book",
+            "X5_asset_turnover":         X5,
+            "z_score":                   z,
+            "risk_classification":       f"{risk} - {status}",
         })
-    
-    # ===============================
-    # CALCULATE TRENDS
-    # ===============================
-    
-    # Z-Score trend
-    z_score_change = []
-    for i in range(n):
-        if i == 0:
-            z_score_change.append("")
-        else:
-            change = z_scores[i] - z_scores[i-1]
-            z_score_change.append(round(change, 4))
-    
-    # Latest year analysis
-    latest_year = years[-1]
-    latest_z_score = z_scores[-1]
-    latest_risk = risk_classifications[-1]
-    
-    # Average Z-Score over all years
-    avg_z_score = round(sum(z_scores) / len(z_scores), 4)
-    
-    # Determine trend direction
-    if len(z_scores) >= 3:
-        recent_trend = z_scores[-1] - z_scores[-3]
-        if recent_trend > 0.5:
-            trend_direction = "Improving"
-        elif recent_trend < -0.5:
-            trend_direction = "Deteriorating"
-        else:
-            trend_direction = "Stable"
+
+    # ── Trend ─────────────────────────────────────────────────────────────────
+    z_score_change = [""] + [
+        round(z_scores[i] - z_scores[i-1], 4) for i in range(1, n)
+    ]
+
+    latest_z     = z_scores[-1]
+    latest_risk  = risk_classifications[-1]
+    avg_z        = round(sum(z_scores) / n, 4)
+
+    if n >= 3:
+        delta = z_scores[-1] - z_scores[-3]
+        trend = "Improving" if delta > 0.5 else ("Deteriorating" if delta < -0.5 else "Stable")
     else:
-        trend_direction = "Insufficient data"
-    
-    # ===============================
-    # INTERPRETATION & RECOMMENDATIONS
-    # ===============================
-    
-    interpretation = []
-    recommendations = []
-    
-    if latest_z_score > 2.99:
+        trend = "Insufficient data"
+
+    # ── Interpretation ────────────────────────────────────────────────────────
+    interpretation, recommendations = [], []
+
+    if latest_z > 2.99:
         interpretation.append("The company is in the SAFE ZONE with strong financial health.")
         interpretation.append("Low probability of bankruptcy in the near term.")
-        recommendations.append("Monitor ongoing performance and maintain financial discipline")
-    elif latest_z_score > 1.81:
+        recommendations.append("Monitor ongoing performance and maintain financial discipline.")
+    elif latest_z > 1.81:
         interpretation.append("The company is in the GREY ZONE with moderate financial stress.")
-        interpretation.append("Some warning signs present - requires careful monitoring.")
-        recommendations.append("Improve working capital management")
-        recommendations.append("Focus on profitability and debt reduction")
-        recommendations.append("Monitor liquidity closely")
+        interpretation.append("Some warning signs present — requires careful monitoring.")
+        recommendations += ["Improve working capital management.",
+                            "Focus on profitability and debt reduction.",
+                            "Monitor liquidity closely."]
     else:
         interpretation.append("The company is in the DISTRESS ZONE with high bankruptcy risk.")
         interpretation.append("Significant financial distress indicators present.")
-        recommendations.append("URGENT: Implement restructuring plan")
-        recommendations.append("Improve cash flow from operations immediately")
-        recommendations.append("Negotiate with creditors for debt relief")
-        recommendations.append("Consider asset sales or capital infusion")
-    
-    # Add trend-based insights
-    if trend_direction == "Improving":
-        interpretation.append(f"Positive trend: Z-Score has improved over the past 3 years.")
-    elif trend_direction == "Deteriorating":
-        interpretation.append(f"Warning: Z-Score has deteriorated over the past 3 years.")
-        recommendations.append("Address declining financial health immediately")
-    
-    # ===============================
-    # RETURN COMPREHENSIVE RESULTS
-    # ===============================
-    
+        recommendations += ["URGENT: Implement restructuring plan.",
+                            "Improve cash flow from operations immediately.",
+                            "Negotiate with creditors for debt relief.",
+                            "Consider asset sales or capital infusion."]
+
+    if trend == "Improving":
+        interpretation.append("Positive trend: Z-Score has improved over the past 3 years.")
+    elif trend == "Deteriorating":
+        interpretation.append("Warning: Z-Score has deteriorated over the past 3 years.")
+        recommendations.append("Address declining financial health immediately.")
+
     return {
-        "years": years,
-        "z_scores": z_scores,
-        "z_score_change": z_score_change,
-        "risk_classifications": risk_classifications,
+        "years":               years,
+        "z_scores":            z_scores,
+        "z_score_change":      z_score_change,
+        "risk_classifications":risk_classifications,
         "z_components_detail": z_components,
+        "model_valid":         True,
+        "sector_warning":      None,
         "summary": {
-            "latest_year": latest_year,
-            "latest_z_score": latest_z_score,
-            "latest_risk_classification": latest_risk,
-            "average_z_score": avg_z_score,
-            "trend_direction": trend_direction
+            "latest_year":                 years[-1] if years else "",
+            "latest_z_score":              latest_z,
+            "latest_risk_classification":  latest_risk,
+            "average_z_score":             avg_z,
+            "trend_direction":             trend,
         },
-        "interpretation": interpretation,
+        "interpretation":  interpretation,
         "recommendations": recommendations,
         "risk_zones": {
-            "safe_zone": "> 2.99 (Low Risk)",
-            "grey_zone": "1.81 - 2.99 (Moderate Risk)",
-            "distress_zone": "< 1.81 (High Risk)"
-        }
+            "safe_zone":     "> 2.99 (Low Risk)",
+            "grey_zone":     "1.81 – 2.99 (Moderate Risk)",
+            "distress_zone": "< 1.81 (High Risk)",
+        },
     }
 
 
