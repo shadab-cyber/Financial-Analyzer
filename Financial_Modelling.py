@@ -2258,18 +2258,31 @@ def run_scenario_analysis(file, forecast_years=5):
 def run_roic(file):
     """
     ROIC = NOPAT / Invested Capital
-    NOPAT = EBIT × (1 - effective tax rate)
-    Invested Capital = Total Equity + Borrowings - Cash & Bank
 
-    Interpretation:
-    - ROIC > 25%: Exceptional — strong competitive moat
-    - 15–25%: Good — above cost of capital
-    - 10–15%: Fair — average business
-    - < 10%: Poor — may be destroying value
+    NOPAT  = EBIT × (1 − effective tax rate)
+
+    Invested Capital (assets-side, CFA standard):
+        IC = Total Assets − Excess Cash − Non-interest-bearing Current Liabilities
+           = Total Assets − Cash & Bank − Other Liabilities
+    This is equivalent to the financing-side definition
+    (Equity + Reserves + Borrowings) but more robust when balance-sheet
+    rows are partial.
+
+    Bank / NBFC guard:
+    If Interest / Sales > 15% → financial sector detected.
+    For banks, EBIT ≈ Total Income which inflates NOPAT vs IC.
+    We switch to Net Profit / (Equity + Reserves) — i.e. ROE on book equity —
+    and label it clearly.
+
+    Benchmarks:
+    > 25%  Exceptional — strong competitive moat
+    15–25% Good — above cost of capital
+    10–15% Fair — average business
+    < 10%  Poor — may be destroying value
     """
     historical = run_historical_fs(file)
     years = historical["years"]
-    n = len(years)
+    n     = len(years)
 
     def gv(label):
         for lbl, vals in historical["income_statement"] + historical["balance_sheet"]:
@@ -2279,78 +2292,104 @@ def run_roic(file):
 
     ebitda       = gv("EBITDA")
     depreciation = gv("Depreciation")
+    interest     = gv("Interest")
     tax          = gv("Tax")
     ebt          = gv("EBT")
+    net_profit   = gv("Net Profit")
+    sales        = gv("Sales")
+
     equity       = gv("Equity Share Capital")
     reserves     = gv("Reserves")
     borrowings   = gv("Borrowings")
+    other_liab   = gv("Other Liabilities")
     cash_bank    = gv("Cash & Bank")
-    sales        = gv("Sales")
+    total_assets = gv("Total Assets")
 
-    nopat_list, invested_capital_list, roic_list = [], [], []
+    # ── Bank detection ────────────────────────────────────────────────────────
+    bank_flag = sum(
+        1 for i in range(n) if sales[i] > 0 and interest[i] / sales[i] > 0.15
+    ) >= max(1, n // 2 + 1)
+
+    nopat_list, ic_list, roic_list = [], [], []
 
     for i in range(n):
-        ebit = ebitda[i] - depreciation[i]
-
-        # Effective tax rate (capped 0–50%)
-        if ebt[i] and ebt[i] > 0:
-            tax_rate = min(max(abs(tax[i] / ebt[i]), 0), 0.5)
+        if bank_flag:
+            # For banks: use Net Profit as numerator, Equity+Reserves as denominator
+            nopat = round(net_profit[i], 2)
+            ic    = round(equity[i] + reserves[i], 2)
         else:
-            tax_rate = 0.30
+            ebit = ebitda[i] - depreciation[i]
+            # Effective tax rate (cap 0–50%)
+            tax_rate = (
+                min(max(tax[i] / ebt[i], 0), 0.50)
+                if ebt[i] and ebt[i] > 0 else 0.30
+            )
+            nopat = round(ebit * (1 - tax_rate), 2)
 
-        nopat = round(ebit * (1 - tax_rate), 2)
+            # Assets-side Invested Capital:
+            # IC = Total Assets − Cash − Non-interest-bearing current liabilities
+            # "Other Liabilities" on Screener = trade payables + provisions (non-interest-bearing)
+            ic = round(total_assets[i] - cash_bank[i] - other_liab[i], 2)
+            ic = max(ic, equity[i] + reserves[i])  # floor at book equity — can't be less
 
-        invested_capital = round(
-            equity[i] + reserves[i] + borrowings[i] - cash_bank[i], 2
-        )
-
-        roic = round((nopat / invested_capital) * 100, 2) if invested_capital else 0
-
+        roic = round((nopat / ic) * 100, 2) if ic else 0
         nopat_list.append(nopat)
-        invested_capital_list.append(invested_capital)
+        ic_list.append(ic)
         roic_list.append(roic)
 
     roic_change = [""] + [
-        round(roic_list[i] - roic_list[i - 1], 2) for i in range(1, n)
+        round(roic_list[i] - roic_list[i-1], 2) for i in range(1, n)
     ]
 
-    # ROIC vs implicit cost of capital (WACC ~11% default)
+    # Use actual WACC from file if possible, else 11% default
     wacc_benchmark = 11.0
-    value_creation = [
-        round(roic_list[i] - wacc_benchmark, 2) for i in range(n)
-    ]
+    try:
+        wacc_benchmark = run_wacc(file)["current_wacc"]
+    except Exception:
+        pass
+
+    value_creation = [round(r - wacc_benchmark, 2) for r in roic_list]
 
     def classify(r):
-        if r > 25:   return "Exceptional ✅"
-        if r > 15:   return "Good ✅"
-        if r > 10:   return "Fair ⚠️"
+        if r > 25:  return "Exceptional ✅"
+        if r > 15:  return "Good ✅"
+        if r > 10:  return "Fair ⚠️"
         return "Poor ❌"
 
     latest_roic = roic_list[-1] if roic_list else 0
     avg_roic    = round(sum(roic_list) / n, 2) if n else 0
 
+    ic_label    = "Equity + Reserves (bank)" if bank_flag else "Invested Capital (₹ Cr)"
+    nopat_label = "Net Profit (₹ Cr)" if bank_flag else "NOPAT (₹ Cr)"
+    roic_label  = "ROE % (bank — ROIC n/a)" if bank_flag else "ROIC %"
+
     return {
         "years": years,
         "roic_data": [
-            ("NOPAT (₹ Cr)",          nopat_list),
-            ("Invested Capital (₹ Cr)", invested_capital_list),
-            ("",                        [""]*n),
-            ("ROIC %",                  roic_list),
-            ("ROIC Change (pp)",        roic_change),
-            ("Value Creation vs WACC",  value_creation),
+            (nopat_label,            nopat_list),
+            (ic_label,               ic_list),
+            ("",                     [""]*n),
+            (roic_label,             roic_list),
+            ("ROIC Change (pp)",     roic_change),
+            ("Value Creation vs WACC", value_creation),
         ],
+        "roic_values":  roic_list,      # convenience alias for frontend
+        "nopat_values": nopat_list,
+        "ic_values":    ic_list,
+        "is_bank":      bank_flag,
         "summary": {
-            "latest_roic":       latest_roic,
-            "avg_roic":          avg_roic,
-            "classification":    classify(latest_roic),
-            "wacc_benchmark":    wacc_benchmark,
+            "latest_roic":    latest_roic,
+            "avg_roic":       avg_roic,
+            "classification": classify(latest_roic),
+            "wacc_benchmark": wacc_benchmark,
+            "ic_method":      "Equity+Reserves" if bank_flag else "Total Assets − Cash − OtherLiab",
         },
         "interpretation": {
             "exceptional": "> 25% — Competitive moat likely",
             "good":        "15–25% — Above cost of capital",
             "fair":        "10–15% — Average business",
             "poor":        "< 10%  — May be destroying value",
-        }
+        },
     }
 
 
