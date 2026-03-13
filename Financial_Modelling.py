@@ -1872,17 +1872,34 @@ def run_altman_zscore(file):
         if tl <= 0 or tl > total_assets[i] * 2:
             tl = max(total_assets[i] - (equity[i] + reserves[i]), 1)
 
-        ta = total_assets[i] if total_assets[i] > 0 else 1
+        # ── Total Assets: robust fallback chain ─────────────────────────────
+        # If "Total Assets" row wasn't found (label mismatch in Screener export),
+        # reconstruct from balance sheet identity: TA = Equity+Res+Borrowings+OtherLiab
+        # This prevents ta=1 which causes X3/X5 to explode into thousands.
+        if total_assets[i] > 0:
+            ta = total_assets[i]
+        elif total_liab_row[i] > 0:
+            ta = total_liab_row[i]   # BS identity: TA = Total Liabilities
+        else:
+            ta = equity[i] + reserves[i] + borrowings[i] + other_liab[i]
+        ta = ta if ta > 0 else (equity[i] + reserves[i] + borrowings[i] + 1)
 
-        X1 = round(wc    / ta, 4)
-        X2 = round(reserves[i] / ta, 4)
-        X3 = round(ebit  / ta, 4)
+        X1 = round(wc           / ta, 4)
+        X2 = round(reserves[i]  / ta, 4)
+        X3 = round(ebit         / ta, 4)
         X4 = round(_equity_value(i) / tl, 4)
-        X5 = round(sales[i] / ta, 4)
+        X5 = round(sales[i]     / ta, 4)
 
-        # Cap individual components to prevent outlier spikes
-        # (X4 > 10 is implausible for any healthy company)
-        X4 = min(X4, 10.0)
+        # ── Per-component caps ────────────────────────────────────────────────
+        # Prevent any single component from dominating the score.
+        # Economically: no ratio to total assets can exceed 100% in absolute terms
+        # for a going concern; X5 (asset turnover) is capped at 5× for asset-light
+        # service companies like IRCTC (even 2× would be high for most sectors).
+        X1 = max(-1.0, min(X1,  1.0))   # WC/TA: bounded [-100%, +100%]
+        X2 = max( 0.0, min(X2,  1.0))   # RE/TA: can't exceed 100%
+        X3 = max(-1.0, min(X3,  1.0))   # EBIT/TA: bounded [-100%, +100%]
+        X4 =           min(X4, 10.0)    # Market equity / liabilities
+        X5 = max( 0.0, min(X5,  5.0))   # Asset turnover: cap at 5× (even 2 is high)
 
         z = round(1.2*X1 + 1.4*X2 + 3.3*X3 + 0.6*X4 + 1.0*X5, 4)
 
