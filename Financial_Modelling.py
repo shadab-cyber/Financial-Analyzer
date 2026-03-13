@@ -417,18 +417,44 @@ def run_ratio_analysis(file):
     # SalesExpenses%Sales, Depreciation%Sales
     
     # 4. RETURN & COVERAGE RATIOS
-    # FIX 2: ROCE = EBIT / Capital Employed (CFA standard)
-    # Capital Employed = Total Assets - Current Liabilities (Other Liabilities proxy)
-    total_assets_ra = get_hist_values("Total Assets")
-    other_liab_ra   = get_hist_values("Other Liabilities")
+    # ROCE = EBIT / Capital Employed (CFA permanent-capital method)
+    # Capital Employed = Equity + Reserves + Long-term Borrowings
+    # This avoids the near-zero denominator that results from
+    # Total Assets - Other Liabilities on Screener exports where
+    # "Other Liabilities" includes deposits / trade payables.
+    equity_ra    = get_hist_values("Equity Share Capital")
+    reserves_ra  = get_hist_values("Reserves")
+    borrowings_ra= get_hist_values("Borrowings")
     capital_employed = [
-        total_assets_ra[i] - other_liab_ra[i] for i in range(n)
-    ]
-    roce = [
-        round((ebit[i] / capital_employed[i]) * 100, 2)
-        if capital_employed[i] else 0
+        equity_ra[i] + reserves_ra[i] + borrowings_ra[i]
         for i in range(n)
     ]
+
+    # Bank / NBFC guard: for financial companies, interest IS operating revenue.
+    # Using EBIT (which adds back interest expense) would double-count it.
+    # Detect: if Interest > 20 % of Sales in majority of years → financial sector.
+    _interest_ra = get_hist_values("Interest")
+    _bank_flag = sum(
+        1 for i in range(n)
+        if sales[i] > 0 and _interest_ra[i] / sales[i] > 0.20
+    ) >= (n // 2 + 1)
+
+    if _bank_flag:
+        # For banks use Net Profit (ROC on permanent capital)
+        # and label it clearly so the user understands
+        roce = [
+            round((net_profit[i] / capital_employed[i]) * 100, 2)
+            if capital_employed[i] else 0
+            for i in range(n)
+        ]
+        _roce_label = "ROCE — Net Profit / CE (bank)"
+    else:
+        roce = [
+            round((ebit[i] / capital_employed[i]) * 100, 2)
+            if capital_employed[i] else 0
+            for i in range(n)
+        ]
+        _roce_label = "ROCE (%)"
     
     # Retained Earnings% - already in Historical FS
     
@@ -557,7 +583,7 @@ def run_ratio_analysis(file):
         ("", [""]*n),  # GAP
         
         # RETURN & COVERAGE RATIOS
-        ("ROCE", roce),
+        (_roce_label, roce),
         ("Retained Earnings %", retained_earnings_ra),
         ("Return on Equity%", roe),
         ("Self Sustained Growth Rate", self_sustained_growth),
