@@ -2155,8 +2155,6 @@ def run_scenario_analysis(file, forecast_years=5):
     }
 
     # ── Shared anchors from the base DCF run ─────────────────────────────────
-    # Run base DCF once to get net_debt, shares, current_price — shared across
-    # all three scenarios so comparisons are apples-to-apples.
     try:
         _base_dcf = run_terminal_value_dcf(
             file,
@@ -2168,7 +2166,7 @@ def run_scenario_analysis(file, forecast_years=5):
         _net_debt  = _base_vs.get("less_net_debt", 0) or 0
         _shares    = _base_vs.get("shares_outstanding") or 1
         _cmp       = _base_vs.get("current_market_price") or 0
-        _base_wacc = _base_dcf["wacc_used"] / 100   # fractional, e.g. 0.13
+        _base_wacc = _base_dcf["wacc_used"] / 100
     except Exception:
         _base_dcf  = None
         _net_debt  = 0
@@ -2176,15 +2174,17 @@ def run_scenario_analysis(file, forecast_years=5):
         _cmp       = 0
         _base_wacc = 0.13
 
-    # ── Build all three scenarios from the same last_base_fcff ────────────────
-    # Each scenario uses:
-    #   · its own FCFF multiplier  → adj_fcff = last_base_fcff × multiplier
-    #   · its own WACC (derived from scenario COE + balance-sheet debt weights)
-    #   · its own terminal growth rate
-    # This guarantees monotonic ordering: bull VPS ≥ base VPS ≥ bear VPS.
+    # ── FCFF multiplier validity check ───────────────────────────────────────
+    # Multipliers only produce monotonic bull≥base≥bear when last_base_fcff > 0.
+    # If base FCFF is ≤ 0 (e.g., heavy capex year), multiplying a negative number
+    # by 1.1 (bull) makes EV *lower* than bear — ordering inverts.
+    # Guard: disable multipliers for non-positive base FCFF; rely purely on
+    # the WACC/growth differentials to drive scenario spread.
+    _use_fcff_mult = last_base_fcff and last_base_fcff > 0
+
     for scenario_key, params in scenarios.items():
         try:
-            fcff_mult = scenario_fcff_multiplier[scenario_key]
+            fcff_mult = scenario_fcff_multiplier[scenario_key] if _use_fcff_mult else 1.0
             g_d       = params["terminal_growth"] / 100
 
             # Get scenario-specific WACC by running WACC with scenario COE
@@ -2201,20 +2201,27 @@ def run_scenario_analysis(file, forecast_years=5):
             g_d = min(g_d, wacc_d - 0.005)
             g_d = max(g_d, 0.005)
 
-            # Scenario FCFF: start from last_base_fcff × multiplier
-            if last_base_fcff and last_base_fcff != 0:
+            # Scenario FCFF: start from last_base_fcff × multiplier.
+            # Only valid when base FCFF > 0. When FCFF ≤ 0, a multiplier of 1.1
+            # grows the loss — making bull worse than bear. Fall back to the
+            # scenario-specific DCF run (WACC + g differentials drive spread).
+            if _use_fcff_mult and last_base_fcff and last_base_fcff > 0:
                 adj_fcff   = last_base_fcff * fcff_mult
                 forecasted = [adj_fcff * ((1 + g_d) ** i)
                               for i in range(1, forecast_years + 1)]
             else:
-                # Fallback: use base DCF forecasted FCFFs if available
+                # Use base DCF forecast table (list of dicts with 'fcff' key)
+                _seed = 10
                 if _base_dcf:
-                    raw_fc = [row[1] for row in _base_dcf.get("fcff_forecast_table", [])
-                              if row[0] == "Forecasted FCFF (₹ Cr)"]
-                    forecasted = (raw_fc[0] if raw_fc else
-                                  [10 * ((1 + g_d) ** i) for i in range(1, forecast_years + 1)])
-                else:
-                    forecasted = [10 * ((1 + g_d) ** i) for i in range(1, forecast_years + 1)]
+                    _ft = _base_dcf.get("fcff_forecast_table", [])
+                    # _ft is a list of dicts: [{"year":…, "fcff":…, …}, …]
+                    _pos_fcdfs = [abs(float(row["fcff"])) for row in _ft
+                                  if isinstance(row, dict) and row.get("fcff") and float(row["fcff"]) > 0]
+                    if _pos_fcdfs:
+                        _seed = _pos_fcdfs[0]
+                    elif last_base_fcff and last_base_fcff != 0:
+                        _seed = max(abs(last_base_fcff) * 0.5, 10)
+                forecasted = [_seed * ((1 + g_d) ** i) for i in range(1, forecast_years + 1)]
 
             discounted = [fcf / ((1 + wacc_d) ** t)
                           for t, fcf in enumerate(forecasted, 1)]
@@ -2291,21 +2298,22 @@ def run_scenario_analysis(file, forecast_years=5):
     expected_vs_market = round(((expected_value / current_price) - 1) * 100, 2) if current_price else 0
     
     # Create comparison summary
+    def _ud(k): return (scenario_results[k] or {}).get("upside_downside", 0) or 0
     comparison_summary = {
         "bull": {
             "value_per_share": bull_value,
-            "upside_downside": scenario_results["bull"]["upside_downside"] if scenario_results.get("bull") else 0,
-            "recommendation": "BUY" if scenario_results["bull"]["upside_downside"] > 20 else "HOLD"
+            "upside_downside": _ud("bull"),
+            "recommendation": "BUY" if _ud("bull") > 20 else "HOLD"
         },
         "base": {
             "value_per_share": base_value,
-            "upside_downside": scenario_results["base"]["upside_downside"] if scenario_results.get("base") else 0,
-            "recommendation": "BUY" if scenario_results["base"]["upside_downside"] > 20 else ("HOLD" if scenario_results["base"]["upside_downside"] > -10 else "SELL")
+            "upside_downside": _ud("base"),
+            "recommendation": "BUY" if _ud("base") > 20 else ("HOLD" if _ud("base") > -10 else "SELL")
         },
         "bear": {
             "value_per_share": bear_value,
-            "upside_downside": scenario_results["bear"]["upside_downside"] if scenario_results.get("bear") else 0,
-            "recommendation": "SELL" if scenario_results["bear"]["upside_downside"] < -20 else "HOLD"
+            "upside_downside": _ud("bear"),
+            "recommendation": "SELL" if _ud("bear") < -20 else "HOLD"
         }
     }
     
