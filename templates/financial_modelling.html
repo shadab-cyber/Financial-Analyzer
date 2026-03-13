@@ -985,6 +985,9 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
         
         <!-- Z-Score Trend Table -->
+        <!-- Sector warning — shown only for banks / financial companies -->
+        <div id="zscoreSectorWarning" style="display:none; background:#fef3c7; border:1px solid #fcd34d; color:#92400e; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:13px; line-height:1.6;"></div>
+
         <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">Historical Z-Scores</h3>
         <div class="overflow-x-auto">
           <div class="table-responsive">
@@ -2082,9 +2085,25 @@ function calculateAltmanZScore() {
         // Render Z-Score table
         renderZScoreTable(data.years, data.z_scores, data.z_score_change, data.risk_classifications);
         
-        // Render components table (latest year)
-        renderZScoreComponentsTable(data.z_components_detail[data.z_components_detail.length - 1]);
-        
+        // Show sector warning banner if model is not valid for this company type
+        const warningBanner = document.getElementById("zscoreSectorWarning");
+        if (warningBanner) {
+            if (data.model_valid === false && data.sector_warning) {
+                warningBanner.textContent = "⚠ " + data.sector_warning;
+                warningBanner.style.display = "block";
+            } else {
+                warningBanner.style.display = "none";
+            }
+        }
+
+        // Render components table (latest year) — only when data exists
+        if (data.z_components_detail && data.z_components_detail.length > 0) {
+            renderZScoreComponentsTable(data.z_components_detail[data.z_components_detail.length - 1]);
+        } else {
+            const compTable = document.getElementById("zscoreComponentsTable");
+            if (compTable) compTable.innerHTML = "<tbody><tr><td colspan='3' style='text-align:center;color:#6b7280;padding:1rem;'>Component breakdown not available — model invalid for this sector.</td></tr></tbody>";
+        }
+
         // Render interpretation and recommendations
         renderInterpretationAndRecommendations(data.interpretation, data.recommendations);
         
@@ -2110,6 +2129,10 @@ function renderZScoreTable(years, zScores, zScoreChange, riskClassifications) {
     // Z-Score row
     tbody += "<tr class='section-row'><td>Z-Score</td>";
     zScores.forEach(score => {
+        if (score === null || score === undefined) {
+            tbody += "<td style='color:#6b7280;'>N/A</td>";
+            return;
+        }
         let color = "";
         if (score > 2.99) color = "background:#d1fae5; color:#065f46;";
         else if (score > 1.81) color = "background:#fef3c7; color:#92400e;";
@@ -2173,7 +2196,7 @@ function renderZScoreComponentsTable(components) {
     html += `<tr>
         <td>X4 - Market Equity Ratio</td>
         <td>Market Value of Equity / Total Liabilities</td>
-        <td>${components.X4_market_equity_ratio}</td>
+        <td>${components.X4_equity_to_liabilities ?? components.X4_market_equity_ratio ?? "N/A"}</td>
     </tr>`;
     
     html += `<tr>
