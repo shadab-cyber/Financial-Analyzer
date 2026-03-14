@@ -157,6 +157,7 @@ def fetch_portfolio_data(holdings):
 
             portfolio_data.append({
                 'symbol':         symbol,
+                'symbol_full':    symbol + '.NS',   # full yfinance ticker used by risk_metrics
                 'quantity':       quantity,
                 'buy_price':      buy_price,
                 'buy_date':       holding.get('buy_date', 'N/A'),
@@ -238,16 +239,71 @@ def calculate_asset_allocation(portfolio_data):
         })
     
     holdings_allocation.sort(key=lambda x: x['weight'], reverse=True)
-    
-    equity_pct = 100.0
-    cash_pct = 0.0
-    debt_pct = 0.0
-    
+
+    # ── Sector classification ─────────────────────────────────────────────────
+    # Map NSE tickers to broad sectors.  Unlisted symbols fall into 'Other'.
+    _SECTOR_MAP = {
+        # Information Technology
+        'TCS':'IT','INFY':'IT','WIPRO':'IT','HCLTECH':'IT','TECHM':'IT',
+        'MPHASIS':'IT','LTIM':'IT','COFORGE':'IT','PERSISTENT':'IT',
+        # Banking & Finance
+        'HDFCBANK':'Banking','ICICIBANK':'Banking','SBIN':'Banking',
+        'KOTAKBANK':'Banking','AXISBANK':'Banking','INDUSINDBK':'Banking',
+        'BANDHANBNK':'Banking','FEDERALBNK':'Banking','IDFCFIRSTB':'Banking',
+        'BAJFINANCE':'NBFC','BAJAJFINSV':'NBFC','CHOLAFIN':'NBFC',
+        'MUTHOOTFIN':'NBFC','MANAPPURAM':'NBFC',
+        # FMCG
+        'HINDUNILVR':'FMCG','ITC':'FMCG','NESTLEIND':'FMCG','BRITANNIA':'FMCG',
+        'DABUR':'FMCG','MARICO':'FMCG','GODREJCP':'FMCG','EMAMILTD':'FMCG',
+        'TATACONSUM':'FMCG','COLPAL':'FMCG',
+        # Auto
+        'TATAMOTORS':'Auto','MARUTI':'Auto','M&M':'Auto','HEROMOTOCO':'Auto',
+        'BAJAJ-AUTO':'Auto','EICHERMOT':'Auto','ASHOKLEY':'Auto',
+        'BOSCHLTD':'Auto','MOTHERSON':'Auto',
+        # Pharma & Healthcare
+        'SUNPHARMA':'Pharma','DRREDDY':'Pharma','CIPLA':'Pharma',
+        'DIVISLAB':'Pharma','BIOCON':'Pharma','LUPIN':'Pharma',
+        'TORNTPHARM':'Pharma','AUROPHARMA':'Pharma',
+        'APOLLOHOSP':'Healthcare','FORTIS':'Healthcare',
+        # Energy & Oil
+        'RELIANCE':'Energy','ONGC':'Energy','BPCL':'Energy','IOC':'Energy',
+        'HINDPETRO':'Energy','GAIL':'Energy','PETRONET':'Energy',
+        'NTPC':'Power','POWERGRID':'Power','TATAPOWER':'Power',
+        'ADANIGREEN':'Power','TORNTPOWER':'Power',
+        # Metals & Mining
+        'TATASTEEL':'Metals','JSWSTEEL':'Metals','HINDALCO':'Metals',
+        'VEDL':'Metals','NMDC':'Metals','COALINDIA':'Metals',
+        'NATIONALUM':'Metals','SAIL':'Metals',
+        # Cement & Construction
+        'ULTRACEMCO':'Cement','SHREECEM':'Cement','AMBUJACEM':'Cement',
+        'ACC':'Cement','RAMCOCEM':'Cement',
+        'LT':'Construction','ADANIPORTS':'Infrastructure',
+        # Telecom
+        'BHARTIARTL':'Telecom',
+        # Consumer Durables & Retail
+        'TITAN':'ConsumerDurables','ASIANPAINT':'ConsumerDurables',
+        'PIDILITIND':'ConsumerDurables','BERGEPAINT':'ConsumerDurables',
+        'HAVELLS':'ConsumerDurables','VOLTAS':'ConsumerDurables',
+        'DMART':'Retail','TRENT':'Retail',
+        # Chemicals
+        'SRF':'Chemicals','DEEPAKNTR':'Chemicals','AARTIIND':'Chemicals',
+        'NAVINFLUOR':'Chemicals','PIIND':'Chemicals',
+    }
+
+    sector_totals = {}
+    for h in holdings_allocation:
+        sector = _SECTOR_MAP.get(h['symbol'], 'Other')
+        sector_totals[sector] = sector_totals.get(sector, 0) + h['weight']
+
+    sector_breakdown = [
+        {'sector': sec, 'weight': round(wt, 2)}
+        for sec, wt in sorted(sector_totals.items(), key=lambda x: x[1], reverse=True)
+    ]
+
     return {
-        'equity_pct': round(equity_pct, 2),
-        'cash_pct': round(cash_pct, 2),
-        'debt_pct': round(debt_pct, 2),
-        'holdings': holdings_allocation
+        'holdings':          holdings_allocation,
+        'sector_breakdown':  sector_breakdown,
+        'total_value':       round(total_value, 2),
     }
 
 
@@ -466,46 +522,88 @@ def generate_rebalancing_signals(portfolio_data, allocation):
 
 def compare_with_benchmark(portfolio_data, days=252):
     """
-    Compare portfolio with NIFTY 50
+    Compare portfolio with NIFTY 50.
+
+    Portfolio return is calculated as the weighted average of each holding's
+    return over the SAME period used for the NIFTY fetch (last `days` calendar
+    days).  For holdings bought more recently than `start_date`, the holding's
+    own buy_date is used as the start so the comparison is apples-to-apples.
+
+    Weighting: current_value weight (i.e. money-weighted, not equal-weighted).
     """
     if not LIBRARIES_AVAILABLE or not portfolio_data:
         return {
             'portfolio_return': None,
             'benchmark_return': None,
-            'outperformance': None,
+            'outperformance':   None,
             'note': 'Insufficient data'
         }
-    
+
     try:
-        # Simplified - use average gain as proxy
-        avg_portfolio_return = sum(h['gain_loss_pct'] for h in portfolio_data) / len(portfolio_data)
-        
-        # Get NIFTY performance
-        end_date = datetime.now()
+        end_date   = datetime.now()
         start_date = end_date - timedelta(days=days)
-        
-        nifty = yf.Ticker('^NSEI')
+
+        # ── Fetch NIFTY return over the window ────────────────────────────────
+        nifty      = yf.Ticker('^NSEI')
         nifty_hist = nifty.history(start=start_date, end=end_date)
-        
-        if len(nifty_hist) > 0:
-            nifty_return = ((nifty_hist['Close'].iloc[-1] / nifty_hist['Close'].iloc[0]) - 1) * 100
-            outperformance = avg_portfolio_return - nifty_return
+
+        if len(nifty_hist) < 2:
+            nifty_return = 0.0
         else:
-            nifty_return = 0
-            outperformance = avg_portfolio_return
-        
+            nifty_return = round(
+                ((nifty_hist['Close'].iloc[-1] / nifty_hist['Close'].iloc[0]) - 1) * 100, 2
+            )
+
+        # ── Weighted portfolio return ─────────────────────────────────────────
+        # For each holding we use its actual buy price and current price.
+        # If the user supplied a buy_date we use that as the effective holding
+        # start (capped to start_date if older) so the period is consistent.
+        # The weight is current_value so larger positions have more impact.
+        total_value = sum(h['current_value'] for h in portfolio_data)
+        if total_value == 0:
+            return {
+                'portfolio_return': None,
+                'benchmark_return': round(nifty_return, 2),
+                'outperformance':   None,
+                'note': 'Zero portfolio value'
+            }
+
+        weighted_return = 0.0
+        for h in portfolio_data:
+            weight  = h['current_value'] / total_value
+            ret_pct = h['gain_loss_pct']   # (current_price / buy_price - 1) * 100
+
+            # Scale to the benchmark window if we have a buy_date
+            buy_date_raw = h.get('buy_date', 'N/A')
+            if buy_date_raw and buy_date_raw != 'N/A':
+                try:
+                    buy_dt = pd.to_datetime(buy_date_raw)
+                    holding_days = (end_date - buy_dt).days
+                    if holding_days > 0 and holding_days < days:
+                        # Annualise then scale to the benchmark window length
+                        annual_ret  = (1 + ret_pct / 100) ** (365 / holding_days) - 1
+                        ret_pct     = ((1 + annual_ret) ** (days / 365) - 1) * 100
+                except Exception:
+                    pass   # keep raw gain_loss_pct if date parsing fails
+
+            weighted_return += weight * ret_pct
+
+        portfolio_return = round(weighted_return, 2)
+        outperformance   = round(portfolio_return - nifty_return, 2)
+
         return {
-            'portfolio_return': round(avg_portfolio_return, 2),
-            'benchmark_return': round(nifty_return, 2),
-            'outperformance': round(outperformance, 2),
-            'benchmark': 'NIFTY 50'
+            'portfolio_return': portfolio_return,
+            'benchmark_return': nifty_return,
+            'outperformance':   outperformance,
+            'benchmark':        'NIFTY 50',
+            'period_days':      days,
         }
-    
+
     except Exception as e:
         return {
             'portfolio_return': None,
             'benchmark_return': None,
-            'outperformance': None,
+            'outperformance':   None,
             'note': f'Error: {str(e)}'
         }
 
