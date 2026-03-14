@@ -322,117 +322,187 @@ def detect_candlestick_patterns(data):
     Returns:
         List of detected patterns with details
     """
-    df = data.copy()
+    df = data.copy().reset_index(drop=True)
     patterns_detected = []
-    
+
     if len(df) < 3:
         return patterns_detected
-    
-    # Get last 3 candles
-    c0 = df.iloc[-3]  # 2 candles ago
-    c1 = df.iloc[-2]  # 1 candle ago
-    c2 = df.iloc[-1]  # Current candle
-    
-    # Calculate body and shadow sizes
-    body_2 = abs(c2['Close'] - c2['Open'])
-    upper_shadow_2 = c2['High'] - max(c2['Open'], c2['Close'])
-    lower_shadow_2 = min(c2['Open'], c2['Close']) - c2['Low']
-    
-    body_1 = abs(c1['Close'] - c1['Open'])
-    
-    # BULLISH PATTERNS
 
-    # Downtrend context: last 5 closes trending down (simple heuristic)
-    recent_closes = df['Close'].tail(6).values
-    in_downtrend = len(recent_closes) >= 5 and recent_closes[-2] < recent_closes[0]
-    in_uptrend   = len(recent_closes) >= 5 and recent_closes[-2] > recent_closes[0]
+    # ── Helper: scan the last `lookback` bars for patterns ───────────────────
+    # We check each valid window position, not just the final 3 candles.
+    # The most recent detected occurrence of each pattern is reported.
+    lookback = min(len(df), 30)   # scan last 30 candles
+    start_i  = len(df) - lookback
 
-    # Hammer (Bullish Reversal) — long lower shadow, small body, any colour
-    # Classic definition: lower shadow ≥ 2× body, upper shadow ≤ 0.3× body,
-    # appears after a downtrend.  Colour doesn't matter.
-    if (lower_shadow_2 >= 2 * body_2 and
-            upper_shadow_2 <= body_2 * 0.3 and
-            body_2 > 0 and in_downtrend):
-        patterns_detected.append({
-            'pattern': 'Hammer',
-            'type': 'Bullish Reversal',
-            'strength': 'Medium',
-            'description': 'Long lower shadow after downtrend — buying pressure absorbing sellers'
-        })
-    
-    # Bullish Engulfing
-    if (c1['Close'] < c1['Open'] and  # Previous red candle
-        c2['Close'] > c2['Open'] and  # Current green candle
-        c2['Open'] < c1['Close'] and  # Opens below previous close
-        c2['Close'] > c1['Open']):    # Closes above previous open
-        patterns_detected.append({
-            'pattern': 'Bullish Engulfing',
-            'type': 'Bullish Reversal',
-            'strength': 'Strong',
-            'description': 'Strong buying pressure engulfs previous candle'
-        })
-    
-    # Morning Star (3-candle pattern)
-    if len(df) >= 3:
-        if (c0['Close'] < c0['Open'] and  # First candle red
-            abs(c1['Close'] - c1['Open']) < body_2 * 0.3 and  # Second small body
-            c2['Close'] > c2['Open'] and  # Third candle green
-            c2['Close'] > (c0['Open'] + c0['Close']) / 2):  # Closes above midpoint
-            patterns_detected.append({
-                'pattern': 'Morning Star',
-                'type': 'Bullish Reversal',
-                'strength': 'Strong',
-                'description': 'Three-candle bullish reversal pattern'
-            })
-    
-    # BEARISH PATTERNS
-    
-    # Shooting Star (Bearish Reversal) — long upper shadow, small body, any colour,
-    # appears after an uptrend.
-    if (upper_shadow_2 >= 2 * body_2 and
-            lower_shadow_2 <= body_2 * 0.3 and
-            body_2 > 0 and in_uptrend):
-        patterns_detected.append({
-            'pattern': 'Shooting Star',
-            'type': 'Bearish Reversal',
-            'strength': 'Medium',
-            'description': 'Long upper shadow after uptrend — sellers rejecting higher prices'
-        })
-    
-    # Bearish Engulfing
-    if (c1['Close'] > c1['Open'] and  # Previous green candle
-        c2['Close'] < c2['Open'] and  # Current red candle
-        c2['Open'] > c1['Close'] and  # Opens above previous close
-        c2['Close'] < c1['Open']):    # Closes below previous open
-        patterns_detected.append({
-            'pattern': 'Bearish Engulfing',
-            'type': 'Bearish Reversal',
-            'strength': 'Strong',
-            'description': 'Strong selling pressure engulfs previous candle'
-        })
-    
-    # Evening Star
-    if len(df) >= 3:
-        if (c0['Close'] > c0['Open'] and  # First candle green
-            abs(c1['Close'] - c1['Open']) < body_2 * 0.3 and  # Second small body
-            c2['Close'] < c2['Open'] and  # Third candle red
-            c2['Close'] < (c0['Open'] + c0['Close']) / 2):  # Closes below midpoint
-            patterns_detected.append({
-                'pattern': 'Evening Star',
-                'type': 'Bearish Reversal',
-                'strength': 'Strong',
-                'description': 'Three-candle bearish reversal pattern'
-            })
-    
-    # Doji (Indecision)
-    if body_2 < (c2['High'] - c2['Low']) * 0.1:
-        patterns_detected.append({
-            'pattern': 'Doji',
-            'type': 'Indecision',
-            'strength': 'Neutral',
-            'description': 'Market indecision, potential reversal'
-        })
-    
+    # Trend context: measured over last 6 closes ending at bar i
+    def _downtrend(i):
+        if i < 5: return False
+        closes = df['Close'].iloc[i-5:i+1].values
+        return closes[-1] < closes[0]
+
+    def _uptrend(i):
+        if i < 5: return False
+        closes = df['Close'].iloc[i-5:i+1].values
+        return closes[-1] > closes[0]
+
+    # Track which patterns already found so we only report the most recent hit
+    found = set()
+
+    def _add(pat_dict):
+        key = pat_dict['pattern']
+        if key not in found:
+            found.add(key)
+            patterns_detected.append(pat_dict)
+
+    # Scan from most-recent backwards so first match = most recent occurrence
+    for i in range(len(df) - 1, max(start_i, 2) - 1, -1):
+        c2 = df.iloc[i]       # current / signal bar
+        c1 = df.iloc[i - 1]  # one bar ago
+        c0 = df.iloc[i - 2]  # two bars ago
+
+        body2 = abs(c2['Close'] - c2['Open'])
+        body1 = abs(c1['Close'] - c1['Open'])
+        body0 = abs(c0['Close'] - c0['Open'])
+        hi2   = c2['High'];  lo2 = c2['Low']
+        hi1   = c1['High'];  lo1 = c1['Low']
+        upper2 = hi2 - max(c2['Open'], c2['Close'])
+        lower2 = min(c2['Open'], c2['Close']) - lo2
+        upper1 = hi1 - max(c1['Open'], c1['Close'])
+        lower1 = min(c1['Open'], c1['Close']) - lo1
+        range2 = hi2 - lo2
+        avg_body = (body0 + body1 + body2) / 3 if (body0 + body1 + body2) > 0 else 1
+
+        # ── SINGLE-BAR BULLISH ────────────────────────────────────────────────
+
+        # Hammer — long lower shadow, small body, any colour, after downtrend
+        if (body2 > 0 and lower2 >= 2 * body2 and
+                upper2 <= body2 * 0.3 and _downtrend(i)):
+            _add({'pattern': 'Hammer', 'type': 'Bullish Reversal', 'strength': 'Medium',
+                  'description': 'Long lower shadow after downtrend — buyers rejecting lower prices'})
+
+        # Inverted Hammer — long upper shadow, small body, after downtrend
+        if (body2 > 0 and upper2 >= 2 * body2 and
+                lower2 <= body2 * 0.3 and _downtrend(i)):
+            _add({'pattern': 'Inverted Hammer', 'type': 'Bullish Reversal', 'strength': 'Weak',
+                  'description': 'Long upper shadow after downtrend — potential buying attempt'})
+
+        # ── SINGLE-BAR BEARISH ────────────────────────────────────────────────
+
+        # Shooting Star — long upper shadow, small body, after uptrend
+        if (body2 > 0 and upper2 >= 2 * body2 and
+                lower2 <= body2 * 0.3 and _uptrend(i)):
+            _add({'pattern': 'Shooting Star', 'type': 'Bearish Reversal', 'strength': 'Medium',
+                  'description': 'Long upper shadow after uptrend — sellers rejecting higher prices'})
+
+        # Hanging Man — looks like Hammer but appears after uptrend (bearish)
+        if (body2 > 0 and lower2 >= 2 * body2 and
+                upper2 <= body2 * 0.3 and _uptrend(i)):
+            _add({'pattern': 'Hanging Man', 'type': 'Bearish Reversal', 'strength': 'Weak',
+                  'description': 'Hammer shape after uptrend — potential distribution'})
+
+        # Doji — body < 10% of range
+        if range2 > 0 and body2 < range2 * 0.1:
+            _add({'pattern': 'Doji', 'type': 'Indecision', 'strength': 'Neutral',
+                  'description': 'Open ≈ Close — market indecision, watch for breakout direction'})
+
+        # ── TWO-BAR BULLISH ───────────────────────────────────────────────────
+
+        # Bullish Engulfing
+        if (c1['Close'] < c1['Open'] and c2['Close'] > c2['Open'] and
+                c2['Open'] <= c1['Close'] and c2['Close'] >= c1['Open']):
+            _add({'pattern': 'Bullish Engulfing', 'type': 'Bullish Reversal', 'strength': 'Strong',
+                  'description': 'Green candle fully engulfs prior red candle — strong buying'})
+
+        # Bullish Harami — small green inside prior large red
+        if (c1['Close'] < c1['Open'] and c2['Close'] > c2['Open'] and
+                c2['Open'] > c1['Close'] and c2['Close'] < c1['Open'] and
+                body2 < body1 * 0.5):
+            _add({'pattern': 'Bullish Harami', 'type': 'Bullish Reversal', 'strength': 'Medium',
+                  'description': 'Small green candle inside large red candle — momentum slowing'})
+
+        # Piercing Line — red then green closing above midpoint of red
+        if (c1['Close'] < c1['Open'] and c2['Close'] > c2['Open'] and
+                c2['Open'] < c1['Low'] and
+                c2['Close'] > (c1['Open'] + c1['Close']) / 2 and
+                c2['Close'] < c1['Open']):
+            _add({'pattern': 'Piercing Line', 'type': 'Bullish Reversal', 'strength': 'Medium',
+                  'description': 'Green close pierces more than halfway into prior red candle'})
+
+        # Tweezer Bottom — two candles with matching lows after downtrend
+        if (_downtrend(i) and abs(lo2 - lo1) / max(lo1, 0.01) < 0.002 and
+                c1['Close'] < c1['Open'] and c2['Close'] > c2['Open']):
+            _add({'pattern': 'Tweezer Bottom', 'type': 'Bullish Reversal', 'strength': 'Medium',
+                  'description': 'Matching lows after downtrend — double rejection of support level'})
+
+        # ── TWO-BAR BEARISH ───────────────────────────────────────────────────
+
+        # Bearish Engulfing
+        if (c1['Close'] > c1['Open'] and c2['Close'] < c2['Open'] and
+                c2['Open'] >= c1['Close'] and c2['Close'] <= c1['Open']):
+            _add({'pattern': 'Bearish Engulfing', 'type': 'Bearish Reversal', 'strength': 'Strong',
+                  'description': 'Red candle fully engulfs prior green candle — strong selling'})
+
+        # Bearish Harami — small red inside prior large green
+        if (c1['Close'] > c1['Open'] and c2['Close'] < c2['Open'] and
+                c2['Open'] < c1['Close'] and c2['Close'] > c1['Open'] and
+                body2 < body1 * 0.5):
+            _add({'pattern': 'Bearish Harami', 'type': 'Bearish Reversal', 'strength': 'Medium',
+                  'description': 'Small red candle inside large green candle — momentum slowing'})
+
+        # Dark Cloud Cover — green then red closing below midpoint of green
+        if (c1['Close'] > c1['Open'] and c2['Close'] < c2['Open'] and
+                c2['Open'] > c1['High'] and
+                c2['Close'] < (c1['Open'] + c1['Close']) / 2 and
+                c2['Close'] > c1['Open']):
+            _add({'pattern': 'Dark Cloud Cover', 'type': 'Bearish Reversal', 'strength': 'Medium',
+                  'description': 'Red close pierces more than halfway into prior green candle'})
+
+        # Tweezer Top — two candles with matching highs after uptrend
+        if (_uptrend(i) and abs(hi2 - hi1) / max(hi1, 0.01) < 0.002 and
+                c1['Close'] > c1['Open'] and c2['Close'] < c2['Open']):
+            _add({'pattern': 'Tweezer Top', 'type': 'Bearish Reversal', 'strength': 'Medium',
+                  'description': 'Matching highs after uptrend — double rejection of resistance level'})
+
+        # ── THREE-BAR BULLISH ─────────────────────────────────────────────────
+
+        # Morning Star
+        if (i >= 2 and c0['Close'] < c0['Open'] and
+                body1 < avg_body * 0.4 and
+                c2['Close'] > c2['Open'] and
+                c2['Close'] > (c0['Open'] + c0['Close']) / 2):
+            _add({'pattern': 'Morning Star', 'type': 'Bullish Reversal', 'strength': 'Strong',
+                  'description': 'Red → small indecision → green above midpoint — classic 3-bar reversal'})
+
+        # Three White Soldiers — three consecutive bullish candles, each closing higher
+        if (i >= 2 and
+                c0['Close'] > c0['Open'] and c1['Close'] > c1['Open'] and c2['Close'] > c2['Open'] and
+                c1['Close'] > c0['Close'] and c2['Close'] > c1['Close'] and
+                body0 > avg_body * 0.6 and body1 > avg_body * 0.6 and body2 > avg_body * 0.6):
+            _add({'pattern': 'Three White Soldiers', 'type': 'Bullish Continuation', 'strength': 'Strong',
+                  'description': 'Three consecutive strong green candles — sustained buying pressure'})
+
+        # ── THREE-BAR BEARISH ─────────────────────────────────────────────────
+
+        # Evening Star
+        if (i >= 2 and c0['Close'] > c0['Open'] and
+                body1 < avg_body * 0.4 and
+                c2['Close'] < c2['Open'] and
+                c2['Close'] < (c0['Open'] + c0['Close']) / 2):
+            _add({'pattern': 'Evening Star', 'type': 'Bearish Reversal', 'strength': 'Strong',
+                  'description': 'Green → small indecision → red below midpoint — classic 3-bar reversal'})
+
+        # Three Black Crows — three consecutive bearish candles, each closing lower
+        if (i >= 2 and
+                c0['Close'] < c0['Open'] and c1['Close'] < c1['Open'] and c2['Close'] < c2['Open'] and
+                c1['Close'] < c0['Close'] and c2['Close'] < c1['Close'] and
+                body0 > avg_body * 0.6 and body1 > avg_body * 0.6 and body2 > avg_body * 0.6):
+            _add({'pattern': 'Three Black Crows', 'type': 'Bearish Continuation', 'strength': 'Strong',
+                  'description': 'Three consecutive strong red candles — sustained selling pressure'})
+
+        # Stop early if we already have 5+ patterns — avoid cluttering the UI
+        if len(patterns_detected) >= 5:
+            break
+
     return patterns_detected
 
 
@@ -611,6 +681,95 @@ def generate_trading_signals(data):
                 signals.append('OBV Falling — selling distribution (Bearish)')
                 bearish_count += 1
     
+    # ── Bollinger Band squeeze / expansion ───────────────────────────────────
+    # BB_Width at a multi-period low = coiling (volatility compression) →
+    # imminent breakout.  We don't know direction yet, so we flag it neutrally
+    # and let price action confirm.  BB_Width at a 20-period high = expansion
+    # → confirms the current trend direction.
+    if 'BB_Width' in df.columns:
+        bb_w = df['BB_Width'].dropna()
+        if len(bb_w) >= 20:
+            current_w   = float(bb_w.iloc[-1])
+            min_20      = float(bb_w.iloc[-20:].min())
+            max_20      = float(bb_w.iloc[-20:].max())
+            width_range = max_20 - min_20
+            if width_range > 0:
+                if current_w <= min_20 * 1.05:   # within 5% of 20-period low
+                    signals.append('BB Squeeze — volatility coiling, breakout imminent')
+                    # Don't add to bull/bear — direction unknown until break
+                elif current_w >= max_20 * 0.95:  # near 20-period high
+                    # Expansion confirms whichever direction price is moving
+                    if latest['Close'] > latest.get('SMA_20', latest['Close']):
+                        signals.append('BB Expansion — trend acceleration (Bullish)')
+                        bullish_count += 1
+                    else:
+                        signals.append('BB Expansion — trend acceleration (Bearish)')
+                        bearish_count += 1
+
+    # ── RSI divergence ────────────────────────────────────────────────────────
+    # Bullish divergence: price makes a lower low, RSI makes a higher low
+    #   → momentum not confirming the new low → likely reversal up
+    # Bearish divergence: price makes a higher high, RSI makes a lower high
+    #   → momentum not confirming the new high → likely reversal down
+    # We scan the last 20 bars to find a recent swing low/high pair.
+    if 'RSI' in df.columns:
+        _rsi  = df['RSI'].dropna()
+        _prc  = df['Close'].reindex(_rsi.index)
+        if len(_rsi) >= 10:
+            # Pivot detection: local min/max with window=3
+            _window = 3
+            _lows_i  = [i for i in range(_window, len(_rsi) - _window)
+                        if _prc.iloc[i] == _prc.iloc[i-_window:i+_window+1].min()]
+            _highs_i = [i for i in range(_window, len(_rsi) - _window)
+                        if _prc.iloc[i] == _prc.iloc[i-_window:i+_window+1].max()]
+
+            # Bullish: two recent lows where price lower but RSI higher
+            if len(_lows_i) >= 2:
+                i1, i2 = _lows_i[-2], _lows_i[-1]
+                if (_prc.iloc[i2] < _prc.iloc[i1] and
+                        _rsi.iloc[i2] > _rsi.iloc[i1] and
+                        (len(_rsi) - 1 - i2) <= 10):   # within last 10 bars
+                    signals.append('RSI Bullish Divergence — price lower low, RSI higher low')
+                    bullish_count += 2
+
+            # Bearish: two recent highs where price higher but RSI lower
+            if len(_highs_i) >= 2:
+                i1, i2 = _highs_i[-2], _highs_i[-1]
+                if (_prc.iloc[i2] > _prc.iloc[i1] and
+                        _rsi.iloc[i2] < _rsi.iloc[i1] and
+                        (len(_rsi) - 1 - i2) <= 10):
+                    signals.append('RSI Bearish Divergence — price higher high, RSI lower high')
+                    bearish_count += 2
+
+    # ── MACD divergence ───────────────────────────────────────────────────────
+    # Same principle applied to MACD histogram:
+    # Bullish: price lower low, MACD_Hist higher (less negative)
+    # Bearish: price higher high, MACD_Hist lower (less positive)
+    if 'MACD_Hist' in df.columns:
+        _hist = df['MACD_Hist'].dropna()
+        _prc2 = df['Close'].reindex(_hist.index)
+        if len(_hist) >= 10:
+            _lows2  = [i for i in range(3, len(_hist) - 3)
+                       if _prc2.iloc[i] == _prc2.iloc[i-3:i+4].min()]
+            _highs2 = [i for i in range(3, len(_hist) - 3)
+                       if _prc2.iloc[i] == _prc2.iloc[i-3:i+4].max()]
+
+            if len(_lows2) >= 2:
+                i1, i2 = _lows2[-2], _lows2[-1]
+                if (_prc2.iloc[i2] < _prc2.iloc[i1] and
+                        _hist.iloc[i2] > _hist.iloc[i1] and
+                        (len(_hist) - 1 - i2) <= 10):
+                    signals.append('MACD Histogram Bullish Divergence')
+                    bullish_count += 1
+
+            if len(_highs2) >= 2:
+                i1, i2 = _highs2[-2], _highs2[-1]
+                if (_prc2.iloc[i2] > _prc2.iloc[i1] and
+                        _hist.iloc[i2] < _hist.iloc[i1] and
+                        (len(_hist) - 1 - i2) <= 10):
+                    signals.append('MACD Histogram Bearish Divergence')
+                    bearish_count += 1
+
     # Determine Overall Signal
     total_signals = bullish_count + bearish_count
     
