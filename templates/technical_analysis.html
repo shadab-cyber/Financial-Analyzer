@@ -1386,10 +1386,11 @@ function displayOOSBacktest(bt) {
     });
 }
 
+function displayPredictionFactors(prediction) {
     const el = document.getElementById('predFactorsList');
     if (!el || !prediction.factors || prediction.factors.length === 0) return;
     el.innerHTML = prediction.factors.map(f => {
-        const up = f.startsWith('▲');
+        const up = f.startsWith('UP') || f.startsWith('▲');
         return `<span class="${up ? 'text-green-600' : 'text-red-600'}">${f}</span>`;
     }).join(' &nbsp;·&nbsp; ');
 }
