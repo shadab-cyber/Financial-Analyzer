@@ -466,7 +466,31 @@ document.addEventListener('DOMContentLoaded', function() {
     <!-- Candlestick Chart -->
     <div class="section-card">
       <div class="section-title">📊 Candlestick Chart</div>
-      <div id="candlestickChart" style="width:100%; height:500px;"></div>
+      <div id="candlestickChart" style="width:100%; height:840px;"></div>
+    </div>
+
+    <!-- Support / Resistance -->
+    <div class="section-card">
+      <div class="section-title">🧱 Support &amp; Resistance Levels</div>
+      <div id="srContainer">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Classic Pivots -->
+          <div>
+            <div class="text-sm font-semibold text-gray-600 mb-3">Classic Pivot (today)</div>
+            <div id="pivotLevels" class="space-y-1"></div>
+          </div>
+          <!-- Resistance -->
+          <div>
+            <div class="text-sm font-semibold text-red-600 mb-3">🔴 Resistance (swing highs)</div>
+            <div id="resistanceLevels" class="space-y-2"></div>
+          </div>
+          <!-- Support -->
+          <div>
+            <div class="text-sm font-semibold text-green-600 mb-3">🟢 Support (swing lows)</div>
+            <div id="supportLevels" class="space-y-2"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Buy/Sell Probabilities -->
@@ -513,8 +537,33 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
         </div>
         <p class="text-xs text-gray-500 mt-4">
-          ⚠️ Prediction based on Random Forest ML model. Not financial advice.
+          ℹ️ Confidence = fraction of 5 momentum factors agreeing (RSI midline, MACD histogram, Price vs SMA-20/50, Stochastic). Rule-based, not a trained ML model. Not financial advice.
         </p>
+        <div id="predFactorsList" class="text-xs text-gray-500 mt-2 space-y-1"></div>
+      </div>
+    </div>
+
+    <!-- VWAP + Key Levels summary -->
+    <div class="section-card" id="vwapSection" style="display:none;">
+      <div class="section-title">📐 Key Levels</div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">VWAP</div>
+          <div class="text-lg font-bold text-purple-700" id="vwapValue">-</div>
+          <div class="text-xs text-gray-400" id="vwapNote"></div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Nearest Resistance</div>
+          <div class="text-lg font-bold text-red-600" id="nearestResistance">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Nearest Support</div>
+          <div class="text-lg font-bold text-green-600" id="nearestSupport">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">vs VWAP</div>
+          <div class="text-lg font-bold" id="vsVwap">-</div>
+        </div>
       </div>
     </div>
 
@@ -622,6 +671,7 @@ function displayResults(data) {
     const signals = data.signals;
     const prediction = data.prediction;
     const patterns = data.patterns;
+    const srLevels = data.support_resistance;
     
     // Update summary cards
     document.getElementById('currentPrice').textContent = '₹' + summary.current_price;
@@ -655,6 +705,9 @@ function displayResults(data) {
     }
     
     document.getElementById('predConfidence').textContent = (prediction.confidence || 0) + '%';
+
+    // Show prediction model factors
+    displayPredictionFactors(prediction);
     
     // Display indicators
     displayIndicators(signals.indicators);
@@ -664,9 +717,15 @@ function displayResults(data) {
     
     // Display patterns
     displayPatterns(patterns);
+
+    // Display support / resistance
+    displaySupportResistance(srLevels);
+
+    // Display VWAP + key levels
+    displayVwapKeyLevels(data);
     
-    // Render candlestick chart
-    renderCandlestickChart(data.chart_data, signals.indicators);
+    // Render 4-panel candlestick chart
+    renderCandlestickChart(data.chart_data, signals.indicators, srLevels, data.is_intraday);
 }
 
 function displayIndicators(indicators) {
@@ -674,14 +733,16 @@ function displayIndicators(indicators) {
     grid.innerHTML = '';
     
     const indicatorList = [
-        { name: 'RSI', value: indicators.RSI, unit: '' },
-        { name: 'MACD', value: indicators.MACD, unit: '' },
-        { name: 'SMA 20', value: indicators.SMA_20, unit: '₹' },
-        { name: 'SMA 50', value: indicators.SMA_50, unit: '₹' },
+        { name: 'RSI',      value: indicators.RSI,    unit: '' },
+        { name: 'MACD',     value: indicators.MACD,   unit: '' },
+        { name: 'ADX',      value: indicators.ADX,    unit: '' },
+        { name: 'SMA 20',   value: indicators.SMA_20, unit: '₹' },
+        { name: 'SMA 50',   value: indicators.SMA_50, unit: '₹' },
         { name: 'BB Upper', value: indicators.BB_Upper, unit: '₹' },
         { name: 'BB Lower', value: indicators.BB_Lower, unit: '₹' },
-        { name: 'Volume', value: indicators.Volume ? indicators.Volume.toLocaleString() : null, unit: '' },
-        { name: 'ATR', value: indicators.ATR, unit: '' }
+        { name: 'ATR',      value: indicators.ATR,    unit: '' },
+        { name: 'Volume',   value: indicators.Volume ? indicators.Volume.toLocaleString() : null, unit: '' },
+        { name: 'OBV',      value: indicators.OBV ? indicators.OBV.toLocaleString() : null, unit: '' },
     ];
     
     indicatorList.forEach(ind => {
@@ -744,81 +805,245 @@ function displayPatterns(patterns) {
     });
 }
 
-function renderCandlestickChart(chartData, indicators) {
-    const dates = chartData.map(d => d.Date);
-    const open = chartData.map(d => d.Open);
-    const high = chartData.map(d => d.High);
-    const low = chartData.map(d => d.Low);
-    const close = chartData.map(d => d.Close);
+function renderCandlestickChart(chartData, indicators, srLevels, isIntraday) {
+    const dates  = chartData.map(d => d.Date);
+    const open   = chartData.map(d => d.Open);
+    const high   = chartData.map(d => d.High);
+    const low    = chartData.map(d => d.Low);
+    const close  = chartData.map(d => d.Close);
     const volume = chartData.map(d => d.Volume);
-    
-    // Candlestick trace
+    const rsiVals  = chartData.map(d => d.RSI   ?? null);
+    const macdVals = chartData.map(d => d.MACD  ?? null);
+    const macdSig  = chartData.map(d => d.MACD_Signal ?? null);
+    const macdHist = chartData.map(d => d.MACD_Hist   ?? null);
+    const vwapVals = chartData.map(d => d.VWAP ?? null);
+
+    // ── Panel domains (bottom → top) ─────────────────────────────────────
+    // [0.00–0.12] volume  [0.14–0.30] MACD  [0.32–0.48] RSI  [0.50–1.00] price
+    const pDom  = [0.50, 1.00];
+    const rDom  = [0.32, 0.48];
+    const mDom  = [0.14, 0.30];
+    const vDom  = [0.00, 0.11];
+
+    // ── Price panel traces ────────────────────────────────────────────────
     const candlestick = {
-        x: dates,
-        open: open,
-        high: high,
-        low: low,
-        close: close,
-        type: 'candlestick',
-        name: 'Price',
+        x: dates, open, high, low, close,
+        type: 'candlestick', name: 'Price',
+        xaxis: 'x', yaxis: 'y',
         increasing: { line: { color: '#10b981' } },
         decreasing: { line: { color: '#ef4444' } }
     };
-    
-    // SMA 20 trace
     const sma20 = {
-        x: dates,
-        y: chartData.map(d => d.SMA_20),
-        type: 'scatter',
-        mode: 'lines',
-        name: 'SMA 20',
-        line: { color: '#3b82f6', width: 1.5 }
+        x: dates, y: chartData.map(d => d.SMA_20 ?? null),
+        type: 'scatter', mode: 'lines', name: 'SMA 20',
+        line: { color: '#3b82f6', width: 1.5 },
+        xaxis: 'x', yaxis: 'y'
     };
-    
-    // SMA 50 trace
     const sma50 = {
-        x: dates,
-        y: chartData.map(d => d.SMA_50),
-        type: 'scatter',
-        mode: 'lines',
-        name: 'SMA 50',
-        line: { color: '#f59e0b', width: 1.5 }
+        x: dates, y: chartData.map(d => d.SMA_50 ?? null),
+        type: 'scatter', mode: 'lines', name: 'SMA 50',
+        line: { color: '#f59e0b', width: 1.5 },
+        xaxis: 'x', yaxis: 'y'
     };
-    
-    // Volume trace (on separate y-axis)
-    const volumeTrace = {
-        x: dates,
-        y: volume,
-        type: 'bar',
-        name: 'Volume',
-        marker: { color: 'rgba(100, 100, 100, 0.3)' },
-        yaxis: 'y2'
-    };
-    
-    const data = [candlestick, sma20, sma50, volumeTrace];
-    
+    const traces = [candlestick, sma20, sma50];
+
+    // VWAP overlay — only on intraday, only if data exists
+    if (isIntraday && vwapVals.some(v => v !== null)) {
+        traces.push({
+            x: dates, y: vwapVals,
+            type: 'scatter', mode: 'lines', name: 'VWAP',
+            line: { color: '#a855f7', width: 2, dash: 'dot' },
+            xaxis: 'x', yaxis: 'y'
+        });
+    }
+
+    // ── Support / Resistance horizontal lines ─────────────────────────────
+    const shapes  = [];
+    const annotations = [];
+    if (srLevels) {
+        const firstDate = dates[0];
+        const lastDate  = dates[dates.length - 1];
+
+        const addLine = (price, color, label) => {
+            shapes.push({
+                type: 'line', x0: firstDate, x1: lastDate,
+                y0: price, y1: price, xref: 'x', yref: 'y',
+                line: { color, width: 1, dash: 'dash' }
+            });
+            annotations.push({
+                x: lastDate, y: price, xref: 'x', yref: 'y',
+                text: `${label} ₹${price}`, showarrow: false,
+                xanchor: 'right', font: { size: 10, color },
+                bgcolor: 'rgba(255,255,255,0.7)'
+            });
+        };
+
+        (srLevels.resistance || []).forEach(r => addLine(r.price, '#ef4444', 'R'));
+        (srLevels.support    || []).forEach(s => addLine(s.price, '#10b981', 'S'));
+
+        // Pivot P line (thicker, blue)
+        const pivot = (srLevels.pivot_levels || []).find(p => p.label === 'P');
+        if (pivot) addLine(pivot.price, '#6366f1', 'PP');
+    }
+
+    // ── RSI sub-panel ─────────────────────────────────────────────────────
+    traces.push({
+        x: dates, y: rsiVals,
+        type: 'scatter', mode: 'lines', name: 'RSI',
+        line: { color: '#8b5cf6', width: 1.5 },
+        xaxis: 'x', yaxis: 'y3'
+    });
+    // RSI 30/70 reference lines
+    shapes.push(
+        { type:'line', x0: dates[0], x1: dates[dates.length-1], y0:70, y1:70,
+          xref:'x', yref:'y3', line:{ color:'#ef4444', width:0.8, dash:'dot' } },
+        { type:'line', x0: dates[0], x1: dates[dates.length-1], y0:30, y1:30,
+          xref:'x', yref:'y3', line:{ color:'#10b981', width:0.8, dash:'dot' } },
+        { type:'line', x0: dates[0], x1: dates[dates.length-1], y0:50, y1:50,
+          xref:'x', yref:'y3', line:{ color:'#9ca3af', width:0.5, dash:'dot' } }
+    );
+
+    // ── MACD sub-panel ────────────────────────────────────────────────────
+    traces.push({
+        x: dates, y: macdVals,
+        type: 'scatter', mode: 'lines', name: 'MACD',
+        line: { color: '#3b82f6', width: 1.5 },
+        xaxis: 'x', yaxis: 'y4'
+    });
+    traces.push({
+        x: dates, y: macdSig,
+        type: 'scatter', mode: 'lines', name: 'Signal',
+        line: { color: '#f97316', width: 1.2, dash: 'dash' },
+        xaxis: 'x', yaxis: 'y4'
+    });
+    // MACD histogram (coloured bars)
+    traces.push({
+        x: dates, y: macdHist,
+        type: 'bar', name: 'MACD Hist',
+        marker: { color: macdHist.map(v => v === null ? 'rgba(0,0,0,0)' : v >= 0 ? 'rgba(16,185,129,0.6)' : 'rgba(239,68,68,0.6)') },
+        xaxis: 'x', yaxis: 'y4'
+    });
+
+    // ── Volume sub-panel ──────────────────────────────────────────────────
+    traces.push({
+        x: dates, y: volume,
+        type: 'bar', name: 'Volume',
+        marker: { color: close.map((c, i) => i === 0 ? 'rgba(100,100,100,0.4)' : c >= open[i] ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)') },
+        xaxis: 'x', yaxis: 'y2'
+    });
+
+    // ── Layout ────────────────────────────────────────────────────────────
     const layout = {
-        title: 'Price Chart with Indicators',
-        xaxis: {
-            title: 'Date',
-            rangeslider: { visible: false }
-        },
-        yaxis: {
-            title: 'Price (₹)',
-            domain: [0.3, 1]
-        },
-        yaxis2: {
-            title: 'Volume',
-            domain: [0, 0.2],
-            overlaying: 'y',
-            side: 'right'
-        },
-        height: 500,
+        xaxis:  { rangeslider: { visible: false }, showticklabels: false, domain: [0, 1] },
+        yaxis:  { title: 'Price (₹)', domain: pDom, autorange: true },
+        yaxis2: { title: 'Vol',       domain: vDom, showticklabels: false },
+        yaxis3: { title: 'RSI',       domain: rDom, range: [0, 100], fixedrange: true,
+                  tickvals: [30, 50, 70] },
+        yaxis4: { title: 'MACD',      domain: mDom, autorange: true, zeroline: true,
+                  zerolinecolor: '#d1d5db', zerolinewidth: 1 },
+        shapes, annotations,
+        height: 820,
+        margin: { t: 30, b: 40, l: 55, r: 10 },
         showlegend: true,
-        legend: { x: 0, y: 1 }
+        legend: { x: 0, y: 1, orientation: 'h', font: { size: 11 } },
+        paper_bgcolor: 'white', plot_bgcolor: '#fafafa',
+        grid: { rows: 4, columns: 1, pattern: 'independent' }
     };
-    
-    Plotly.newPlot('candlestickChart', data, layout, { responsive: true });
+
+    Plotly.newPlot('candlestickChart', traces, layout, { responsive: true });
+}
+
+function displaySupportResistance(srLevels) {
+    if (!srLevels) return;
+
+    // Pivot levels
+    const pivotEl = document.getElementById('pivotLevels');
+    pivotEl.innerHTML = '';
+    (srLevels.pivot_levels || []).forEach(p => {
+        const color = p.type === 'resistance' ? 'text-red-600' :
+                      p.type === 'support'    ? 'text-green-600' : 'text-indigo-600';
+        const bg    = p.type === 'resistance' ? 'bg-red-50' :
+                      p.type === 'support'    ? 'bg-green-50' : 'bg-indigo-50';
+        pivotEl.innerHTML += `
+          <div class="flex justify-between items-center px-3 py-1 rounded ${bg}">
+            <span class="text-xs font-bold ${color}">${p.label}</span>
+            <span class="text-sm font-semibold text-gray-800">₹${p.price}</span>
+          </div>`;
+    });
+
+    // Resistance
+    const resEl = document.getElementById('resistanceLevels');
+    resEl.innerHTML = '';
+    if (!srLevels.resistance || srLevels.resistance.length === 0) {
+        resEl.innerHTML = '<p class="text-xs text-gray-400">No resistance levels found above current price</p>';
+    } else {
+        srLevels.resistance.forEach(r => {
+            const w = r.strength === 'Strong' ? 'font-bold' : r.strength === 'Medium' ? 'font-semibold' : '';
+            resEl.innerHTML += `
+              <div class="flex justify-between items-center px-3 py-2 rounded bg-red-50 border-l-2 border-red-400">
+                <div>
+                  <span class="text-sm ${w} text-red-700">₹${r.price}</span>
+                  <span class="text-xs text-gray-500 ml-2">${r.strength}</span>
+                </div>
+                <span class="text-xs text-gray-400">${r.touches} touch${r.touches !== 1 ? 'es' : ''}</span>
+              </div>`;
+        });
+    }
+
+    // Support
+    const supEl = document.getElementById('supportLevels');
+    supEl.innerHTML = '';
+    if (!srLevels.support || srLevels.support.length === 0) {
+        supEl.innerHTML = '<p class="text-xs text-gray-400">No support levels found below current price</p>';
+    } else {
+        srLevels.support.forEach(s => {
+            const w = s.strength === 'Strong' ? 'font-bold' : s.strength === 'Medium' ? 'font-semibold' : '';
+            supEl.innerHTML += `
+              <div class="flex justify-between items-center px-3 py-2 rounded bg-green-50 border-l-2 border-green-400">
+                <div>
+                  <span class="text-sm ${w} text-green-700">₹${s.price}</span>
+                  <span class="text-xs text-gray-500 ml-2">${s.strength}</span>
+                </div>
+                <span class="text-xs text-gray-400">${s.touches} touch${s.touches !== 1 ? 'es' : ''}</span>
+              </div>`;
+        });
+    }
+}
+
+function displayVwapKeyLevels(data) {
+    const summary = data.summary;
+    const section = document.getElementById('vwapSection');
+    const isIntraday = data.is_intraday;
+
+    // Show key levels section always (VWAP only if intraday)
+    section.style.display = '';
+
+    if (isIntraday && summary.vwap) {
+        document.getElementById('vwapValue').textContent = '₹' + summary.vwap;
+        const diff = ((summary.current_price / summary.vwap) - 1) * 100;
+        const vsEl = document.getElementById('vsVwap');
+        vsEl.textContent = (diff >= 0 ? '+' : '') + diff.toFixed(2) + '%';
+        vsEl.className = 'text-lg font-bold ' + (diff >= 0 ? 'text-green-600' : 'text-red-600');
+        document.getElementById('vwapNote').textContent = 'Intraday';
+    } else {
+        document.getElementById('vwapValue').textContent = '-';
+        document.getElementById('vwapNote').textContent = 'Daily/weekly only';
+        document.getElementById('vsVwap').textContent = '-';
+    }
+
+    document.getElementById('nearestResistance').textContent =
+        summary.nearest_resistance ? '₹' + summary.nearest_resistance : '-';
+    document.getElementById('nearestSupport').textContent =
+        summary.nearest_support ? '₹' + summary.nearest_support : '-';
+}
+
+function displayPredictionFactors(prediction) {
+    const el = document.getElementById('predFactorsList');
+    if (!el || !prediction.factors || prediction.factors.length === 0) return;
+    el.innerHTML = prediction.factors.map(f => {
+        const up = f.startsWith('▲');
+        return `<span class="${up ? 'text-green-600' : 'text-red-600'}">${f}</span>`;
+    }).join(' &nbsp;·&nbsp; ');
 }
 </script>
 
