@@ -305,7 +305,17 @@ def calculate_technical_indicators(data):
             df['MFI'] = ta.volume.MFIIndicator(df['High'], df['Low'], df['Close'], df['Volume']).money_flow_index()
         else:
             df['MFI'] = None
-        
+
+        # ── VWAP (Volume-Weighted Average Price) ─────────────────────────────
+        # Always computed; run_technical_analysis decides whether to expose it
+        # based on timeframe. On intraday data (1m–1h) it resets each session.
+        # On daily data it becomes a cumulative average, less meaningful but
+        # still valid as a trend filter.
+        _tp        = (df['High'] + df['Low'] + df['Close']) / 3
+        _cum_tpvol = (_tp * df['Volume']).cumsum()
+        _cum_vol   = df['Volume'].cumsum()
+        df['VWAP'] = (_cum_tpvol / _cum_vol.replace(0, np.nan)).round(2)
+
         return df
     
     except Exception as e:
@@ -758,6 +768,109 @@ def predict_next_candle(data):
     }
 
 
+def calculate_support_resistance(data, n_levels=3, swing_window=5):
+    """
+    Identify support and resistance levels from swing highs/lows + daily pivot.
+
+    Method
+    ──────
+    1. Classic daily pivot (most recent complete session):
+         P  = (High + Low + Close) / 3
+         R1 = 2P − Low    S1 = 2P − High
+         R2 = P + (High − Low)   S2 = P − (High − Low)
+         R3 = High + 2(P − Low)  S3 = Low  − 2(High − P)
+
+    2. Swing high / low detection across the full dataset:
+       A bar is a swing high if its High > all neighbours within ±swing_window.
+       A bar is a swing low  if its Low  < all neighbours within ±swing_window.
+       We cluster nearby levels (within 0.5% of each other) and rank clusters
+       by touch-count to return the strongest n_levels.
+
+    Args:
+        data          : DataFrame with High, Low, Close columns.
+        n_levels      : How many support / resistance lines to return each side.
+        swing_window  : Half-width of the rolling window for swing detection.
+
+    Returns:
+        dict with keys:
+            pivot_levels  – list of {label, price, type} for classic pivots
+            support       – list of {price, touches, strength} sorted desc touches
+            resistance    – list of {price, touches, strength} sorted desc touches
+            current_price – latest Close
+    """
+    df = data.copy().reset_index(drop=True)
+    if len(df) < swing_window * 2 + 1:
+        return {'pivot_levels': [], 'support': [], 'resistance': [],
+                'current_price': round(float(df.iloc[-1]['Close']), 2)}
+
+    current_price = float(df.iloc[-1]['Close'])
+
+    # ── 1. Classic pivot (last completed bar) ────────────────────────────────
+    last = df.iloc[-1]
+    P  = (last['High'] + last['Low'] + last['Close']) / 3
+    R1 = round(2 * P - last['Low'],  2)
+    R2 = round(P + (last['High'] - last['Low']), 2)
+    R3 = round(last['High'] + 2 * (P - last['Low']), 2)
+    S1 = round(2 * P - last['High'], 2)
+    S2 = round(P - (last['High'] - last['Low']), 2)
+    S3 = round(last['Low'] - 2 * (last['High'] - P), 2)
+    P  = round(P, 2)
+
+    pivot_levels = [
+        {'label': 'R3', 'price': R3, 'type': 'resistance'},
+        {'label': 'R2', 'price': R2, 'type': 'resistance'},
+        {'label': 'R1', 'price': R1, 'type': 'resistance'},
+        {'label': 'P',  'price': P,  'type': 'pivot'},
+        {'label': 'S1', 'price': S1, 'type': 'support'},
+        {'label': 'S2', 'price': S2, 'type': 'support'},
+        {'label': 'S3', 'price': S3, 'type': 'support'},
+    ]
+
+    # ── 2. Swing high / low scan ─────────────────────────────────────────────
+    w = swing_window
+    swing_highs = []
+    swing_lows  = []
+
+    for i in range(w, len(df) - w):
+        window_slice = df.iloc[i - w: i + w + 1]
+        if df.iloc[i]['High'] == window_slice['High'].max():
+            swing_highs.append(float(df.iloc[i]['High']))
+        if df.iloc[i]['Low'] == window_slice['Low'].min():
+            swing_lows.append(float(df.iloc[i]['Low']))
+
+    def cluster_levels(raw_prices, cluster_pct=0.005):
+        """Merge levels within cluster_pct of each other, count touches."""
+        if not raw_prices:
+            return []
+        prices = sorted(raw_prices)
+        clusters = []
+        current = [prices[0]]
+        for p in prices[1:]:
+            if abs(p - current[0]) / current[0] <= cluster_pct:
+                current.append(p)
+            else:
+                clusters.append(current)
+                current = [p]
+        clusters.append(current)
+        result = []
+        for c in clusters:
+            avg   = round(sum(c) / len(c), 2)
+            touches = len(c)
+            strength = 'Strong' if touches >= 3 else ('Medium' if touches == 2 else 'Weak')
+            result.append({'price': avg, 'touches': touches, 'strength': strength})
+        return sorted(result, key=lambda x: x['touches'], reverse=True)
+
+    all_resistance = cluster_levels([p for p in swing_highs if p > current_price])
+    all_support    = cluster_levels([p for p in swing_lows  if p < current_price])
+
+    return {
+        'pivot_levels':   pivot_levels,
+        'support':        all_support[:n_levels],
+        'resistance':     all_resistance[:n_levels],
+        'current_price':  round(current_price, 2),
+    }
+
+
 def run_technical_analysis(symbol, timeframe='1d', period='1y'):
     """
     Complete technical analysis pipeline
@@ -785,25 +898,37 @@ def run_technical_analysis(symbol, timeframe='1d', period='1y'):
         
         # 5. Predict next candle
         prediction = predict_next_candle(data)
-        
-        # 6. Prepare chart data (last 100 candles for display)
+
+        # 6. Support / Resistance levels
+        sr_levels = calculate_support_resistance(data)
+
+        # 7. Prepare chart data (last 100 candles for display)
         chart_data = data.tail(100).to_dict('records')
-        
+
         # Convert timestamps to strings for JSON serialization
         for row in chart_data:
             if 'Date' in row and isinstance(row['Date'], pd.Timestamp):
                 row['Date'] = row['Date'].strftime('%Y-%m-%d %H:%M:%S')
-        
+
+        # 8. VWAP — only meaningful for intraday timeframes
+        intraday_tf = timeframe in ('1m', '5m', '15m', '30m', '60m', '1h')
+        vwap_value  = None
+        if 'VWAP' in data.columns and not pd.isna(data.iloc[-1].get('VWAP')):
+            vwap_value = round(float(data.iloc[-1]['VWAP']), 2)
+
         return {
             'success': True,
             'symbol': symbol,
             'timeframe': timeframe,
             'period': period,
+            'is_intraday': intraday_tf,
             'total_candles': len(data),
             'chart_data': chart_data,
             'patterns': patterns,
             'signals': signals,
             'prediction': prediction,
+            'support_resistance': sr_levels,
+            'vwap': vwap_value,
             'summary': {
                 'current_price': signals['current_price'],
                 'recommendation': signals['signal'],
@@ -811,7 +936,10 @@ def run_technical_analysis(symbol, timeframe='1d', period='1y'):
                 'buy_probability': signals['buy_probability'],
                 'sell_probability': signals['sell_probability'],
                 'predicted_direction': prediction.get('predicted_direction', 'UNKNOWN'),
-                'predicted_change': prediction.get('predicted_change', 0)
+                'predicted_change': prediction.get('predicted_change', 0),
+                'vwap': vwap_value,
+                'nearest_support':    sr_levels['support'][0]['price']    if sr_levels['support']    else None,
+                'nearest_resistance': sr_levels['resistance'][0]['price'] if sr_levels['resistance'] else None,
             }
         }
     
