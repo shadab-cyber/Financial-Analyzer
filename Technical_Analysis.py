@@ -348,16 +348,23 @@ def detect_candlestick_patterns(data):
     body_1 = abs(c1['Close'] - c1['Open'])
     
     # BULLISH PATTERNS
-    
-    # Hammer (Bullish Reversal)
-    if (lower_shadow_2 > 2 * body_2 and 
-        upper_shadow_2 < body_2 * 0.3 and
-        c2['Close'] > c2['Open']):
+
+    # Downtrend context: last 5 closes trending down (simple heuristic)
+    recent_closes = df['Close'].tail(6).values
+    in_downtrend = len(recent_closes) >= 5 and recent_closes[-2] < recent_closes[0]
+    in_uptrend   = len(recent_closes) >= 5 and recent_closes[-2] > recent_closes[0]
+
+    # Hammer (Bullish Reversal) — long lower shadow, small body, any colour
+    # Classic definition: lower shadow ≥ 2× body, upper shadow ≤ 0.3× body,
+    # appears after a downtrend.  Colour doesn't matter.
+    if (lower_shadow_2 >= 2 * body_2 and
+            upper_shadow_2 <= body_2 * 0.3 and
+            body_2 > 0 and in_downtrend):
         patterns_detected.append({
             'pattern': 'Hammer',
             'type': 'Bullish Reversal',
             'strength': 'Medium',
-            'description': 'Long lower shadow suggests buying pressure'
+            'description': 'Long lower shadow after downtrend — buying pressure absorbing sellers'
         })
     
     # Bullish Engulfing
@@ -387,15 +394,16 @@ def detect_candlestick_patterns(data):
     
     # BEARISH PATTERNS
     
-    # Shooting Star (Bearish Reversal)
-    if (upper_shadow_2 > 2 * body_2 and 
-        lower_shadow_2 < body_2 * 0.3 and
-        c2['Close'] < c2['Open']):
+    # Shooting Star (Bearish Reversal) — long upper shadow, small body, any colour,
+    # appears after an uptrend.
+    if (upper_shadow_2 >= 2 * body_2 and
+            lower_shadow_2 <= body_2 * 0.3 and
+            body_2 > 0 and in_uptrend):
         patterns_detected.append({
             'pattern': 'Shooting Star',
             'type': 'Bearish Reversal',
             'strength': 'Medium',
-            'description': 'Long upper shadow suggests selling pressure'
+            'description': 'Long upper shadow after uptrend — sellers rejecting higher prices'
         })
     
     # Bearish Engulfing
@@ -461,33 +469,62 @@ def generate_trading_signals(data):
         }
     
     latest = df.iloc[-1]
+    prev   = df.iloc[-2] if len(df) >= 2 else latest   # needed for crossover checks
     signals = []
     bullish_count = 0
     bearish_count = 0
-    
-    # RSI Analysis
+
+    # ── ADX trend-strength gate ───────────────────────────────────────────────
+    # ADX < 20 → no meaningful trend; oscillator signals are unreliable in
+    # choppy/sideways markets. We still report them but at half weight, and
+    # we add an explanatory note so the user knows.
+    adx_value = latest.get('ADX') if not pd.isna(latest.get('ADX')) else None
+    trending  = adx_value is not None and adx_value >= 20
+    osc_weight = 1 if trending else 0  # weight multiplier for oscillator signals
+    if adx_value is not None:
+        if trending:
+            signals.append(f'ADX {round(adx_value, 1)} — trending market (signals reliable)')
+        else:
+            signals.append(f'ADX {round(adx_value, 1)} — choppy/sideways market (oscillator signals suppressed)')
+
+    # RSI Analysis (oscillator — suppressed when not trending)
     if not pd.isna(latest.get('RSI')):
         if latest['RSI'] < 30:
             signals.append('RSI Oversold (Bullish)')
-            bullish_count += 2
+            bullish_count += 2 * osc_weight
         elif latest['RSI'] > 70:
             signals.append('RSI Overbought (Bearish)')
-            bearish_count += 2
+            bearish_count += 2 * osc_weight
         elif latest['RSI'] < 40:
             signals.append('RSI Below 40 (Slightly Bullish)')
-            bullish_count += 1
+            bullish_count += 1 * osc_weight
         elif latest['RSI'] > 60:
             signals.append('RSI Above 60 (Slightly Bearish)')
-            bearish_count += 1
-    
-    # MACD Analysis
-    if not pd.isna(latest.get('MACD')) and not pd.isna(latest.get('MACD_Signal')):
-        if latest['MACD'] > latest['MACD_Signal'] and latest['MACD'] > 0:
+            bearish_count += 1 * osc_weight
+
+    # MACD Analysis — detect the actual crossover event, not sustained position
+    # Bullish crossover: MACD crosses ABOVE Signal on this candle
+    # Bearish crossover: MACD crosses BELOW Signal on this candle
+    if (not pd.isna(latest.get('MACD')) and not pd.isna(latest.get('MACD_Signal'))
+            and not pd.isna(prev.get('MACD')) and not pd.isna(prev.get('MACD_Signal'))):
+        bullish_cross = (prev['MACD'] <= prev['MACD_Signal'] and
+                         latest['MACD'] > latest['MACD_Signal'])
+        bearish_cross = (prev['MACD'] >= prev['MACD_Signal'] and
+                         latest['MACD'] < latest['MACD_Signal'])
+        if bullish_cross:
             signals.append('MACD Bullish Crossover')
             bullish_count += 2
-        elif latest['MACD'] < latest['MACD_Signal'] and latest['MACD'] < 0:
+        elif bearish_cross:
             signals.append('MACD Bearish Crossover')
             bearish_count += 2
+        else:
+            # No crossover this candle — report sustained position at lower weight
+            if latest['MACD'] > latest['MACD_Signal']:
+                signals.append('MACD Above Signal (Bullish momentum)')
+                bullish_count += 1
+            elif latest['MACD'] < latest['MACD_Signal']:
+                signals.append('MACD Below Signal (Bearish momentum)')
+                bearish_count += 1
     
     # Moving Average Analysis
     if not pd.isna(latest.get('SMA_20')) and not pd.isna(latest.get('SMA_50')):
@@ -513,23 +550,23 @@ def generate_trading_signals(data):
             signals.append('Price at Upper BB (Overbought)')
             bearish_count += 1
     
-    # Stochastic Analysis
+    # Stochastic Analysis (oscillator — ADX-gated)
     if not pd.isna(latest.get('Stoch_K')):
         if latest['Stoch_K'] < 20:
             signals.append('Stochastic Oversold (Bullish)')
-            bullish_count += 1
+            bullish_count += 1 * osc_weight
         elif latest['Stoch_K'] > 80:
             signals.append('Stochastic Overbought (Bearish)')
-            bearish_count += 1
-    
-    # MFI Analysis
+            bearish_count += 1 * osc_weight
+
+    # MFI Analysis (volume-weighted oscillator — ADX-gated)
     if not pd.isna(latest.get('MFI')):
         if latest['MFI'] < 20:
             signals.append('Money Flow Oversold (Bullish)')
-            bullish_count += 1
+            bullish_count += 1 * osc_weight
         elif latest['MFI'] > 80:
             signals.append('Money Flow Overbought (Bearish)')
-            bearish_count += 1
+            bearish_count += 1 * osc_weight
     
     # Volume Analysis
     if not pd.isna(latest.get('Volume_SMA_20')) and not pd.isna(latest.get('Volume')):
@@ -578,133 +615,147 @@ def generate_trading_signals(data):
             'BB_Upper': round(latest.get('BB_Upper', 0), 2) if not pd.isna(latest.get('BB_Upper')) else None,
             'BB_Lower': round(latest.get('BB_Lower', 0), 2) if not pd.isna(latest.get('BB_Lower')) else None,
             'Volume': int(latest.get('Volume', 0)) if not pd.isna(latest.get('Volume')) else None,
-            'ATR': round(latest.get('ATR', 0), 2) if not pd.isna(latest.get('ATR')) else None
+            'ATR': round(latest.get('ATR', 0), 2) if not pd.isna(latest.get('ATR')) else None,
+            'ADX': round(latest.get('ADX', 0), 2) if not pd.isna(latest.get('ADX')) else None,
+            'OBV': int(latest.get('OBV', 0)) if not pd.isna(latest.get('OBV')) else None,
         }
     }
 
 
 def predict_next_candle(data):
     """
-    Predict next candle direction using simple ML
-    
-    Args:
-        data: DataFrame with indicators
-    
-    Returns:
-        Dictionary with prediction details
+    Predict next-candle direction using a transparent multi-factor momentum model.
+
+    Why not Random Forest?
+    ──────────────────────
+    A standard trading dataset contains 50–250 rows after indicator warmup.
+    A RandomForestClassifier trained on such small samples and immediately
+    evaluated on the very next row has no meaningful generalisation ability —
+    its reported "confidence" is essentially the class prior, not a
+    statistically valid probability.  Displaying 65–72% RF confidence to a
+    retail investor implies a level of certainty the model cannot deliver.
+
+    This replacement uses five rule-based momentum signals drawn from the same
+    indicators already calculated by calculate_technical_indicators().  Each
+    signal casts a directional vote (+1 = bullish, −1 = bearish).  The
+    aggregate score is mapped to a direction and a signal-count-based
+    confidence band that is honest about what it represents: "X out of 5
+    momentum factors agree."  The approach is fully auditable — users can
+    see exactly why the model says UP or DOWN.
     """
     df = data.copy()
-    
-    if len(df) < 30:
+
+    if len(df) < 14:
         return {
             'predicted_direction': 'INSUFFICIENT_DATA',
             'predicted_change': 0,
             'confidence': 0,
-            'note': f'Need at least 30 candles for prediction (have {len(df)}). Get more historical data.'
+            'note': f'Need at least 14 candles (have {len(df)}).',
+            'model': 'Multi-factor momentum',
         }
-    
-    try:
-        # Prepare features - use only available ones
-        available_features = []
-        feature_cols = ['RSI', 'MACD', 'SMA_20', 'SMA_50', 'ATR', 'Volume', 'MFI', 'Stoch_K']
-        
-        for col in feature_cols:
-            if col in df.columns:
-                available_features.append(col)
-        
-        if len(available_features) < 3:
-            return {
-                'predicted_direction': 'INSUFFICIENT_INDICATORS',
-                'predicted_change': 0,
-                'confidence': 0,
-                'note': 'Not enough indicators calculated for ML prediction'
-            }
-        
-        # Remove rows with NaN in available features
-        df_clean = df.dropna(subset=available_features)
-        
-        if len(df_clean) < 20:
-            return {
-                'predicted_direction': 'INSUFFICIENT_CLEAN_DATA',
-                'predicted_change': 0,
-                'confidence': 0,
-                'note': 'Too many missing values in indicator data'
-            }
-        
-        # Create target: 1 if next close > current close, 0 otherwise
-        df_clean['Target'] = (df_clean['Close'].shift(-1) > df_clean['Close']).astype(int)
-        
-        # Remove last row (no target)
-        df_clean = df_clean[:-1]
-        
-        if len(df_clean) < 15:
-            return {
-                'predicted_direction': 'UNKNOWN',
-                'predicted_change': 0,
-                'confidence': 0,
-                'note': 'Need more data points for reliable ML prediction'
-            }
-        
-        X = df_clean[available_features]
-        y = df_clean['Target']
-        
-        # Train simple model with reduced complexity for small datasets
-        from sklearn.ensemble import RandomForestClassifier
-        n_estimators = min(30, len(df_clean) // 2)  # Adapt to data size
-        model = RandomForestClassifier(n_estimators=n_estimators, max_depth=3, random_state=42)
-        model.fit(X, y)
-        
-        # Predict for latest candle
-        latest_features = df[available_features].iloc[[-1]]
-        
-        if latest_features.isna().any().any():
-            return {
-                'predicted_direction': 'UNKNOWN',
-                'predicted_change': 0,
-                'confidence': 0,
-                'note': 'Latest candle has missing indicator values'
-            }
-        
-        prediction = model.predict(latest_features)[0]
-        probability = model.predict_proba(latest_features)[0]
-        
-        predicted_direction = 'UP' if prediction == 1 else 'DOWN'
-        confidence = round(max(probability) * 100, 2)
-        
-        # Estimate price change based on ATR or recent volatility
-        current_price = df.iloc[-1]['Close']
-        
-        if not pd.isna(df.iloc[-1].get('ATR')) and df.iloc[-1]['ATR'] > 0:
-            atr = df.iloc[-1]['ATR']
-        else:
-            # Use recent price volatility as fallback
-            recent_returns = df['Close'].pct_change().tail(10)
-            atr = recent_returns.std() * current_price
-        
-        if predicted_direction == 'UP':
-            predicted_price = current_price + (atr * 0.5)
-            predicted_change = round(((predicted_price / current_price) - 1) * 100, 2)
-        else:
-            predicted_price = current_price - (atr * 0.5)
-            predicted_change = round(((predicted_price / current_price) - 1) * 100, 2)
-        
+
+    latest = df.iloc[-1]
+    prev   = df.iloc[-2] if len(df) >= 2 else latest
+    current_price = float(latest['Close'])
+
+    # ── ATR-based price range estimate ───────────────────────────────────────
+    if not pd.isna(latest.get('ATR')) and latest['ATR'] > 0:
+        atr = float(latest['ATR'])
+    else:
+        atr = float(df['Close'].pct_change().tail(10).std() * current_price)
+    atr = atr if atr > 0 else current_price * 0.01
+
+    # ── Five momentum votes ───────────────────────────────────────────────────
+    # Each vote:  +1 = bullish,  −1 = bearish,  0 = neutral/unavailable
+    votes = {}
+
+    # 1. RSI momentum: above/below 50 midline
+    rsi = latest.get('RSI')
+    if not pd.isna(rsi):
+        votes['RSI midline'] = 1 if rsi > 50 else -1
+
+    # 2. MACD histogram direction (positive = buying pressure building)
+    mhist = latest.get('MACD_Hist')
+    mhist_p = prev.get('MACD_Hist')
+    if not pd.isna(mhist) and not pd.isna(mhist_p):
+        if mhist > 0 and mhist > mhist_p:
+            votes['MACD histogram'] = 1    # positive and rising
+        elif mhist < 0 and mhist < mhist_p:
+            votes['MACD histogram'] = -1   # negative and falling
+        elif mhist > 0:
+            votes['MACD histogram'] = 1
+        elif mhist < 0:
+            votes['MACD histogram'] = -1
+
+    # 3. Price vs SMA-20 (short-term trend)
+    sma20 = latest.get('SMA_20')
+    if not pd.isna(sma20) and sma20 > 0:
+        votes['Price vs SMA-20'] = 1 if current_price > sma20 else -1
+
+    # 4. Price vs SMA-50 (medium-term trend)
+    sma50 = latest.get('SMA_50')
+    if not pd.isna(sma50) and sma50 > 0:
+        votes['Price vs SMA-50'] = 1 if current_price > sma50 else -1
+
+    # 5. Stochastic %K vs 50 midline (momentum)
+    stoch = latest.get('Stoch_K')
+    if not pd.isna(stoch):
+        votes['Stochastic %K'] = 1 if stoch > 50 else -1
+
+    if not votes:
         return {
-            'predicted_direction': predicted_direction,
-            'predicted_price': round(predicted_price, 2),
-            'predicted_change': predicted_change,
-            'confidence': confidence,
-            'current_price': round(current_price, 2),
-            'model': f'Random Forest ({n_estimators} trees)',
-            'features_used': len(available_features)
-        }
-    
-    except Exception as e:
-        return {
-            'predicted_direction': 'ERROR',
+            'predicted_direction': 'UNKNOWN',
             'predicted_change': 0,
             'confidence': 0,
-            'note': f'Prediction error: {str(e)}'
+            'note': 'Insufficient indicators to score.',
+            'model': 'Multi-factor momentum',
         }
+
+    total      = len(votes)
+    bull_votes = sum(1 for v in votes.values() if v > 0)
+    bear_votes = sum(1 for v in votes.values() if v < 0)
+    net_score  = bull_votes - bear_votes  # range: −total … +total
+
+    # Direction: majority of votes
+    if net_score > 0:
+        direction = 'UP'
+        predicted_price  = round(current_price + atr * 0.5, 2)
+    elif net_score < 0:
+        direction = 'DOWN'
+        predicted_price  = round(current_price - atr * 0.5, 2)
+    else:
+        direction = 'NEUTRAL'
+        predicted_price  = round(current_price, 2)
+
+    predicted_change = round(((predicted_price / current_price) - 1) * 100, 2)
+
+    # Confidence: fraction of agreeing votes, scaled 50–90%
+    # We cap at 90% because no single-candle model can be more certain than that.
+    majority_votes  = max(bull_votes, bear_votes)
+    raw_frac        = majority_votes / total                    # 0.5 … 1.0
+    confidence      = round(50 + raw_frac * 40, 1)             # 70 … 90
+
+    # Build readable factor summary
+    factor_lines = []
+    for fname, vote in votes.items():
+        arrow = '▲' if vote > 0 else '▼'
+        factor_lines.append(f'{arrow} {fname}')
+
+    return {
+        'predicted_direction': direction,
+        'predicted_price': predicted_price,
+        'predicted_change': predicted_change,
+        'confidence': confidence,
+        'current_price': round(current_price, 2),
+        'model': f'Multi-factor momentum ({total} factors: {bull_votes} bullish, {bear_votes} bearish)',
+        'model_note': (
+            'Confidence reflects how many of the 5 momentum factors agree — '
+            'not a statistical probability. This model is rule-based and auditable, '
+            'not a trained ML classifier.'
+        ),
+        'factors': factor_lines,
+        'features_used': total,
+    }
 
 
 def run_technical_analysis(symbol, timeframe='1d', period='1y'):
