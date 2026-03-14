@@ -1109,22 +1109,321 @@ def calculate_support_resistance(data, n_levels=3, swing_window=5):
     }
 
 
-def run_technical_analysis(symbol, timeframe='1d', period='1y'):
+def calculate_multi_timeframe_confluence(symbol, primary_timeframe, primary_data):
     """
-    Complete technical analysis pipeline
+    Fetch the next-higher timeframe and run the same signal logic on it.
+
+    Timeframe ladder:
+        1m/5m/15m → 1h (intraday context)
+        30m/1h    → 1d (daily context)
+        1d        → 1wk (weekly context)
+        1wk/1mo   → skip (already top-level)
+
+    Returns dict with:
+        higher_tf          – which timeframe was used
+        higher_signal      – BUY / SELL / HOLD
+        higher_trend       – 'bullish' / 'bearish' / 'neutral'
+        confluence         – True if primary and higher agree
+        confluence_label   – human-readable summary
+        weekly_sma20       – SMA-20 on higher TF (useful reference)
+        weekly_adx         – ADX on higher TF (is higher TF trending?)
+    """
+    tf_ladder = {
+        '1m': '1h',  '5m': '1h',  '15m': '1h',
+        '30m': '1d', '60m': '1d', '1h':  '1d',
+        '1d':  '1wk',
+    }
+    higher_tf = tf_ladder.get(primary_timeframe)
+    if not higher_tf:
+        return {
+            'higher_tf': None,
+            'higher_signal': 'N/A',
+            'higher_trend': 'n/a',
+            'confluence': None,
+            'confluence_label': 'No higher timeframe available',
+        }
+
+    # Period for higher TF: enough bars for meaningful indicators
+    period_map = {'1h': '3mo', '1d': '1y', '1wk': '5y'}
+    higher_period = period_map.get(higher_tf, '1y')
+
+    try:
+        h_data = fetch_stock_data(symbol, higher_tf, higher_period)
+        h_data = calculate_technical_indicators(h_data)
+        h_sig  = generate_trading_signals(h_data)
+
+        h_latest     = h_data.iloc[-1]
+        weekly_sma20 = round(float(h_latest.get('SMA_20', 0) or 0), 2)
+        weekly_adx   = round(float(h_latest.get('ADX',   0) or 0), 2)
+        higher_signal = h_sig['signal']     # BUY / SELL / HOLD
+        primary_signal = generate_trading_signals(primary_data)['signal']
+
+        # Trend direction from higher TF
+        if higher_signal == 'BUY':
+            higher_trend = 'bullish'
+        elif higher_signal == 'SELL':
+            higher_trend = 'bearish'
+        else:
+            higher_trend = 'neutral'
+
+        # Confluence: primary and higher agree directionally
+        def _direction(sig):
+            if sig == 'BUY':   return 'up'
+            if sig == 'SELL':  return 'down'
+            return 'neutral'
+
+        p_dir = _direction(primary_signal)
+        h_dir = _direction(higher_signal)
+        confluence = (p_dir == h_dir) and p_dir != 'neutral'
+
+        if confluence:
+            confluence_label = (
+                f"✅ Confirmed — {higher_tf} trend is also {higher_trend}. "
+                f"Multi-timeframe alignment increases signal reliability."
+            )
+        elif h_dir == 'neutral':
+            confluence_label = (
+                f"⚠️ Higher timeframe ({higher_tf}) is neutral/sideways — "
+                f"proceed with caution."
+            )
+        else:
+            confluence_label = (
+                f"❌ Against trend — {higher_tf} is {higher_trend} but "
+                f"primary signal is {primary_signal}. Consider waiting for alignment."
+            )
+
+        return {
+            'higher_tf':        higher_tf,
+            'higher_signal':    higher_signal,
+            'higher_trend':     higher_trend,
+            'confluence':       confluence,
+            'confluence_label': confluence_label,
+            'weekly_sma20':     weekly_sma20,
+            'weekly_adx':       weekly_adx,
+            'higher_bull':      h_sig['bullish_signals'],
+            'higher_bear':      h_sig['bearish_signals'],
+        }
+
+    except Exception as e:
+        return {
+            'higher_tf':        higher_tf,
+            'higher_signal':    'ERROR',
+            'higher_trend':     'unknown',
+            'confluence':       None,
+            'confluence_label': f'Could not fetch {higher_tf} data: {str(e)}',
+        }
+
+
+def calculate_position_size(current_price, atr, account_size=100000,
+                             risk_pct=1.0, atr_multiplier=2.0):
+    """
+    ATR-based position sizing — the standard institutional method.
+
+    Concept
+    ───────
+    Stop distance = ATR × atr_multiplier
+        (place stop atr_multiplier ATRs away from entry)
+    Risk per trade = account_size × risk_pct / 100
+        (never risk more than risk_pct% of capital on one trade)
+    Shares = Risk per trade / Stop distance
+
+    This ensures a fixed % capital loss if the stop is hit, regardless of
+    the stock's price or volatility.
 
     Args:
-        symbol: Stock ticker
-        timeframe: Candle timeframe
-        period: Historical period
+        current_price   – latest close price
+        atr             – Average True Range of the stock
+        account_size    – total capital in same currency as price (default ₹1L)
+        risk_pct        – % of account to risk per trade (default 1%)
+        atr_multiplier  – stop distance in ATR units (default 2×ATR)
+
+    Returns dict with:
+        shares          – number of shares to buy/sell
+        stop_loss       – suggested stop price (entry − stop_distance)
+        stop_distance   – absolute price distance of stop
+        risk_amount     – ₹ at risk if stop is hit
+        position_value  – total position value (shares × price)
+        position_pct    – position as % of account
+        reward_target   – 2:1 R/R target price (entry + 2 × stop_distance)
+        risk_reward     – R/R ratio (always 2.0 with this method)
+    """
+    if not atr or atr <= 0 or not current_price or current_price <= 0:
+        return {'error': 'Invalid price or ATR for position sizing'}
+
+    stop_distance  = round(atr * atr_multiplier, 2)
+    risk_amount    = round(account_size * risk_pct / 100, 2)
+    shares         = int(risk_amount / stop_distance)   # whole shares only
+    shares         = max(shares, 0)
+
+    stop_loss      = round(current_price - stop_distance, 2)
+    reward_target  = round(current_price + stop_distance * 2, 2)   # 2:1 R/R
+    position_value = round(shares * current_price, 2)
+    position_pct   = round(position_value / account_size * 100, 2) if account_size else 0
+    actual_risk    = round(shares * stop_distance, 2)   # may differ from risk_amount due to rounding
+
+    return {
+        'shares':          shares,
+        'entry_price':     round(current_price, 2),
+        'stop_loss':       stop_loss,
+        'stop_distance':   stop_distance,
+        'reward_target':   reward_target,
+        'risk_reward':     2.0,
+        'risk_amount':     actual_risk,
+        'risk_pct_actual': round(actual_risk / account_size * 100, 3) if account_size else 0,
+        'position_value':  position_value,
+        'position_pct':    position_pct,
+        'account_size':    account_size,
+        'atr_used':        round(atr, 2),
+        'atr_multiplier':  atr_multiplier,
+        'method':          f'ATR×{atr_multiplier} stop, {risk_pct}% account risk, 2:1 R/R target',
+    }
+
+
+def run_oos_backtest(data, test_split=0.3, commission_pct=0.05):
+    """
+    Out-of-sample backtest with train/test split.
+
+    Design
+    ──────
+    Train period: first (1 - test_split) of bars — used for nothing here
+        because the model is rule-based and has no parameters to fit.
+        We still honour the split to simulate real deployment: signals
+        generated only on test data, with no look-ahead.
+
+    For each bar i in the test set:
+        1. Run the 5-factor momentum scorer on bar i (same logic as
+           predict_next_candle's _score_bar).
+        2. If direction = UP  → long  next bar's open, exit at close.
+           If direction = DOWN → short next bar's open, exit at close.
+           If NEUTRAL → flat.
+        3. Apply commission_pct on each side of the trade.
 
     Returns:
-        Dictionary with complete analysis
+        total_trades, win_rate, avg_win_pct, avg_loss_pct,
+        profit_factor, max_drawdown_pct, sharpe_ratio (annualised),
+        equity_curve (list of cumulative % returns),
+        train_bars, test_bars, oos_label
+    """
+    df = data.copy().reset_index(drop=True)
+    n  = len(df)
+
+    if n < 30:
+        return {'error': f'Need at least 30 bars for backtest (have {n})'}
+
+    split_i   = int(n * (1 - test_split))
+    train_df  = df.iloc[:split_i]
+    test_df   = df.iloc[split_i:].reset_index(drop=True)
+
+    def _score_bar(row, prev_row):
+        v = {}
+        rsi = row.get('RSI')
+        if not pd.isna(rsi):
+            v['RSI'] = 1 if rsi > 50 else -1
+        mh = row.get('MACD_Hist'); mph = prev_row.get('MACD_Hist')
+        if not pd.isna(mh) and not pd.isna(mph):
+            v['MACD'] = 1 if mh > 0 else -1
+        s20 = row.get('SMA_20')
+        if not pd.isna(s20) and s20 > 0:
+            v['S20'] = 1 if row['Close'] > s20 else -1
+        s50 = row.get('SMA_50')
+        if not pd.isna(s50) and s50 > 0:
+            v['S50'] = 1 if row['Close'] > s50 else -1
+        stoch = row.get('Stoch_K')
+        if not pd.isna(stoch):
+            v['Stoch'] = 1 if stoch > 50 else -1
+        if not v:
+            return 'NEUTRAL'
+        bull = sum(1 for x in v.values() if x > 0)
+        bear = sum(1 for x in v.values() if x < 0)
+        return 'UP' if bull > bear else 'DOWN' if bear > bull else 'NEUTRAL'
+
+    trades    = []
+    equity    = 0.0
+    equity_curve = [0.0]
+    peak      = 0.0
+    max_dd    = 0.0
+    comm      = commission_pct / 100
+
+    for i in range(1, len(test_df) - 1):
+        direction = _score_bar(test_df.iloc[i], test_df.iloc[i - 1])
+        if direction == 'NEUTRAL':
+            equity_curve.append(round(equity, 4))
+            continue
+
+        entry = float(test_df.iloc[i + 1].get('Open', test_df.iloc[i + 1]['Close']))
+        exit_ = float(test_df.iloc[i + 1]['Close'])
+
+        if entry == 0:
+            equity_curve.append(round(equity, 4))
+            continue
+
+        raw_ret = (exit_ - entry) / entry if direction == 'UP' else (entry - exit_) / entry
+        net_ret = raw_ret - 2 * comm   # pay commission both ways
+        trades.append(net_ret)
+        equity += net_ret * 100        # cumulative % return
+        equity_curve.append(round(equity, 4))
+
+        if equity > peak:
+            peak = equity
+        dd = peak - equity
+        if dd > max_dd:
+            max_dd = dd
+
+    if not trades:
+        return {'error': 'No trades generated in test period'}
+
+    wins       = [t for t in trades if t > 0]
+    losses     = [t for t in trades if t <= 0]
+    win_rate   = round(len(wins) / len(trades) * 100, 1)
+    avg_win    = round(np.mean(wins) * 100, 3)   if wins   else 0
+    avg_loss   = round(np.mean(losses) * 100, 3) if losses else 0
+    gross_win  = sum(wins)
+    gross_loss = abs(sum(losses))
+    pf         = round(gross_win / gross_loss, 2) if gross_loss > 0 else None
+
+    # Annualised Sharpe (assume 252 trading days/year)
+    ret_arr   = np.array(trades)
+    sharpe    = None
+    if ret_arr.std() > 0:
+        sharpe = round(float(ret_arr.mean() / ret_arr.std() * np.sqrt(252)), 2)
+
+    return {
+        'train_bars':       len(train_df),
+        'test_bars':        len(test_df),
+        'total_trades':     len(trades),
+        'win_rate':         win_rate,
+        'avg_win_pct':      avg_win,
+        'avg_loss_pct':     avg_loss,
+        'profit_factor':    pf,
+        'max_drawdown_pct': round(max_dd, 2),
+        'sharpe_ratio':     sharpe,
+        'total_return_pct': round(equity, 2),
+        'equity_curve':     equity_curve[-100:],   # last 100 points for chart
+        'oos_label':        f'OOS test: last {round(test_split*100)}% of data ({len(test_df)} bars)',
+        'commission_pct':   commission_pct,
+    }
+
+
+def run_technical_analysis(symbol, timeframe='1d', period='1y',
+                            account_size=100000, risk_pct=1.0,
+                            run_mtf=True, run_backtest=True):
+    """
+    Complete technical analysis pipeline — now includes:
+      · Multi-timeframe confluence (higher TF trend check)
+      · ATR-based position sizing
+      · Out-of-sample backtest (train/test split)
+
+    Args:
+        symbol        – Stock ticker
+        timeframe     – Candle timeframe
+        period        – Historical period
+        account_size  – Capital for position sizing (default ₹1,00,000)
+        risk_pct      – % to risk per trade (default 1%)
+        run_mtf       – Whether to fetch higher TF (adds one API call)
+        run_backtest  – Whether to run OOS backtest (CPU only, fast)
     """
     # ── Cache check ───────────────────────────────────────────────────────────
     _now = datetime.now()
-    # For intraday (≤1h) use hour-bucket so cache refreshes every hour at most.
-    # For daily+ data use date-bucket so cache lasts the trading day.
     _intraday_tf = timeframe in ('1m', '5m', '15m', '30m', '60m', '1h')
     _bucket = _now.strftime('%Y-%m-%d_%H') if _intraday_tf else _now.strftime('%Y-%m-%d')
     _cache_key = f"{symbol.upper()}|{timeframe}|{period}|{_bucket}"
@@ -1136,39 +1435,51 @@ def run_technical_analysis(symbol, timeframe='1d', period='1y'):
             return _cached_result
 
     try:
-        # 1. Fetch data
+        # 1. Fetch + indicators
         data = fetch_stock_data(symbol, timeframe, period)
-        
-        # 2. Calculate indicators
         data = calculate_technical_indicators(data)
-        
-        # 3. Detect patterns
-        patterns = detect_candlestick_patterns(data)
-        
-        # 4. Generate signals
-        signals = generate_trading_signals(data)
-        
-        # 5. Predict next candle
-        prediction = predict_next_candle(data)
 
-        # 6. Support / Resistance levels
+        # 2. Core analysis
+        patterns  = detect_candlestick_patterns(data)
+        signals   = generate_trading_signals(data)
+        prediction = predict_next_candle(data)
         sr_levels = calculate_support_resistance(data)
 
-        # 7. Prepare chart data (last 100 candles for display)
-        chart_data = data.tail(100).to_dict('records')
-
-        # Convert timestamps to strings for JSON serialization
-        for row in chart_data:
-            if 'Date' in row and isinstance(row['Date'], pd.Timestamp):
-                row['Date'] = row['Date'].strftime('%Y-%m-%d %H:%M:%S')
-
-        # 8. VWAP — only meaningful for intraday timeframes
-        intraday_tf = timeframe in ('1m', '5m', '15m', '30m', '60m', '1h')
+        # 3. VWAP
+        intraday_tf = _intraday_tf
         vwap_value  = None
         if 'VWAP' in data.columns and not pd.isna(data.iloc[-1].get('VWAP')):
             vwap_value = round(float(data.iloc[-1]['VWAP']), 2)
 
-        return {
+        # 4. Multi-timeframe confluence
+        mtf = None
+        if run_mtf:
+            mtf = calculate_multi_timeframe_confluence(symbol, timeframe, data)
+
+        # 5. ATR-based position sizing
+        latest_atr   = None
+        position_size = None
+        if 'ATR' in data.columns and not pd.isna(data.iloc[-1].get('ATR')):
+            latest_atr = float(data.iloc[-1]['ATR'])
+        current_price = signals['current_price']
+        if latest_atr and current_price:
+            position_size = calculate_position_size(
+                current_price, latest_atr,
+                account_size=account_size, risk_pct=risk_pct
+            )
+
+        # 6. Out-of-sample backtest
+        oos_backtest = None
+        if run_backtest:
+            oos_backtest = run_oos_backtest(data)
+
+        # 7. Chart data (last 100 candles)
+        chart_data = data.tail(100).to_dict('records')
+        for row in chart_data:
+            if 'Date' in row and isinstance(row['Date'], pd.Timestamp):
+                row['Date'] = row['Date'].strftime('%Y-%m-%d %H:%M:%S')
+
+        result = {
             'success': True,
             'symbol': symbol,
             'timeframe': timeframe,
@@ -1181,30 +1492,37 @@ def run_technical_analysis(symbol, timeframe='1d', period='1y'):
             'prediction': prediction,
             'support_resistance': sr_levels,
             'vwap': vwap_value,
+            'multi_timeframe': mtf,
+            'position_size': position_size,
+            'oos_backtest': oos_backtest,
             'summary': {
-                'current_price': signals['current_price'],
-                'recommendation': signals['signal'],
-                'confidence': signals['confidence'],
-                'buy_probability': signals['buy_probability'],
-                'sell_probability': signals['sell_probability'],
+                'current_price':      current_price,
+                'recommendation':     signals['signal'],
+                'confidence':         signals['confidence'],
+                'buy_probability':    signals['buy_probability'],
+                'sell_probability':   signals['sell_probability'],
                 'predicted_direction': prediction.get('predicted_direction', 'UNKNOWN'),
-                'predicted_change': prediction.get('predicted_change', 0),
-                'vwap': vwap_value,
+                'predicted_change':   prediction.get('predicted_change', 0),
+                'vwap':               vwap_value,
                 'nearest_support':    sr_levels['support'][0]['price']    if sr_levels['support']    else None,
                 'nearest_resistance': sr_levels['resistance'][0]['price'] if sr_levels['resistance'] else None,
+                'mtf_confluence':     mtf.get('confluence')       if mtf else None,
+                'mtf_label':          mtf.get('confluence_label') if mtf else None,
+                'higher_tf_signal':   mtf.get('higher_signal')    if mtf else None,
+                'oos_win_rate':       oos_backtest.get('win_rate')        if oos_backtest else None,
+                'oos_sharpe':         oos_backtest.get('sharpe_ratio')    if oos_backtest else None,
             }
         }
 
-        # ── Cache store ───────────────────────────────────────────────────────
+        # ── Cache store (must be before return) ──────────────────────────────
         result['from_cache'] = False
         _CACHE[_cache_key] = (datetime.now(), result)
-        # Evict stale entries (keep cache lean — max 50 entries)
         if len(_CACHE) > 50:
             oldest_key = min(_CACHE, key=lambda k: _CACHE[k][0])
             del _CACHE[oldest_key]
 
         return result
-    
+
     except Exception as e:
         return {
             'success': False,
