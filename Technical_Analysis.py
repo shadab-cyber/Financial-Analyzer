@@ -824,26 +824,18 @@ def generate_trading_signals(data):
 
 def predict_next_candle(data):
     """
-    Predict next-candle direction using a transparent multi-factor momentum model.
+    Predict next-candle direction using a transparent multi-factor momentum model
+    with a rolling backtest to show historical hit-rate on the same dataset.
 
     Why not Random Forest?
     ──────────────────────
-    A standard trading dataset contains 50–250 rows after indicator warmup.
-    A RandomForestClassifier trained on such small samples and immediately
-    evaluated on the very next row has no meaningful generalisation ability —
-    its reported "confidence" is essentially the class prior, not a
-    statistically valid probability.  Displaying 65–72% RF confidence to a
-    retail investor implies a level of certainty the model cannot deliver.
-
-    This replacement uses five rule-based momentum signals drawn from the same
-    indicators already calculated by calculate_technical_indicators().  Each
-    signal casts a directional vote (+1 = bullish, −1 = bearish).  The
-    aggregate score is mapped to a direction and a signal-count-based
-    confidence band that is honest about what it represents: "X out of 5
-    momentum factors agree."  The approach is fully auditable — users can
-    see exactly why the model says UP or DOWN.
+    A standard trading dataset contains 50-250 rows after indicator warmup.
+    A RandomForestClassifier trained on such small samples has no meaningful
+    generalisation ability. This replacement uses five rule-based momentum
+    signals. The model is backtested on the same historical window to produce
+    an honest hit-rate shown alongside the prediction.
     """
-    df = data.copy()
+    df = data.copy().reset_index(drop=True)
 
     if len(df) < 14:
         return {
@@ -854,50 +846,110 @@ def predict_next_candle(data):
             'model': 'Multi-factor momentum',
         }
 
+    def _score_bar(row, prev_row):
+        """Apply the 5 momentum votes to a single bar. Returns (direction, n_votes)."""
+        v = {}
+        rsi = row.get('RSI')
+        if not pd.isna(rsi):
+            v['RSI'] = 1 if rsi > 50 else -1
+
+        mhist = row.get('MACD_Hist')
+        mhist_p = prev_row.get('MACD_Hist')
+        if not pd.isna(mhist) and not pd.isna(mhist_p):
+            v['MACD'] = 1 if mhist > 0 else -1
+
+        sma20 = row.get('SMA_20')
+        if not pd.isna(sma20) and sma20 > 0:
+            v['SMA20'] = 1 if row['Close'] > sma20 else -1
+
+        sma50 = row.get('SMA_50')
+        if not pd.isna(sma50) and sma50 > 0:
+            v['SMA50'] = 1 if row['Close'] > sma50 else -1
+
+        stoch = row.get('Stoch_K')
+        if not pd.isna(stoch):
+            v['Stoch'] = 1 if stoch > 50 else -1
+
+        if not v:
+            return 'NEUTRAL', 0
+        bull = sum(1 for x in v.values() if x > 0)
+        bear = sum(1 for x in v.values() if x < 0)
+        return ('UP' if bull > bear else 'DOWN' if bear > bull else 'NEUTRAL'), len(v)
+
+    # ── Rolling backtest ──────────────────────────────────────────────────────
+    # Walk through bars [1 .. n-2], predict next-bar direction, compare to actual.
+    # Skip NEUTRAL predictions — they are abstentions, not errors.
+    backtest_window = min(len(df) - 2, 100)
+    start_bt = max(1, len(df) - 1 - backtest_window)
+
+    total_calls = 0
+    correct_all = 0
+    bt_log = []   # (predicted, actual, hit)
+
+    for i in range(start_bt, len(df) - 1):
+        pred_dir, _ = _score_bar(df.iloc[i], df.iloc[i - 1])
+        if pred_dir == 'NEUTRAL':
+            continue
+        actual_dir = 'UP' if df.iloc[i + 1]['Close'] > df.iloc[i]['Close'] else 'DOWN'
+        hit = (pred_dir == actual_dir)
+        bt_log.append((pred_dir, actual_dir, hit))
+        total_calls += 1
+        if hit:
+            correct_all += 1
+
+    # Last-20 hit-rate
+    calls_20 = correct_20 = 0
+    for _, _, hit in bt_log[-20:]:
+        calls_20 += 1
+        if hit:
+            correct_20 += 1
+
+    # Current streak
+    streak = 0
+    streak_sign = None
+    if bt_log:
+        last_hit = bt_log[-1][2]
+        streak_sign = 'W' if last_hit else 'L'
+        streak = 1
+        for _, _, hit in reversed(bt_log[:-1]):
+            if hit == last_hit:
+                streak += 1
+            else:
+                break
+
+    hit_rate_all = round(correct_all / total_calls * 100, 1) if total_calls else None
+    hit_rate_20  = round(correct_20 / calls_20 * 100, 1)     if calls_20  else None
+    streak_label = f"{streak} {'win' if streak_sign == 'W' else 'loss'} streak" if streak and streak_sign else None
+
+    # ── Current prediction ────────────────────────────────────────────────────
     latest = df.iloc[-1]
-    prev   = df.iloc[-2] if len(df) >= 2 else latest
+    prev   = df.iloc[-2]
     current_price = float(latest['Close'])
 
-    # ── ATR-based price range estimate ───────────────────────────────────────
     if not pd.isna(latest.get('ATR')) and latest['ATR'] > 0:
         atr = float(latest['ATR'])
     else:
         atr = float(df['Close'].pct_change().tail(10).std() * current_price)
-    atr = atr if atr > 0 else current_price * 0.01
+    atr = max(atr, current_price * 0.001)
 
-    # ── Five momentum votes ───────────────────────────────────────────────────
-    # Each vote:  +1 = bullish,  −1 = bearish,  0 = neutral/unavailable
     votes = {}
-
-    # 1. RSI momentum: above/below 50 midline
     rsi = latest.get('RSI')
     if not pd.isna(rsi):
         votes['RSI midline'] = 1 if rsi > 50 else -1
 
-    # 2. MACD histogram direction (positive = buying pressure building)
     mhist = latest.get('MACD_Hist')
     mhist_p = prev.get('MACD_Hist')
     if not pd.isna(mhist) and not pd.isna(mhist_p):
-        if mhist > 0 and mhist > mhist_p:
-            votes['MACD histogram'] = 1    # positive and rising
-        elif mhist < 0 and mhist < mhist_p:
-            votes['MACD histogram'] = -1   # negative and falling
-        elif mhist > 0:
-            votes['MACD histogram'] = 1
-        elif mhist < 0:
-            votes['MACD histogram'] = -1
+        votes['MACD histogram'] = 1 if mhist > 0 else -1
 
-    # 3. Price vs SMA-20 (short-term trend)
     sma20 = latest.get('SMA_20')
     if not pd.isna(sma20) and sma20 > 0:
         votes['Price vs SMA-20'] = 1 if current_price > sma20 else -1
 
-    # 4. Price vs SMA-50 (medium-term trend)
     sma50 = latest.get('SMA_50')
     if not pd.isna(sma50) and sma50 > 0:
         votes['Price vs SMA-50'] = 1 if current_price > sma50 else -1
 
-    # 5. Stochastic %K vs 50 midline (momentum)
     stoch = latest.get('Stoch_K')
     if not pd.isna(stoch):
         votes['Stochastic %K'] = 1 if stoch > 50 else -1
@@ -914,48 +966,44 @@ def predict_next_candle(data):
     total      = len(votes)
     bull_votes = sum(1 for v in votes.values() if v > 0)
     bear_votes = sum(1 for v in votes.values() if v < 0)
-    net_score  = bull_votes - bear_votes  # range: −total … +total
+    net_score  = bull_votes - bear_votes
 
-    # Direction: majority of votes
     if net_score > 0:
-        direction = 'UP'
-        predicted_price  = round(current_price + atr * 0.5, 2)
+        direction       = 'UP'
+        predicted_price = round(current_price + atr * 0.5, 2)
     elif net_score < 0:
-        direction = 'DOWN'
-        predicted_price  = round(current_price - atr * 0.5, 2)
+        direction       = 'DOWN'
+        predicted_price = round(current_price - atr * 0.5, 2)
     else:
-        direction = 'NEUTRAL'
-        predicted_price  = round(current_price, 2)
+        direction       = 'NEUTRAL'
+        predicted_price = round(current_price, 2)
 
-    predicted_change = round(((predicted_price / current_price) - 1) * 100, 2)
-
-    # Confidence: fraction of agreeing votes, scaled 50–90%
-    # We cap at 90% because no single-candle model can be more certain than that.
-    majority_votes  = max(bull_votes, bear_votes)
-    raw_frac        = majority_votes / total                    # 0.5 … 1.0
-    confidence      = round(50 + raw_frac * 40, 1)             # 70 … 90
-
-    # Build readable factor summary
-    factor_lines = []
-    for fname, vote in votes.items():
-        arrow = '▲' if vote > 0 else '▼'
-        factor_lines.append(f'{arrow} {fname}')
+    predicted_change   = round(((predicted_price / current_price) - 1) * 100, 2)
+    majority_votes     = max(bull_votes, bear_votes)
+    confidence         = round(50 + (majority_votes / total) * 40, 1)
+    factor_lines       = [f"{'UP' if v > 0 else 'DN'} {fname}" for fname, v in votes.items()]
 
     return {
         'predicted_direction': direction,
-        'predicted_price': predicted_price,
-        'predicted_change': predicted_change,
-        'confidence': confidence,
-        'current_price': round(current_price, 2),
+        'predicted_price':     predicted_price,
+        'predicted_change':    predicted_change,
+        'confidence':          confidence,
+        'current_price':       round(current_price, 2),
         'model': f'Multi-factor momentum ({total} factors: {bull_votes} bullish, {bear_votes} bearish)',
         'model_note': (
-            'Confidence reflects how many of the 5 momentum factors agree — '
-            'not a statistical probability. This model is rule-based and auditable, '
-            'not a trained ML classifier.'
+            'Confidence = fraction of factors agreeing (rule-based, auditable). '
+            'Hit-rate = how often this same model was correct on recent history.'
         ),
-        'factors': factor_lines,
-        'features_used': total,
+        'factors':        factor_lines,
+        'features_used':  total,
+        'hit_rate_all':   hit_rate_all,
+        'hit_rate_20':    hit_rate_20,
+        'backtest_calls': total_calls,
+        'streak':         streak,
+        'streak_type':    streak_sign,
+        'streak_label':   streak_label,
     }
+
 
 
 def calculate_support_resistance(data, n_levels=3, swing_window=5):
