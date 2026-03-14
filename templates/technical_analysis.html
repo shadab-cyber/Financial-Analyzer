@@ -532,12 +532,27 @@ document.addEventListener('DOMContentLoaded', function() {
             <div id="predChange" class="text-2xl font-bold">-</div>
           </div>
           <div>
-            <div class="text-sm text-gray-600">ML Confidence</div>
+            <div class="text-sm text-gray-600">Factor Confidence</div>
             <div id="predConfidence" class="text-2xl font-bold text-gray-800">-</div>
           </div>
         </div>
+        <!-- Hit-rate backtest row -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-blue-200">
+          <div>
+            <div class="text-xs text-gray-500 mb-1">Hit-rate (full history)</div>
+            <div id="hitRateAll" class="text-lg font-bold text-gray-700">-</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">Hit-rate (last 20 calls)</div>
+            <div id="hitRate20" class="text-lg font-bold text-gray-700">-</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">Current streak</div>
+            <div id="predStreak" class="text-lg font-bold text-gray-700">-</div>
+          </div>
+        </div>
         <p class="text-xs text-gray-500 mt-4">
-          ℹ️ Confidence = fraction of 5 momentum factors agreeing (RSI midline, MACD histogram, Price vs SMA-20/50, Stochastic). Rule-based, not a trained ML model. Not financial advice.
+          ℹ️ Confidence = fraction of 5 momentum factors agreeing. Hit-rate = backtest on same dataset (last 100 bars). Rule-based model — not financial advice.
         </p>
         <div id="predFactorsList" class="text-xs text-gray-500 mt-2 space-y-1"></div>
       </div>
@@ -706,6 +721,35 @@ function displayResults(data) {
     
     document.getElementById('predConfidence').textContent = (prediction.confidence || 0) + '%';
 
+    // Hit-rate + streak
+    const hrAll = prediction.hit_rate_all;
+    const hr20  = prediction.hit_rate_20;
+    const hrAllEl = document.getElementById('hitRateAll');
+    const hr20El  = document.getElementById('hitRate20');
+    const streakEl = document.getElementById('predStreak');
+
+    if (hrAll !== null && hrAll !== undefined) {
+        hrAllEl.textContent = hrAll + '%';
+        hrAllEl.className = 'text-lg font-bold ' +
+            (hrAll >= 55 ? 'text-green-600' : hrAll >= 45 ? 'text-yellow-600' : 'text-red-600');
+    } else {
+        hrAllEl.textContent = 'n/a';
+    }
+    if (hr20 !== null && hr20 !== undefined) {
+        hr20El.textContent = hr20 + '%';
+        hr20El.className = 'text-lg font-bold ' +
+            (hr20 >= 55 ? 'text-green-600' : hr20 >= 45 ? 'text-yellow-600' : 'text-red-600');
+    } else {
+        hr20El.textContent = 'n/a';
+    }
+    if (prediction.streak_label) {
+        streakEl.textContent = prediction.streak_label;
+        streakEl.className = 'text-lg font-bold ' +
+            (prediction.streak_type === 'W' ? 'text-green-600' : 'text-red-600');
+    } else {
+        streakEl.textContent = '-';
+    }
+
     // Show prediction model factors
     displayPredictionFactors(prediction);
     
@@ -714,6 +758,9 @@ function displayResults(data) {
     
     // Display signals
     displaySignals(signals.signals_list);
+
+    // Store signals for chart annotation access
+    window._lastSignalsList = signals.signals_list || [];
     
     // Display patterns
     displayPatterns(patterns);
@@ -884,6 +931,83 @@ function renderCandlestickChart(chartData, indicators, srLevels, isIntraday) {
         // Pivot P line (thicker, blue)
         const pivot = (srLevels.pivot_levels || []).find(p => p.label === 'P');
         if (pivot) addLine(pivot.price, '#6366f1', 'PP');
+    }
+
+    // ── Divergence annotations ────────────────────────────────────────────
+    // Parse signal list for divergence hits and annotate on RSI / MACD panels.
+    // The divergence was detected on the most recent swing, so we annotate the
+    // last data point as the signal bar — simple and readable.
+    const signalList = (window._lastSignalsList || []);
+    const lastDate   = dates[dates.length - 1];
+    const lastRsi    = rsiVals[rsiVals.length - 1];
+    const lastMacd   = macdHist[macdHist.length - 1];
+
+    const hasBullRsiDiv  = signalList.some(s => s.includes('RSI Bullish Divergence'));
+    const hasBearRsiDiv  = signalList.some(s => s.includes('RSI Bearish Divergence'));
+    const hasBullMacdDiv = signalList.some(s => s.includes('MACD Histogram Bullish'));
+    const hasBearMacdDiv = signalList.some(s => s.includes('MACD Histogram Bearish'));
+    const hasBBSqueeze   = signalList.some(s => s.includes('BB Squeeze'));
+    const hasBBExpand    = signalList.some(s => s.includes('BB Expansion'));
+
+    if (hasBullRsiDiv && lastRsi !== null) {
+        annotations.push({
+            x: lastDate, y: lastRsi, xref: 'x', yref: 'y3',
+            text: '▲ Bull Div', showarrow: true, arrowhead: 2,
+            arrowcolor: '#10b981', arrowsize: 1.2, ax: 0, ay: 20,
+            font: { size: 10, color: '#10b981' },
+            bgcolor: 'rgba(16,185,129,0.12)', bordercolor: '#10b981', borderwidth: 1
+        });
+    }
+    if (hasBearRsiDiv && lastRsi !== null) {
+        annotations.push({
+            x: lastDate, y: lastRsi, xref: 'x', yref: 'y3',
+            text: '▼ Bear Div', showarrow: true, arrowhead: 2,
+            arrowcolor: '#ef4444', arrowsize: 1.2, ax: 0, ay: -20,
+            font: { size: 10, color: '#ef4444' },
+            bgcolor: 'rgba(239,68,68,0.12)', bordercolor: '#ef4444', borderwidth: 1
+        });
+    }
+    if (hasBullMacdDiv && lastMacd !== null) {
+        annotations.push({
+            x: lastDate, y: lastMacd, xref: 'x', yref: 'y4',
+            text: '▲ Hist Div', showarrow: true, arrowhead: 2,
+            arrowcolor: '#10b981', arrowsize: 1.2, ax: 0, ay: 18,
+            font: { size: 10, color: '#10b981' },
+            bgcolor: 'rgba(16,185,129,0.12)', bordercolor: '#10b981', borderwidth: 1
+        });
+    }
+    if (hasBearMacdDiv && lastMacd !== null) {
+        annotations.push({
+            x: lastDate, y: lastMacd, xref: 'x', yref: 'y4',
+            text: '▼ Hist Div', showarrow: true, arrowhead: 2,
+            arrowcolor: '#ef4444', arrowsize: 1.2, ax: 0, ay: -18,
+            font: { size: 10, color: '#ef4444' },
+            bgcolor: 'rgba(239,68,68,0.12)', bordercolor: '#ef4444', borderwidth: 1
+        });
+    }
+
+    // BB Squeeze / Expansion — vertical band on price panel at last bar
+    if (hasBBSqueeze) {
+        const prevDate = dates.length > 1 ? dates[dates.length - 2] : lastDate;
+        shapes.push({
+            type: 'rect', x0: prevDate, x1: lastDate,
+            y0: 0, y1: 1, xref: 'x', yref: 'y domain',
+            fillcolor: 'rgba(251,191,36,0.15)', line: { width: 0 }
+        });
+        annotations.push({
+            x: lastDate, y: 1, xref: 'x', yref: 'y domain',
+            text: '⚡ Squeeze', showarrow: false, xanchor: 'right', yanchor: 'top',
+            font: { size: 10, color: '#b45309' },
+            bgcolor: 'rgba(251,191,36,0.2)'
+        });
+    }
+    if (hasBBExpand) {
+        annotations.push({
+            x: lastDate, y: 1, xref: 'x', yref: 'y domain',
+            text: '↔ Expand', showarrow: false, xanchor: 'right', yanchor: 'top',
+            font: { size: 10, color: '#1d4ed8' },
+            bgcolor: 'rgba(59,130,246,0.12)'
+        });
     }
 
     // ── RSI sub-panel ─────────────────────────────────────────────────────
