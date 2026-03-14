@@ -20,6 +20,16 @@ except ImportError:
     print("Warning: yfinance, ta, or sklearn not installed. Install with:")
     print("pip install yfinance ta scikit-learn --break-system-packages")
 
+# ── In-memory response cache ──────────────────────────────────────────────────
+# Keys:   "{SYMBOL}|{timeframe}|{date_str}"   (date_str = today's date for daily,
+#          or today+current_hour for intraday ≤1h, for a tighter TTL bucket)
+# Values: (timestamp_of_storage, result_dict)
+# TTL:    5 minutes — balances freshness vs Yahoo Finance rate limits.
+# This is process-local (reset on Render dyno restart), which is fine;
+# the benefit is avoiding redundant downloads within the same session.
+_CACHE: dict = {}
+_CACHE_TTL_SECONDS = 300   # 5 minutes
+
 
 def fetch_stock_data(symbol, timeframe='1d', period='1y'):
     """
@@ -73,66 +83,39 @@ def fetch_stock_data(symbol, timeframe='1d', period='1y'):
         
         days_back = period_to_days.get(period, 400)
         start_date = end_date - timedelta(days=days_back)
-        
-        # Common symbol mappings for Indian stocks
-        symbol_mappings = {
-            'TATAMOTORS': 'TATAMOTORS',
+
+        # ── Symbol normalisation ──────────────────────────────────────────────
+        # A small alias table for the handful of cases where a common shorthand
+        # differs from the actual NSE ticker.  yfinance handles the rest once
+        # we append .NS — no need for a 90-entry exhaustive dict.
+        _ALIASES = {
             'TATA MOTORS': 'TATAMOTORS',
-            'RELIANCE': 'RELIANCE',
-            'TCS': 'TCS',
-            'INFY': 'INFY',
-            'INFOSYS': 'INFY',
-            'HDFCBANK': 'HDFCBANK',
-            'HDFC': 'HDFCBANK',
-            'ICICIBANK': 'ICICIBANK',
-            'ICICI': 'ICICIBANK',
-            'SBIN': 'SBIN',
-            'SBI': 'SBIN',
-            'BHARTIARTL': 'BHARTIARTL',
-            'AIRTEL': 'BHARTIARTL',
-            'ITC': 'ITC',
-            'KOTAKBANK': 'KOTAKBANK',
-            'KOTAK': 'KOTAKBANK',
-            'LT': 'LT',
-            'AXISBANK': 'AXISBANK',
-            'AXIS': 'AXISBANK',
-            'MARUTI': 'MARUTI',
-            'WIPRO': 'WIPRO',
-            'HCLTECH': 'HCLTECH',
-            'HCL': 'HCLTECH',
-            'ASIANPAINT': 'ASIANPAINT',
-            'ULTRACEMCO': 'ULTRACEMCO',
-            'BAJFINANCE': 'BAJFINANCE',
-            'BAJAJ': 'BAJFINANCE',
-            'TITAN': 'TITAN',
-            'NESTLEIND': 'NESTLEIND',
-            'NESTLE': 'NESTLEIND',
-            'SUNPHARMA': 'SUNPHARMA',
-            'TATASTEEL': 'TATASTEEL',
-            'ONGC': 'ONGC',
-            'NTPC': 'NTPC',
-            'POWERGRID': 'POWERGRID',
-            'M&M': 'M&M',
-            'MAHINDRA': 'M&M',
-            'HINDUNILVR': 'HINDUNILVR',
-            'HUL': 'HINDUNILVR'
+            'INFOSYS':     'INFY',
+            'HDFC':        'HDFCBANK',
+            'ICICI':       'ICICIBANK',
+            'SBI':         'SBIN',
+            'AIRTEL':      'BHARTIARTL',
+            'KOTAK':       'KOTAKBANK',
+            'HCL':         'HCLTECH',
+            'BAJAJ':       'BAJFINANCE',
+            'NESTLE':      'NESTLEIND',
+            'MAHINDRA':    'M&M',
+            'HUL':         'HINDUNILVR',
+            'AXIS':        'AXISBANK',
         }
-        
-        # Apply mapping if exists
-        if symbol in symbol_mappings:
-            symbol = symbol_mappings[symbol]
-        
+        symbol = _ALIASES.get(symbol, symbol)   # apply alias if found
+
         # Try NSE first (most common for Indian stocks)
         symbols_to_try = [
-            f"{symbol}.NS",      # NSE
-            f"{symbol}.BO",      # BSE
-            symbol               # US stocks (no suffix)
+            f"{symbol}.NS",   # NSE
+            f"{symbol}.BO",   # BSE
+            symbol            # US stocks / already-suffixed
         ]
-        
+
         data = None
         last_error = None
         successful_symbol = None
-        
+
         for test_symbol in symbols_to_try:
             try:
                 print(f"Trying {test_symbol} with {timeframe} interval from {start_date.date()} to {end_date.date()}")
@@ -578,10 +561,55 @@ def generate_trading_signals(data):
             signals.append('Money Flow Overbought (Bearish)')
             bearish_count += 1 * osc_weight
     
-    # Volume Analysis
+    # Volume Analysis — high volume confirms the move
     if not pd.isna(latest.get('Volume_SMA_20')) and not pd.isna(latest.get('Volume')):
         if latest['Volume'] > latest['Volume_SMA_20'] * 1.5:
             signals.append('High Volume (Strong Move)')
+
+    # SMA-200 — long-term trend filter (not ADX-gated; it IS a trend indicator)
+    sma200 = latest.get('SMA_200')
+    if not pd.isna(sma200) and sma200 and sma200 > 0:
+        if latest['Close'] > sma200:
+            signals.append('Price Above SMA-200 (Long-term Uptrend)')
+            bullish_count += 1
+        else:
+            signals.append('Price Below SMA-200 (Long-term Downtrend)')
+            bearish_count += 1
+
+    # EMA-12 / EMA-26 crossover — faster signal than SMA crossover
+    ema12 = latest.get('EMA_12'); ema26 = latest.get('EMA_26')
+    prev_ema12 = prev.get('EMA_12'); prev_ema26 = prev.get('EMA_26')
+    if (not pd.isna(ema12) and not pd.isna(ema26) and
+            not pd.isna(prev_ema12) and not pd.isna(prev_ema26)):
+        ema_bull_cross = prev_ema12 <= prev_ema26 and ema12 > ema26
+        ema_bear_cross = prev_ema12 >= prev_ema26 and ema12 < ema26
+        if ema_bull_cross:
+            signals.append('EMA-12 Crossed Above EMA-26 (Bullish)')
+            bullish_count += 2
+        elif ema_bear_cross:
+            signals.append('EMA-12 Crossed Below EMA-26 (Bearish)')
+            bearish_count += 2
+        elif ema12 > ema26:
+            signals.append('EMA-12 Above EMA-26 (Bullish momentum)')
+            bullish_count += 1
+        else:
+            signals.append('EMA-12 Below EMA-26 (Bearish momentum)')
+            bearish_count += 1
+
+    # OBV trend — rising OBV = buyers accumulating; falling = distribution
+    # Compare current OBV to its 10-period average as a simple trend check
+    if 'OBV' in df.columns:
+        obv_series = df['OBV'].dropna()
+        if len(obv_series) >= 10:
+            obv_now  = float(obv_series.iloc[-1])
+            obv_avg  = float(obv_series.iloc[-10:].mean())
+            obv_prev = float(obv_series.iloc[-2]) if len(obv_series) >= 2 else obv_now
+            if obv_now > obv_avg and obv_now > obv_prev:
+                signals.append('OBV Rising — buying accumulation (Bullish)')
+                bullish_count += 1
+            elif obv_now < obv_avg and obv_now < obv_prev:
+                signals.append('OBV Falling — selling distribution (Bearish)')
+                bearish_count += 1
     
     # Determine Overall Signal
     total_signals = bullish_count + bearish_count
@@ -628,6 +656,9 @@ def generate_trading_signals(data):
             'ATR': round(latest.get('ATR', 0), 2) if not pd.isna(latest.get('ATR')) else None,
             'ADX': round(latest.get('ADX', 0), 2) if not pd.isna(latest.get('ADX')) else None,
             'OBV': int(latest.get('OBV', 0)) if not pd.isna(latest.get('OBV')) else None,
+            'SMA_200': round(latest.get('SMA_200', 0), 2) if not pd.isna(latest.get('SMA_200')) else None,
+            'EMA_12': round(latest.get('EMA_12', 0), 2) if not pd.isna(latest.get('EMA_12')) else None,
+            'EMA_26': round(latest.get('EMA_26', 0), 2) if not pd.isna(latest.get('EMA_26')) else None,
         }
     }
 
@@ -874,15 +905,29 @@ def calculate_support_resistance(data, n_levels=3, swing_window=5):
 def run_technical_analysis(symbol, timeframe='1d', period='1y'):
     """
     Complete technical analysis pipeline
-    
+
     Args:
         symbol: Stock ticker
         timeframe: Candle timeframe
         period: Historical period
-    
+
     Returns:
         Dictionary with complete analysis
     """
+    # ── Cache check ───────────────────────────────────────────────────────────
+    _now = datetime.now()
+    # For intraday (≤1h) use hour-bucket so cache refreshes every hour at most.
+    # For daily+ data use date-bucket so cache lasts the trading day.
+    _intraday_tf = timeframe in ('1m', '5m', '15m', '30m', '60m', '1h')
+    _bucket = _now.strftime('%Y-%m-%d_%H') if _intraday_tf else _now.strftime('%Y-%m-%d')
+    _cache_key = f"{symbol.upper()}|{timeframe}|{period}|{_bucket}"
+
+    if _cache_key in _CACHE:
+        _stored_at, _cached_result = _CACHE[_cache_key]
+        if (_now - _stored_at).total_seconds() < _CACHE_TTL_SECONDS:
+            _cached_result['from_cache'] = True
+            return _cached_result
+
     try:
         # 1. Fetch data
         data = fetch_stock_data(symbol, timeframe, period)
@@ -942,6 +987,16 @@ def run_technical_analysis(symbol, timeframe='1d', period='1y'):
                 'nearest_resistance': sr_levels['resistance'][0]['price'] if sr_levels['resistance'] else None,
             }
         }
+
+        # ── Cache store ───────────────────────────────────────────────────────
+        result['from_cache'] = False
+        _CACHE[_cache_key] = (datetime.now(), result)
+        # Evict stale entries (keep cache lean — max 50 entries)
+        if len(_CACHE) > 50:
+            oldest_key = min(_CACHE, key=lambda k: _CACHE[k][0])
+            del _CACHE[oldest_key]
+
+        return result
     
     except Exception as e:
         return {
