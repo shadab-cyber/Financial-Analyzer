@@ -40,6 +40,8 @@
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 <!-- Plotly for candlestick charts -->
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<!-- Chart.js for equity curve mini-chart -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 
 <style>
     body {
@@ -493,6 +495,106 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
     </div>
 
+    <!-- Multi-Timeframe Confluence -->
+    <div class="section-card" id="mtfSection" style="display:none;">
+      <div class="section-title">📡 Multi-Timeframe Confluence</div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Higher TF Signal</div>
+          <div id="mtfHigherSignal" class="text-xl font-bold">-</div>
+          <div class="text-xs text-gray-400" id="mtfHigherTf"></div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Confluence</div>
+          <div id="mtfConfluence" class="text-xl font-bold">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Higher TF ADX</div>
+          <div id="mtfAdx" class="text-xl font-bold text-gray-700">-</div>
+        </div>
+      </div>
+      <div id="mtfLabel" class="mt-3 p-3 rounded-lg text-sm text-gray-700 bg-gray-50"></div>
+    </div>
+
+    <!-- Position Sizing -->
+    <div class="section-card" id="posSection" style="display:none;">
+      <div class="section-title">💼 ATR Position Sizing</div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Shares to Buy</div>
+          <div id="posShares" class="text-2xl font-bold text-indigo-700">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Stop Loss</div>
+          <div id="posStop" class="text-xl font-bold text-red-600">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Target (2:1 R/R)</div>
+          <div id="posTarget" class="text-xl font-bold text-green-600">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Capital at Risk</div>
+          <div id="posRisk" class="text-xl font-bold text-orange-600">-</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Position Value</div>
+          <div id="posValue" class="text-lg font-bold text-gray-700">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">% of Account</div>
+          <div id="posPct" class="text-lg font-bold text-gray-700">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">ATR Used</div>
+          <div id="posAtr" class="text-lg font-bold text-gray-500">-</div>
+        </div>
+      </div>
+      <p class="text-xs text-gray-400 mt-3" id="posMethod"></p>
+    </div>
+
+    <!-- OOS Backtest -->
+    <div class="section-card" id="oosSection" style="display:none;">
+      <div class="section-title">📈 Out-of-Sample Backtest</div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Win Rate</div>
+          <div id="oosWinRate" class="text-2xl font-bold">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Profit Factor</div>
+          <div id="oosPF" class="text-2xl font-bold">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Sharpe Ratio</div>
+          <div id="oosSharpe" class="text-2xl font-bold">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Max Drawdown</div>
+          <div id="oosDD" class="text-2xl font-bold text-red-600">-</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-4 mb-4">
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Total Return</div>
+          <div id="oosReturn" class="text-lg font-bold">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Avg Win</div>
+          <div id="oosAvgWin" class="text-lg font-bold text-green-600">-</div>
+        </div>
+        <div class="indicator-card">
+          <div class="text-xs text-gray-600 mb-1">Avg Loss</div>
+          <div id="oosAvgLoss" class="text-lg font-bold text-red-600">-</div>
+        </div>
+      </div>
+      <div style="position:relative;height:120px;margin-bottom:8px;">
+        <canvas id="oosEquityChart"></canvas>
+      </div>
+      <p class="text-xs text-gray-400" id="oosLabel"></p>
+    </div>
+
     <!-- Buy/Sell Probabilities -->
     <div class="section-card">
       <div class="section-title">💰 Buy/Sell Probability</div>
@@ -770,6 +872,15 @@ function displayResults(data) {
 
     // Display VWAP + key levels
     displayVwapKeyLevels(data);
+
+    // Display multi-timeframe confluence
+    displayMTF(data.multi_timeframe);
+
+    // Display position sizing
+    displayPositionSize(data.position_size);
+
+    // Display OOS backtest
+    displayOOSBacktest(data.oos_backtest);
     
     // Render 4-panel candlestick chart
     renderCandlestickChart(data.chart_data, signals.indicators, srLevels, data.is_intraday);
@@ -1161,7 +1272,120 @@ function displayVwapKeyLevels(data) {
         summary.nearest_support ? '₹' + summary.nearest_support : '-';
 }
 
-function displayPredictionFactors(prediction) {
+function displayMTF(mtf) {
+    const sec = document.getElementById('mtfSection');
+    if (!mtf || !mtf.higher_tf) { sec.style.display = 'none'; return; }
+    sec.style.display = '';
+
+    const sigEl = document.getElementById('mtfHigherSignal');
+    sigEl.textContent = mtf.higher_signal || '-';
+    sigEl.className = 'text-xl font-bold ' +
+        (mtf.higher_signal === 'BUY'  ? 'text-green-600' :
+         mtf.higher_signal === 'SELL' ? 'text-red-600'   : 'text-yellow-600');
+
+    document.getElementById('mtfHigherTf').textContent = mtf.higher_tf ? mtf.higher_tf + ' timeframe' : '';
+
+    const confEl = document.getElementById('mtfConfluence');
+    if (mtf.confluence === true) {
+        confEl.textContent = '✅ Confirmed'; confEl.className = 'text-xl font-bold text-green-600';
+    } else if (mtf.confluence === false) {
+        confEl.textContent = '❌ Conflicting'; confEl.className = 'text-xl font-bold text-red-600';
+    } else {
+        confEl.textContent = '⚠️ Neutral'; confEl.className = 'text-xl font-bold text-yellow-600';
+    }
+
+    const adxEl = document.getElementById('mtfAdx');
+    adxEl.textContent = mtf.weekly_adx != null ? mtf.weekly_adx : '-';
+    const adxVal = parseFloat(mtf.weekly_adx);
+    adxEl.className = 'text-xl font-bold ' + (adxVal >= 25 ? 'text-green-600' : 'text-yellow-600');
+
+    const lbl = document.getElementById('mtfLabel');
+    lbl.textContent = mtf.confluence_label || '';
+    lbl.className = 'mt-3 p-3 rounded-lg text-sm ' +
+        (mtf.confluence === true  ? 'bg-green-50 text-green-800' :
+         mtf.confluence === false ? 'bg-red-50 text-red-800'     : 'bg-yellow-50 text-yellow-800');
+}
+
+function displayPositionSize(ps) {
+    const sec = document.getElementById('posSection');
+    if (!ps || ps.error || !ps.shares) { sec.style.display = 'none'; return; }
+    sec.style.display = '';
+
+    document.getElementById('posShares').textContent  = ps.shares.toLocaleString();
+    document.getElementById('posStop').textContent    = '₹' + ps.stop_loss;
+    document.getElementById('posTarget').textContent  = '₹' + ps.reward_target;
+    document.getElementById('posRisk').textContent    = '₹' + ps.risk_amount.toLocaleString();
+    document.getElementById('posValue').textContent   = '₹' + ps.position_value.toLocaleString();
+    document.getElementById('posPct').textContent     = ps.position_pct + '% of account';
+    document.getElementById('posAtr').textContent     = 'ATR = ₹' + ps.atr_used;
+    document.getElementById('posMethod').textContent  = ps.method || '';
+}
+
+function displayOOSBacktest(bt) {
+    const sec = document.getElementById('oosSection');
+    if (!bt || bt.error) { sec.style.display = 'none'; return; }
+    sec.style.display = '';
+
+    const wr = bt.win_rate;
+    const wrEl = document.getElementById('oosWinRate');
+    wrEl.textContent  = wr + '%';
+    wrEl.className    = 'text-2xl font-bold ' + (wr >= 55 ? 'text-green-600' : wr >= 45 ? 'text-yellow-600' : 'text-red-600');
+
+    const pfEl = document.getElementById('oosPF');
+    const pf   = bt.profit_factor;
+    pfEl.textContent = pf != null ? pf : '-';
+    pfEl.className   = 'text-2xl font-bold ' + (pf >= 1.5 ? 'text-green-600' : pf >= 1 ? 'text-yellow-600' : 'text-red-600');
+
+    const shEl = document.getElementById('oosSharpe');
+    const sh   = bt.sharpe_ratio;
+    shEl.textContent = sh != null ? sh : '-';
+    shEl.className   = 'text-2xl font-bold ' + (sh >= 1 ? 'text-green-600' : sh >= 0 ? 'text-yellow-600' : 'text-red-600');
+
+    const ddEl = document.getElementById('oosDD');
+    ddEl.textContent = '-' + bt.max_drawdown_pct + '%';
+
+    const retEl = document.getElementById('oosReturn');
+    const ret   = bt.total_return_pct;
+    retEl.textContent = (ret >= 0 ? '+' : '') + ret + '%';
+    retEl.className   = 'text-lg font-bold ' + (ret >= 0 ? 'text-green-600' : 'text-red-600');
+
+    document.getElementById('oosAvgWin').textContent  = bt.avg_win_pct  != null ? '+' + bt.avg_win_pct  + '%' : '-';
+    document.getElementById('oosAvgLoss').textContent = bt.avg_loss_pct != null ? bt.avg_loss_pct + '%' : '-';
+    document.getElementById('oosLabel').textContent   = bt.oos_label || '';
+
+    // Equity curve mini-chart
+    const curve = bt.equity_curve || [];
+    if (curve.length < 2) return;
+    const canvas = document.getElementById('oosEquityChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (window._oosChart) { window._oosChart.destroy(); }
+    window._oosChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: curve.map((_, i) => i),
+            datasets: [{
+                data: curve,
+                borderColor: ret >= 0 ? '#10b981' : '#ef4444',
+                borderWidth: 1.5,
+                pointRadius: 0,
+                fill: true,
+                backgroundColor: ret >= 0 ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { display: false },
+                y: { display: true, ticks: { font: { size: 10 } },
+                     title: { display: true, text: 'Cumulative %', font: { size: 10 } } }
+            }
+        }
+    });
+}
+
     const el = document.getElementById('predFactorsList');
     if (!el || !prediction.factors || prediction.factors.length === 0) return;
     el.innerHTML = prediction.factors.map(f => {
