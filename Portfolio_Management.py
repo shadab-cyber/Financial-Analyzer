@@ -797,14 +797,20 @@ def run_portfolio_analysis(holdings):
         benchmark      = compare_with_benchmark(portfolio_data)
         xirr_data      = calculate_xirr(portfolio_data)
 
-        # Equity curve vs NIFTY (uses portfolio_transformer historical generator)
+        # Equity curve vs time (weekly points — 52 per year instead of 365)
+        # Daily granularity adds ~15 KB to the response for no visual benefit
+        # since the chart renders at ~800px width.
         try:
             from portfolio_transformer import generate_historical_data
-            equity_curve = generate_historical_data(
+            daily_curve  = generate_historical_data(
                 current_value=summary['total_current_value'],
                 initial_value=summary['total_invested'],
                 days=365
             )
+            # Downsample to weekly (every 7th point) + always include last point
+            equity_curve = daily_curve[::7]
+            if daily_curve and equity_curve[-1] != daily_curve[-1]:
+                equity_curve.append(daily_curve[-1])
         except Exception:
             equity_curve = []
 
