@@ -626,34 +626,6 @@ async function runDCF() {
   }
 }
 
-function renderDCF(data) {
-  document.getElementById("summary").innerHTML = `
-    <p><b>Enterprise Value:</b> ₹ ${data["Enterprise Value (₹ Cr)"]} Cr</p>
-    <p><b>Terminal Value:</b> ₹ ${data["Terminal Value (₹ Cr)"]} Cr</p>
-    <p><b>Avg FCF Growth:</b> ${data["Average FCF Growth Rate (%)"]}%</p>
-  `;
-
-  let rows = "";
-  data["Forecast FCF (₹ Cr)"].forEach((v, i) => {
-    rows += `
-      <tr>
-        <td class="border p-2 text-center">Year ${i + 1}</td>
-        <td class="border p-2 text-center font-semibold">${v}</td>
-      </tr>`;
-  });
-
-  document.getElementById("tables").innerHTML = `
-    <div class="table-responsive overflow-x-auto"><table class="w-full border text-sm">
-      <thead class="bg-gray-200">
-        <tr>
-          <th class="border p-2">Year</th>
-          <th class="border p-2">FCF (₹ Cr)</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table></div>
-  `;
-}
 </script>
 
 
