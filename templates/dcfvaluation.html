@@ -295,19 +295,238 @@ document.addEventListener('DOMContentLoaded', function() {
 
   <!-- UPLOAD -->
   <div class="border-2 border-dashed p-6 rounded-lg mb-6 text-center">
-    <input
-      type="file"
-      id="pdfFiles"
-      accept=".pdf"
-      multiple
-      class="mb-3"
-    />
+    <input type="file" id="pdfFiles" accept=".pdf" multiple class="mb-3" />
     <p class="text-sm text-gray-600">
-      Upload Annual Report PDFs (minimum 5 years) <p class="text-sm font-bold text-red-800">NOTE:- THE VALUATION TAKES TIME TO COMPLETE UPTO 30 MINUTES
-    </p></p>
+      Upload Annual Report PDFs (minimum 5 years recommended)
+    </p>
+    <p class="text-xs text-red-700 font-semibold mt-1">
+      ⚠️ PDF extraction can take up to 30 minutes depending on file size.
+    </p>
+  </div>
+
+  <!-- DCF INPUTS -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+    <div>
+      <label class="block text-xs font-semibold text-gray-600 mb-1">WACC (%)</label>
+      <input type="number" id="inputWACC" value="11" min="5" max="30" step="0.5"
+             class="w-full border rounded px-3 py-2 text-sm" />
+      <p class="text-xs text-gray-400 mt-1">Weighted average cost of capital</p>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-gray-600 mb-1">Terminal Growth Rate (%)</label>
+      <input type="number" id="inputTermGrowth" value="4" min="0" max="10" step="0.5"
+             class="w-full border rounded px-3 py-2 text-sm" />
+      <p class="text-xs text-gray-400 mt-1">Must be less than WACC</p>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-gray-600 mb-1">Net Debt (₹ Cr)</label>
+      <input type="number" id="inputNetDebt" value="0" step="1"
+             class="w-full border rounded px-3 py-2 text-sm" />
+      <p class="text-xs text-gray-400 mt-1">Total debt − cash. Negative = net cash</p>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-gray-600 mb-1">Shares Outstanding (Cr)</label>
+      <input type="number" id="inputShares" value="" placeholder="e.g. 67.5" step="0.01"
+             class="w-full border rounded px-3 py-2 text-sm" />
+      <p class="text-xs text-gray-400 mt-1">Number of shares in crore</p>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-gray-600 mb-1">Current Market Price (₹)</label>
+      <input type="number" id="inputCMP" value="" placeholder="e.g. 2450" step="0.01"
+             class="w-full border rounded px-3 py-2 text-sm" />
+      <p class="text-xs text-gray-400 mt-1">For margin of safety calculation</p>
+    </div>
+    <div class="flex items-end">
+      <p class="text-xs text-gray-500">
+        Net Debt and Shares are needed to compute <strong>Equity Value per share</strong>.
+        WACC and Terminal Growth control the DCF assumptions.
+      </p>
+    </div>
   </div>
 
   <!-- BUTTON -->
+  <div class="text-center mb-6">
+    <button onclick="runDCF()"
+      class="bg-blue-600 text-white px-8 py-2 rounded-lg hover:bg-blue-700">
+      ▶ Run DCF Valuation
+    </button>
+  </div>
+
+  <!-- STATUS / ERROR -->
+  <div id="status" class="text-center font-semibold mb-4 hidden"></div>
+  <div id="error" class="text-red-600 font-semibold mb-4 hidden"></div>
+
+  <!-- RESULT -->
+  <div id="result" class="hidden">
+    <h2 class="text-xl font-bold mb-4">📈 DCF Results</h2>
+    <div id="summary" class="mb-6"></div>
+    <div id="warnings" class="mb-4"></div>
+    <div id="tables"></div>
+  </div>
+
+</div>
+
+<script>
+async function runDCF() {
+  const filesInput  = document.getElementById("pdfFiles");
+  const statusDiv   = document.getElementById("status");
+  const errorDiv    = document.getElementById("error");
+  const resultDiv   = document.getElementById("result");
+
+  errorDiv.classList.add("hidden");
+  resultDiv.classList.add("hidden");
+
+  if (filesInput.files.length < 1) {
+    errorDiv.textContent = "Please upload at least one Annual Report PDF.";
+    errorDiv.classList.remove("hidden");
+    return;
+  }
+
+  // Read user inputs
+  const wacc        = parseFloat(document.getElementById("inputWACC").value) / 100;
+  const termGrowth  = parseFloat(document.getElementById("inputTermGrowth").value) / 100;
+  const netDebt     = parseFloat(document.getElementById("inputNetDebt").value) || 0;
+  const shares      = parseFloat(document.getElementById("inputShares").value) || null;
+  const cmp         = parseFloat(document.getElementById("inputCMP").value) || null;
+
+  if (termGrowth >= wacc) {
+    errorDiv.textContent = `Terminal growth (${(termGrowth*100).toFixed(1)}%) must be less than WACC (${(wacc*100).toFixed(1)}%). Please adjust.`;
+    errorDiv.classList.remove("hidden");
+    return;
+  }
+
+  const formData = new FormData();
+  for (const file of filesInput.files) formData.append("files", file);
+  formData.append("wacc",           wacc);
+  formData.append("terminal_growth", termGrowth);
+  formData.append("net_debt",        netDebt);
+  if (shares) formData.append("shares_outstanding", shares);
+  if (cmp)    formData.append("current_price",       cmp);
+
+  statusDiv.textContent = "⏳ Extracting financials & running DCF...";
+  statusDiv.classList.remove("hidden");
+
+  try {
+    const res  = await fetch("/dcf/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    statusDiv.classList.add("hidden");
+
+    if (data.error) {
+      errorDiv.textContent = data.error;
+      errorDiv.classList.remove("hidden");
+      return;
+    }
+
+    renderDCF(data);
+    resultDiv.classList.remove("hidden");
+
+  } catch (err) {
+    statusDiv.classList.add("hidden");
+    errorDiv.textContent = err.message;
+    errorDiv.classList.remove("hidden");
+  }
+}
+
+function renderDCF(data) {
+  // ── Summary cards ──────────────────────────────────────────────────────────
+  const ev   = data["Enterprise Value (₹ Cr)"];
+  const eqv  = data["Equity Value (₹ Cr)"];
+  const ivps = data["Intrinsic Value per Share (₹)"];
+  const cmp  = data["Current Market Price (₹)"];
+  const mos  = data["Margin of Safety (%)"];
+  const tv   = data["Terminal Value (₹ Cr)"];
+  const g    = data["Average FCF Growth Rate (%)"];
+  const conf = data["Confidence Score (%)"];
+  const asmp = data["Assumptions"] || {};
+
+  const mosColor  = mos === null ? 'text-gray-500' : mos > 0 ? 'text-green-600' : 'text-red-600';
+  const mosLabel  = mos === null ? 'N/A' : (mos > 0 ? '+' : '') + mos + '%';
+  const ivpsLabel = ivps !== null ? '₹' + ivps : 'Provide shares outstanding';
+
+  document.getElementById("summary").innerHTML = `
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      <div class="metric-card border-l-4 border-blue-500">
+        <div class="text-xs text-gray-500">Enterprise Value</div>
+        <div class="text-xl font-bold text-gray-800">₹${ev?.toLocaleString()} Cr</div>
+        <div class="text-xs text-gray-400">EV = Equity + Net Debt</div>
+      </div>
+      <div class="metric-card border-l-4 border-indigo-500">
+        <div class="text-xs text-gray-500">Equity Value</div>
+        <div class="text-xl font-bold text-indigo-700">₹${eqv?.toLocaleString()} Cr</div>
+        <div class="text-xs text-gray-400">EV − Net Debt (₹${asmp["Net Debt (₹ Cr)"]} Cr)</div>
+      </div>
+      <div class="metric-card border-l-4 border-teal-500">
+        <div class="text-xs text-gray-500">Intrinsic Value / Share</div>
+        <div class="text-xl font-bold text-teal-700">${ivpsLabel}</div>
+        <div class="text-xs text-gray-400">${asmp["Shares (Cr)"] ? asmp["Shares (Cr)"] + ' Cr shares' : 'Enter shares above'}</div>
+      </div>
+      <div class="metric-card border-l-4 ${mos > 0 ? 'border-green-500' : mos < 0 ? 'border-red-500' : 'border-gray-300'}">
+        <div class="text-xs text-gray-500">Margin of Safety</div>
+        <div class="text-xl font-bold ${mosColor}">${mosLabel}</div>
+        <div class="text-xs text-gray-400">${cmp ? 'vs CMP ₹' + cmp : 'Enter CMP above'}</div>
+      </div>
+    </div>
+    <div class="grid grid-cols-3 gap-4 mb-4">
+      <div class="metric-card">
+        <div class="text-xs text-gray-500">Terminal Value</div>
+        <div class="text-lg font-bold text-gray-700">₹${tv?.toLocaleString()} Cr</div>
+        <div class="text-xs text-gray-400">@ g=${asmp["Terminal Growth (%)"]}%</div>
+      </div>
+      <div class="metric-card">
+        <div class="text-xs text-gray-500">Avg FCF Growth</div>
+        <div class="text-lg font-bold text-gray-700">${g}%</div>
+        <div class="text-xs text-gray-400">Historical (capped ±50%)</div>
+      </div>
+      <div class="metric-card">
+        <div class="text-xs text-gray-500">Extraction Confidence</div>
+        <div class="text-lg font-bold ${conf >= 80 ? 'text-green-600' : conf >= 50 ? 'text-yellow-600' : 'text-red-600'}">${conf}%</div>
+        <div class="text-xs text-gray-400">WACC ${asmp["WACC (%)"]}% · ${asmp["Forecast Years"]}yr forecast</div>
+      </div>
+    </div>`;
+
+  // ── Warnings ────────────────────────────────────────────────────────────────
+  const warnings = data["Growth Warnings"] || [];
+  const warnDiv  = document.getElementById("warnings");
+  if (warnings.length) {
+    warnDiv.innerHTML = warnings.map(w =>
+      `<div class="text-sm px-4 py-2 rounded mb-2 ${w.includes('⚠️') ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' : 'bg-blue-50 text-blue-800 border border-blue-200'}">${w}</div>`
+    ).join('');
+  } else {
+    warnDiv.innerHTML = '';
+  }
+
+  // ── FCF table ───────────────────────────────────────────────────────────────
+  const hist    = data["Historical FCF (₹ Cr)"] || [];
+  const forecast = data["Forecast FCF (₹ Cr)"] || [];
+  const discounted = data["Discounted FCF (₹ Cr)"] || [];
+
+  let histRows = hist.map((v, i) =>
+    `<tr><td class="border p-2 text-center text-gray-500">Historical Y${i+1}</td>
+     <td class="border p-2 text-center">${v}</td>
+     <td class="border p-2 text-center text-gray-400">—</td></tr>`
+  ).join('');
+
+  let forecastRows = forecast.map((v, i) =>
+    `<tr class="bg-blue-50"><td class="border p-2 text-center font-semibold">Forecast Y${i+1}</td>
+     <td class="border p-2 text-center font-semibold">${v}</td>
+     <td class="border p-2 text-center text-indigo-700 font-semibold">${discounted[i] || '—'}</td></tr>`
+  ).join('');
+
+  document.getElementById("tables").innerHTML = `
+    <div class="table-responsive overflow-x-auto">
+      <table class="w-full border text-sm">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="border p-2">Period</th>
+            <th class="border p-2">FCF (₹ Cr)</th>
+            <th class="border p-2">Discounted FCF (₹ Cr)</th>
+          </tr>
+        </thead>
+        <tbody>${histRows}${forecastRows}</tbody>
+      </table>
+    </div>`;
+}
+</script>
   <div class="text-center mb-6">
     <button
       onclick="runDCF()"
