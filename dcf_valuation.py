@@ -70,7 +70,11 @@ def extract_cfo(text_blocks):
                         combined += " " + lines[i + j]
 
                 nums = extract_numbers_from_line(combined)
-                extracted.extend(nums)
+                # Take only the FIRST number on the matched line — the current
+                # year figure. Using .extend grabbed every number (prior years,
+                # note references, page numbers) causing wildly wrong FCF.
+                if nums:
+                    extracted.append(nums[0])
 
     return extracted
 
@@ -91,7 +95,9 @@ def extract_capex(text_blocks):
                         combined += " " + lines[i + j]
 
                 nums = extract_numbers_from_line(combined)
-                extracted.extend(nums)
+                # Same fix as extract_cfo — only take the first number.
+                if nums:
+                    extracted.append(nums[0])
 
     return extracted
 
@@ -143,13 +149,70 @@ TERMINAL_GROWTH = 0.04
 # AVG FCF GROWTH
 # =========================
 def calculate_avg_fcf_growth(fcf_list):
+    """
+    Calculate average YoY FCF growth rate with safety caps.
+
+    Problems with the naive average:
+    · Sign changes (negative → positive or vice versa) produce growth rates of
+      −200%, +500%, etc. that make the average meaningless.
+    · A single outlier year dominates.
+
+    Fix:
+    · Cap each individual YoY rate at ±50% before averaging.
+    · Detect sign changes and flag them.
+    · If more than half the YoY rates hit the cap, mark the result as
+      'unreliable' so the caller can warn the user.
+
+    Returns:
+        (avg_growth_rate, warnings_list)
+    """
     growth_rates = []
+    warnings = []
+    sign_changes = 0
+
     for i in range(1, len(fcf_list)):
         prev = fcf_list[i - 1]
         curr = fcf_list[i]
-        if prev not in (None, 0):
-            growth_rates.append((curr - prev) / abs(prev))
-    return sum(growth_rates) / len(growth_rates) if growth_rates else 0.0
+
+        if prev is None or prev == 0:
+            warnings.append(f"Year {i}: skipped (prior FCF = 0 or missing)")
+            continue
+
+        # Detect sign change
+        if (prev < 0 < curr) or (curr < 0 < prev):
+            sign_changes += 1
+            warnings.append(
+                f"Year {i}: FCF sign changed ({round(prev,1)} → {round(curr,1)}) "
+                f"— growth rate may be misleading"
+            )
+
+        raw_rate = (curr - prev) / abs(prev)
+
+        # Cap at ±50% to prevent one outlier year from dominating the average
+        CAP = 0.50
+        if abs(raw_rate) > CAP:
+            warnings.append(
+                f"Year {i}: growth rate {round(raw_rate*100,1)}% capped at "
+                f"{'+'  if raw_rate > 0 else ''}{int(CAP*100)}%"
+            )
+            raw_rate = CAP if raw_rate > 0 else -CAP
+
+        growth_rates.append(raw_rate)
+
+    if not growth_rates:
+        return 0.0, ["No valid growth rates — defaulting to 0%"]
+
+    avg = sum(growth_rates) / len(growth_rates)
+
+    # Flag if more than half the rates were capped or involved sign changes
+    n_capped = sum(1 for w in warnings if "capped" in w)
+    if n_capped > len(growth_rates) / 2 or sign_changes >= 2:
+        warnings.append(
+            "⚠️ Growth rate estimate is unreliable due to volatile FCF history. "
+            "Consider overriding manually."
+        )
+
+    return round(avg, 4), warnings
 
 
 # =========================
@@ -174,11 +237,27 @@ def discount_cash_flows(cash_flows, rate):
 # =========================
 # TERMINAL VALUE
 # =========================
-def calculate_terminal_value(last_forecast_fcf):
-    return round(
-        (last_forecast_fcf * (1 + TERMINAL_GROWTH)) / (WACC - TERMINAL_GROWTH),
-        2
-    )
+def calculate_terminal_value(last_forecast_fcf, wacc=None, terminal_growth=None):
+    """
+    Gordon Growth Model terminal value with g < WACC guard.
+
+    If terminal_growth >= wacc the denominator goes to zero or negative,
+    producing infinity or a negative TV which is financially nonsensical.
+    We clamp g to wacc - 0.01 (i.e. at least 1pp below WACC) and warn.
+    """
+    w = wacc if wacc is not None else WACC
+    g = terminal_growth if terminal_growth is not None else TERMINAL_GROWTH
+
+    tv_warning = None
+    if g >= w:
+        g = w - 0.01
+        tv_warning = (
+            f"⚠️ Terminal growth ({round(g*100+1,1)}%) was ≥ WACC ({round(w*100,1)}%). "
+            f"Clamped to {round(g*100,1)}% to avoid infinite terminal value."
+        )
+
+    tv = round((last_forecast_fcf * (1 + g)) / (w - g), 2)
+    return tv, tv_warning
 
 
 def discount_terminal_value(tv, years, rate):
@@ -192,47 +271,98 @@ def calculate_enterprise_value(pv_fcf, pv_terminal):
 # =========================
 # MASTER PIPELINE
 # =========================
-def run_dcf_from_pdf_text(text_blocks):
+def run_dcf_from_pdf_text(text_blocks, net_debt=0, shares_outstanding=None,
+                           current_price=None, wacc=None, terminal_growth=None):
+    """
+    Complete DCF pipeline.
+
+    New parameters (all optional with sensible defaults):
+        net_debt           – Net Debt = Total Debt − Cash (₹ Cr). Used to
+                             convert Enterprise Value → Equity Value.
+                             Pass a negative number if company has net cash.
+        shares_outstanding – Shares in Crore. Used for per-share intrinsic value.
+        current_price      – Current market price (₹). Used for margin of safety.
+        wacc               – Override module-level WACC constant (decimal, e.g. 0.12)
+        terminal_growth    – Override module-level TERMINAL_GROWTH (decimal, e.g. 0.05)
+    """
+    w  = wacc            if wacc            is not None else WACC
+    g  = terminal_growth if terminal_growth is not None else TERMINAL_GROWTH
+
     historical_fcf, cfo, capex = calculate_fcf_from_text(text_blocks)
 
-    avg_growth = calculate_avg_fcf_growth(historical_fcf)
+    avg_growth, growth_warnings = calculate_avg_fcf_growth(historical_fcf)
     forecast = forecast_fcf(historical_fcf[-1], avg_growth)
-    discounted_fcf = discount_cash_flows(forecast, WACC)
 
-    terminal_value = calculate_terminal_value(forecast[-1])
-    discounted_terminal = discount_terminal_value(
-        terminal_value, FORECAST_YEARS, WACC
-    )
+    # Guard: negative last FCF makes forecasting unreliable
+    if historical_fcf[-1] < 0:
+        growth_warnings.append(
+            "⚠️ Most recent FCF is negative. Forecast may be unreliable — "
+            "consider using a normalised FCF base."
+        )
 
-    enterprise_value = calculate_enterprise_value(
-        discounted_fcf, discounted_terminal
-    )
+    discounted_fcf = discount_cash_flows(forecast, w)
+
+    terminal_value, tv_warning = calculate_terminal_value(forecast[-1], wacc=w, terminal_growth=g)
+    if tv_warning:
+        growth_warnings.append(tv_warning)
+
+    discounted_terminal = discount_terminal_value(terminal_value, FORECAST_YEARS, w)
+    enterprise_value    = calculate_enterprise_value(discounted_fcf, discounted_terminal)
+
+    # ── Equity Value & per-share intrinsic value ──────────────────────────────
+    # Enterprise Value = Equity Value + Net Debt
+    # ∴  Equity Value  = Enterprise Value − Net Debt
+    net_debt_used    = float(net_debt) if net_debt is not None else 0.0
+    equity_value     = round(enterprise_value - net_debt_used, 2)
+
+    intrinsic_per_share  = None
+    margin_of_safety_pct = None
+
+    if shares_outstanding and float(shares_outstanding) > 0:
+        shares = float(shares_outstanding)
+        # Equity value is in ₹ Crore; shares in Crore → per-share in ₹
+        intrinsic_per_share = round((equity_value * 1e7) / (shares * 1e7), 2)
+        # = equity_value / shares  (both in Crore, so Cr/Cr = ₹ per share)
+
+        if current_price and float(current_price) > 0 and intrinsic_per_share:
+            cmp = float(current_price)
+            margin_of_safety_pct = round(
+                (intrinsic_per_share - cmp) / cmp * 100, 2
+            )
 
     return {
-        "Historical FCF (₹ Cr)": historical_fcf,
-        "Average FCF Growth Rate (%)": round(avg_growth * 100, 2),
-        "Forecast FCF (₹ Cr)": forecast,
-        "Discounted FCF (₹ Cr)": discounted_fcf,
-        "Terminal Value (₹ Cr)": terminal_value,
+        "Historical FCF (₹ Cr)":        historical_fcf,
+        "Average FCF Growth Rate (%)":   round(avg_growth * 100, 2),
+        "Forecast FCF (₹ Cr)":           forecast,
+        "Discounted FCF (₹ Cr)":         discounted_fcf,
+        "Terminal Value (₹ Cr)":         terminal_value,
         "Discounted Terminal Value (₹ Cr)": discounted_terminal,
-        "Enterprise Value (₹ Cr)": enterprise_value,
-        "Confidence Score (%)": extraction_confidence(cfo, capex),
+        "Enterprise Value (₹ Cr)":       enterprise_value,
+        "Net Debt (₹ Cr)":               net_debt_used,
+        "Equity Value (₹ Cr)":           equity_value,
+        "Intrinsic Value per Share (₹)": intrinsic_per_share,
+        "Current Market Price (₹)":      float(current_price) if current_price else None,
+        "Margin of Safety (%)":          margin_of_safety_pct,
+        "Confidence Score (%)":          extraction_confidence(cfo, capex),
+        "Growth Warnings":               growth_warnings,
         "Assumptions": {
-            "WACC (%)": int(WACC * 100),
-            "Terminal Growth (%)": int(TERMINAL_GROWTH * 100),
-            "Forecast Years": FORECAST_YEARS
+            "WACC (%)":           round(w * 100, 2),
+            "Terminal Growth (%)": round(g * 100, 2),
+            "Forecast Years":     FORECAST_YEARS,
+            "Net Debt (₹ Cr)":    net_debt_used,
+            "Shares (Cr)":        float(shares_outstanding) if shares_outstanding else None,
         }
     }
 
 # =========================
 # PDF → TEXT → DCF WRAPPER
 # =========================
-from pdf_text_extractor import extract_financials_from_pdf
 
-def run_dcf_from_pdfs(pdf_paths):
+def run_dcf_from_pdfs(pdf_paths, net_debt=0, shares_outstanding=None,
+                       current_price=None, wacc=None, terminal_growth=None):
     """
-    Accepts list of PDF file paths
-    Returns DCF valuation result
+    Accepts list of PDF file paths.
+    Returns DCF valuation result.
     """
     all_text_blocks = []
 
@@ -240,4 +370,11 @@ def run_dcf_from_pdfs(pdf_paths):
         extracted = extract_financials_from_pdf(pdf)
         all_text_blocks.extend(extracted["structured_financials"]["raw_text"])
 
-    return run_dcf_from_pdf_text(all_text_blocks)
+    return run_dcf_from_pdf_text(
+        all_text_blocks,
+        net_debt=net_debt,
+        shares_outstanding=shares_outstanding,
+        current_price=current_price,
+        wacc=wacc,
+        terminal_growth=terminal_growth,
+    )
