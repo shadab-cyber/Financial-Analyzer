@@ -563,40 +563,96 @@ def calculate_risk_metrics(portfolio_data, days=252, risk_free_rate=0.071):
         }
 
 
-def calculate_diversification(portfolio_data):
+def calculate_diversification(portfolio_data, corr_matrix=None):
     """
-    Calculate diversification metrics
+    Calculate diversification metrics — now correlation-aware.
+
+    Two independent scores are computed and combined:
+
+    1. Weight concentration (HHI)
+       HHI = Σ wᵢ²  (0 = perfectly spread, 1 = single stock)
+       HHI-score = (1 - HHI) × 100   →  higher = better spread
+
+    2. Correlation score (new)
+       avg_corr = mean of all off-diagonal pairwise correlations.
+       A portfolio of 5 uncorrelated assets (avg_corr ≈ 0) scores 100.
+       A portfolio of 5 perfectly correlated assets (avg_corr = 1) scores 0.
+       corr_score = (1 - avg_corr) × 100   →  higher = better independence
+
+    Combined diversification score = 0.5 × HHI-score + 0.5 × corr_score
+    (equal weight; both matter).
+
+    If no correlation data is available (yfinance failed), falls back to
+    HHI-score alone with a flag so the frontend can note the limitation.
     """
     if not portfolio_data:
         return {
-            'concentration_score': 0,
-            'num_holdings': 0,
+            'concentration_score':  0,
+            'diversification_score': 0,
+            'correlation_score':    None,
+            'avg_pairwise_corr':    None,
+            'num_holdings':         0,
             'largest_position_pct': 0,
-            'top_5_concentration': 0
+            'top_5_concentration':  0,
+            'corr_available':       False,
         }
-    
+
     total_value = sum(h['current_value'] for h in portfolio_data)
-    weights = [h['current_value'] / total_value for h in portfolio_data]
-    
-    # Herfindahl Index
-    herfindahl_index = sum(w**2 for w in weights) * 100
-    
-    # Largest position
-    largest_position_pct = max(weights) * 100
-    
-    # Top 5 concentration
-    sorted_weights = sorted(weights, reverse=True)
-    top_5_concentration = sum(sorted_weights[:min(5, len(sorted_weights))]) * 100
-    
-    # Diversification score
-    diversification_score = 100 - herfindahl_index
-    
+    weights     = [h['current_value'] / total_value for h in portfolio_data]
+
+    # ── 1. HHI-based concentration ────────────────────────────────────────────
+    hhi             = sum(w ** 2 for w in weights)       # 0 … 1
+    hhi_score       = round((1 - hhi) * 100, 2)          # 0 … 100, higher = better
+    largest_pct     = round(max(weights) * 100, 2)
+    sorted_w        = sorted(weights, reverse=True)
+    top5_pct        = round(sum(sorted_w[:min(5, len(sorted_w))]) * 100, 2)
+
+    # ── 2. Correlation score ──────────────────────────────────────────────────
+    avg_corr       = None
+    corr_score     = None
+    corr_available = False
+
+    cm = corr_matrix   # {'labels': [...], 'matrix': [[...]]}
+    if cm and isinstance(cm.get('matrix'), list) and len(cm['matrix']) > 1:
+        try:
+            mat  = cm['matrix']
+            n    = len(mat)
+            # Collect all off-diagonal values
+            off_diag = [mat[i][j] for i in range(n) for j in range(n) if i != j]
+            if off_diag:
+                avg_corr       = round(float(sum(off_diag) / len(off_diag)), 3)
+                # Clamp to [−1, 1] in case of floating-point drift
+                avg_corr       = max(-1.0, min(1.0, avg_corr))
+                # Map avg_corr from [−1, 1] to corr_score [100, 0]
+                # avg_corr = −1  → perfect negative corr → corr_score = 100
+                # avg_corr =  0  → uncorrelated          → corr_score = 50  … but
+                # For diversification 0 correlation is ideal, so we use:
+                # corr_score = (1 − avg_corr) / 2 × 100  maps [−1→100, 0→50, 1→0]
+                # A cleaner interpretation: higher corr = worse diversification
+                corr_score     = round((1.0 - avg_corr) * 50, 2)   # 0 … 100
+                corr_available = True
+        except Exception:
+            pass
+
+    # ── Combined score ────────────────────────────────────────────────────────
+    if corr_available and corr_score is not None:
+        combined = round(0.5 * hhi_score + 0.5 * corr_score, 2)
+        method   = 'HHI 50% + Correlation 50%'
+    else:
+        combined = hhi_score
+        method   = 'HHI only (correlation data unavailable)'
+
     return {
-        'concentration_score': round(herfindahl_index, 2),
-        'diversification_score': round(diversification_score, 2),
-        'num_holdings': len(portfolio_data),
-        'largest_position_pct': round(largest_position_pct, 2),
-        'top_5_concentration': round(top_5_concentration, 2)
+        'concentration_score':   round(hhi * 100, 2),     # HHI × 100 (lower = better)
+        'diversification_score': combined,                 # 0–100 (higher = better)
+        'hhi_score':             hhi_score,
+        'correlation_score':     corr_score,
+        'avg_pairwise_corr':     avg_corr,
+        'num_holdings':          len(portfolio_data),
+        'largest_position_pct':  largest_pct,
+        'top_5_concentration':   top5_pct,
+        'corr_available':        corr_available,
+        'scoring_method':        method,
     }
 
 
@@ -789,7 +845,10 @@ def run_portfolio_analysis(holdings):
         summary        = calculate_portfolio_summary(portfolio_data)
         allocation     = calculate_asset_allocation(portfolio_data)
         risk_metrics   = calculate_risk_metrics(portfolio_data)
-        diversification = calculate_diversification(portfolio_data)
+        # Pass correlation matrix from risk_metrics into diversification so the
+        # combined score can use both HHI and average pairwise correlation.
+        _corr = risk_metrics.get('correlation_matrix') if risk_metrics else None
+        diversification = calculate_diversification(portfolio_data, corr_matrix=_corr)
         rebalancing    = generate_rebalancing_signals(
                             portfolio_data, allocation,
                             target_weights=holdings[0].get('_target_weights') if holdings else None
