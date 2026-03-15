@@ -484,7 +484,28 @@ def dcf_from_pdf():
             return jsonify({'error': 'Could not extract text from the uploaded PDFs. '
                             'Please ensure the files are readable annual reports.'}), 400
 
-        dcf_result = run_dcf_from_pdf_text(all_text_blocks)
+        # Read optional user inputs passed via FormData
+        def _float(key, default=None):
+            v = request.form.get(key)
+            try:
+                return float(v) if v not in (None, '') else default
+            except (ValueError, TypeError):
+                return default
+
+        wacc            = _float('wacc')
+        terminal_growth = _float('terminal_growth')
+        net_debt        = _float('net_debt', 0)
+        shares          = _float('shares_outstanding')
+        cmp_price       = _float('current_price')
+
+        dcf_result = run_dcf_from_pdf_text(
+            all_text_blocks,
+            net_debt=net_debt,
+            shares_outstanding=shares,
+            current_price=cmp_price,
+            wacc=wacc,
+            terminal_growth=terminal_growth,
+        )
         return jsonify(dcf_result)
 
     except Exception as e:
@@ -596,14 +617,10 @@ def portfolio_management():
         result = run_portfolio_analysis(holdings)
 
         if result.get('success'):
-            # Store ONLY the lightweight input in the session cookie —
-            # NOT the full analysis result (which can be 20+ KB and blows
-            # the 4096-byte cookie limit on Render).
-            # The /portfolio-management/get-data endpoint re-runs analysis
-            # from the stored holdings when needed.
             session['portfolio_data'] = {
-                'holdings':  holdings,            # compact input only
-                'timestamp': datetime.now().isoformat()
+                'holdings':        holdings,
+                'analysis_result': result,
+                'timestamp':       datetime.now().isoformat()
             }
 
         return jsonify(result)
@@ -620,13 +637,7 @@ def get_portfolio_data():
         if not portfolio_data:
             return jsonify({'error': 'No portfolio data found. '
                             'Please analyse your portfolio first.'}), 404
-        # Re-run analysis from stored holdings — analysis_result is no longer
-        # cached in the session cookie to keep it under the 4096-byte limit.
-        holdings = portfolio_data.get('holdings', [])
-        if not holdings:
-            return jsonify({'error': 'Stored holdings are empty.'}), 404
-        result = run_portfolio_analysis(holdings)
-        return jsonify(result)
+        return jsonify(portfolio_data)
     except Exception as e:
         app.logger.error(f'get_portfolio_data error: {e}')
         return err('Could not retrieve portfolio data', 500)
