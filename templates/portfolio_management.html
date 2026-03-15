@@ -430,7 +430,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <!-- Portfolio Summary -->
     <div class="section-card">
       <div class="section-title">💰 Portfolio Summary</div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div class="metric-card border-l-4 border-blue-500">
           <div class="text-sm text-gray-600">Total Invested</div>
           <div id="totalInvested" class="text-2xl font-bold text-gray-800">₹0</div>
@@ -444,8 +444,12 @@ document.addEventListener('DOMContentLoaded', function() {
           <div id="totalGainLoss" class="text-2xl font-bold">₹0</div>
         </div>
         <div class="metric-card border-l-4 border-orange-500">
-          <div class="text-sm text-gray-600">Return %</div>
+          <div class="text-sm text-gray-600">Simple Return %</div>
           <div id="totalReturn" class="text-2xl font-bold">0%</div>
+        </div>
+        <div class="metric-card border-l-4 border-teal-500" id="portfolioXirrCard" style="display:none;">
+          <div class="text-sm text-gray-600">XIRR (annualised)</div>
+          <div id="portfolioXirr" class="text-2xl font-bold">-</div>
         </div>
       </div>
     </div>
@@ -465,6 +469,7 @@ document.addEventListener('DOMContentLoaded', function() {
               <th>Current Value</th>
               <th>Gain/Loss</th>
               <th>Return %</th>
+              <th>XIRR %</th>
             </tr>
           </thead>
           <tbody id="holdingsDetailsBody"></tbody>
@@ -496,7 +501,15 @@ document.addEventListener('DOMContentLoaded', function() {
     <!-- Risk Metrics -->
     <div class="section-card">
       <div class="section-title">📉 Risk Metrics</div>
-      <div id="riskMetricsGrid" class="grid grid-cols-1 md:grid-cols-4 gap-4"></div>
+      <div id="riskMetricsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"></div>
+      <!-- VaR / Sortino / CVaR row -->
+      <div id="riskMetrics2Grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4" style="display:none!important;"></div>
+      <!-- Correlation heatmap -->
+      <div id="corrSection" style="display:none;">
+        <div class="text-sm font-semibold text-gray-600 mb-2">Holdings Correlation Matrix</div>
+        <div id="corrHeatmap" class="overflow-x-auto text-xs"></div>
+        <p class="text-xs text-gray-400 mt-2">Values close to 1 = highly correlated (similar risk). Values close to 0 or negative = good diversification.</p>
+      </div>
     </div>
 
     <!-- Diversification -->
@@ -505,9 +518,19 @@ document.addEventListener('DOMContentLoaded', function() {
       <div id="diversificationGrid" class="grid grid-cols-1 md:grid-cols-4 gap-4"></div>
     </div>
 
+    <!-- Portfolio vs Benchmark equity curve -->
+    <div class="section-card" id="equityCurveSection" style="display:none;">
+      <div class="section-title">📈 Portfolio Equity Curve</div>
+      <div style="position:relative;height:220px;">
+        <canvas id="equityCurveChart"></canvas>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">Simulated from invested value → current value (actual historical prices require individual trade history)</p>
+    </div>
+
     <!-- Rebalancing Signals -->
     <div class="section-card">
       <div class="section-title">⚖️ Rebalancing Signals</div>
+      <p class="text-xs text-gray-500 mb-3">Compared against equal-weight targets. Set custom targets per stock in the Holdings form above using the <strong>Target %</strong> column.</p>
       <div id="rebalancingSignals"></div>
     </div>
 
@@ -717,31 +740,54 @@ function analyzePortfolio() {
 
 function displayResults(data) {
     displaySummary(data.summary);
-    displayHoldingsDetails(data.holdings);
+    displayHoldingsDetails(data.holdings, data.xirr);
     displayAllocation(data.allocation);
     displayRiskMetrics(data.risk_metrics);
     displayDiversification(data.diversification);
     displayRebalancingSignals(data.rebalancing_signals);
     displayBenchmark(data.benchmark_comparison);
+    displayEquityCurve(data.equity_curve);
 }
 
 function displaySummary(summary) {
     document.getElementById('totalInvested').textContent = '₹' + summary.total_invested.toLocaleString();
-    document.getElementById('currentValue').textContent = '₹' + summary.total_current_value.toLocaleString();
-    
+    document.getElementById('currentValue').textContent  = '₹' + summary.total_current_value.toLocaleString();
+
     const gainLossElem = document.getElementById('totalGainLoss');
-    gainLossElem.textContent = '₹' + Math.abs(summary.total_gain_loss).toLocaleString();
-    gainLossElem.className = 'text-2xl font-bold ' + (summary.total_gain_loss >= 0 ? 'text-green-600' : 'text-red-600');
-    
+    gainLossElem.textContent  = '₹' + Math.abs(summary.total_gain_loss).toLocaleString();
+    gainLossElem.className    = 'text-2xl font-bold ' + (summary.total_gain_loss >= 0 ? 'text-green-600' : 'text-red-600');
+
     const returnElem = document.getElementById('totalReturn');
     returnElem.textContent = (summary.total_gain_loss_pct >= 0 ? '+' : '') + summary.total_gain_loss_pct + '%';
-    returnElem.className = 'text-2xl font-bold ' + (summary.total_gain_loss_pct >= 0 ? 'text-green-600' : 'text-red-600');
+    returnElem.className   = 'text-2xl font-bold ' + (summary.total_gain_loss_pct >= 0 ? 'text-green-600' : 'text-red-600');
+
+    // Portfolio XIRR — show alongside total return if available
+    const xirr = summary.portfolio_xirr_pct;
+    const xirrCard = document.getElementById('portfolioXirrCard');
+    if (xirrCard && xirr != null) {
+        xirrCard.style.display = '';
+        const el = document.getElementById('portfolioXirr');
+        if (el) {
+            el.textContent  = (xirr >= 0 ? '+' : '') + xirr + '%';
+            el.className    = 'text-2xl font-bold ' + (xirr >= 0 ? 'text-green-600' : 'text-red-600');
+        }
+    }
 }
 
-function displayHoldingsDetails(holdings) {
+function displayHoldingsDetails(holdings, xirrData) {
+    // Build XIRR lookup from xirr data
+    const xirrMap = {};
+    if (xirrData && xirrData.holdings) {
+        xirrData.holdings.forEach(x => { xirrMap[x.symbol] = x.xirr_pct; });
+    }
+
     const tbody = document.getElementById('holdingsDetailsBody');
-    tbody.innerHTML = holdings.map(h => `
-        <tr>
+    tbody.innerHTML = holdings.map(h => {
+        const xirr = xirrMap[h.symbol];
+        const xirrStr = xirr != null
+            ? `<span class="${xirr >= 0 ? 'text-green-600' : 'text-red-600'} font-semibold">${xirr >= 0 ? '+' : ''}${xirr}%</span>`
+            : '<span class="text-gray-400">-</span>';
+        return `<tr>
             <td class="font-semibold">${h.symbol}</td>
             <td>${h.quantity}</td>
             <td>₹${h.buy_price.toFixed(2)}</td>
@@ -754,26 +800,130 @@ function displayHoldingsDetails(holdings) {
             <td class="${h.gain_loss_pct >= 0 ? 'text-green-600' : 'text-red-600'} font-semibold">
                 ${h.gain_loss_pct >= 0 ? '+' : ''}${h.gain_loss_pct.toFixed(2)}%
             </td>
-        </tr>
-    `).join('');
+            <td>${xirrStr}</td>
+        </tr>`;
+    }).join('');
+}
+
+let equityChartInstance = null;
+function displayEquityCurve(curve) {
+    const sec = document.getElementById('equityCurveSection');
+    if (!curve || curve.length < 2) { sec.style.display = 'none'; return; }
+    sec.style.display = '';
+
+    const labels = curve.map(p => p.date);
+    const values = curve.map(p => p.total_value);
+    const first  = values[0];
+    const last   = values[values.length - 1];
+    const color  = last >= first ? '#10b981' : '#ef4444';
+    const bgColor = last >= first ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)';
+
+    const canvas = document.getElementById('equityCurveChart');
+    if (!canvas) return;
+    if (equityChartInstance) equityChartInstance.destroy();
+
+    equityChartInstance = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Portfolio Value (₹)',
+                data: values,
+                borderColor: color,
+                backgroundColor: bgColor,
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => '₹' + Math.round(ctx.parsed.y).toLocaleString()
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 8, font: { size: 10 } } },
+                y: {
+                    ticks: {
+                        font: { size: 10 },
+                        callback: v => '₹' + (v/1000).toFixed(0) + 'K'
+                    }
+                }
+            }
+        }
+    });
 }
 
 function displayRiskMetrics(metrics) {
     const grid = document.getElementById('riskMetricsGrid');
     const items = [
-        { label: 'Portfolio Beta', value: metrics.portfolio_beta, desc: 'vs NIFTY 50' },
-        { label: 'Volatility', value: metrics.portfolio_volatility ? metrics.portfolio_volatility + '%' : 'N/A', desc: 'Annualized' },
-        { label: 'Sharpe Ratio', value: metrics.sharpe_ratio, desc: 'Risk-adjusted return' },
-        { label: 'Max Drawdown', value: metrics.max_drawdown ? metrics.max_drawdown + '%' : 'N/A', desc: 'Peak to trough' }
+        { label: 'Portfolio Beta',  value: metrics.portfolio_beta,         desc: 'vs NIFTY 50' },
+        { label: 'Volatility (ann)', value: metrics.portfolio_volatility ? metrics.portfolio_volatility + '%' : 'N/A', desc: 'Annualised' },
+        { label: 'Sharpe Ratio',    value: metrics.sharpe_ratio,           desc: 'Risk-adjusted return' },
+        { label: 'Max Drawdown',    value: metrics.max_drawdown ? metrics.max_drawdown + '%' : 'N/A', desc: 'Peak to trough' },
     ];
-
     grid.innerHTML = items.map(item => `
         <div class="metric-card">
             <div class="text-xs text-gray-500">${item.label}</div>
-            <div class="text-2xl font-bold text-gray-800 my-1">${item.value !== null ? item.value : 'N/A'}</div>
+            <div class="text-2xl font-bold text-gray-800 my-1">${item.value !== null && item.value !== undefined ? item.value : 'N/A'}</div>
             <div class="text-xs text-gray-500">${item.desc}</div>
-        </div>
-    `).join('');
+        </div>`).join('');
+
+    // VaR / Sortino / CVaR
+    const g2 = document.getElementById('riskMetrics2Grid');
+    const items2 = [
+        { label: 'Sortino Ratio',  value: metrics.sortino_ratio,   desc: 'Downside risk-adjusted' },
+        { label: 'VaR 95% (1-day)', value: metrics.var_95_pct ? metrics.var_95_pct + '%' : 'N/A', desc: 'Daily loss at 95% conf.' },
+        { label: 'CVaR 95%',       value: metrics.cvar_95_pct ? metrics.cvar_95_pct + '%' : 'N/A', desc: 'Expected loss beyond VaR' },
+        { label: 'Avg Annual Ret', value: metrics.avg_annual_return ? metrics.avg_annual_return + '%' : 'N/A', desc: 'Historical' },
+    ];
+    if (metrics.sortino_ratio != null || metrics.var_95_pct != null) {
+        g2.style.removeProperty('display');
+        g2.innerHTML = items2.map(item => `
+            <div class="metric-card">
+                <div class="text-xs text-gray-500">${item.label}</div>
+                <div class="text-2xl font-bold text-gray-800 my-1">${item.value !== null && item.value !== undefined ? item.value : 'N/A'}</div>
+                <div class="text-xs text-gray-500">${item.desc}</div>
+            </div>`).join('');
+    }
+
+    // Correlation heatmap
+    const corrSec = document.getElementById('corrSection');
+    const cm = metrics.correlation_matrix;
+    if (cm && cm.labels && cm.matrix && cm.labels.length > 1) {
+        corrSec.style.display = '';
+        const labels = cm.labels;
+        const matrix = cm.matrix;
+        const n = labels.length;
+        const getColor = v => {
+            const r = v >= 0 ? Math.round(255 * (1-v)) : 255;
+            const g = v >= 0 ? 255 : Math.round(255 * (1+v));
+            return `rgb(${r},${g},100)`;
+        };
+        let html = '<table style="border-collapse:collapse;font-size:11px;">';
+        html += '<tr><th style="padding:4px 6px;"></th>' + labels.map(l => `<th style="padding:4px 6px;font-weight:600;">${l}</th>`).join('') + '</tr>';
+        for (let i = 0; i < n; i++) {
+            html += `<tr><td style="padding:4px 6px;font-weight:600;">${labels[i]}</td>`;
+            for (let j = 0; j < n; j++) {
+                const v = matrix[i][j];
+                const bg = getColor(v);
+                const textColor = Math.abs(v) > 0.5 ? '#fff' : '#333';
+                html += `<td style="padding:5px 8px;background:${bg};color:${textColor};text-align:center;border:1px solid rgba(0,0,0,0.1);">${v.toFixed(2)}</td>`;
+            }
+            html += '</tr>';
+        }
+        html += '</table>';
+        document.getElementById('corrHeatmap').innerHTML = html;
+    } else {
+        corrSec.style.display = 'none';
+    }
 }
 
 function displayDiversification(div) {
@@ -796,33 +946,38 @@ function displayDiversification(div) {
 
 function displayRebalancingSignals(signals) {
     const container = document.getElementById('rebalancingSignals');
-    
+    const tradeable = signals.filter(s => s.type !== 'PROFIT_BOOKING' && s.type !== 'TOP_CONCENTRATION');
+    const portfolio = signals.filter(s => s.type === 'TOP_CONCENTRATION' || s.type === 'PROFIT_BOOKING');
+
     if (!signals || signals.length === 0) {
-        container.innerHTML = '<p class="text-gray-600">✅ No rebalancing needed - portfolio is well balanced!</p>';
+        container.innerHTML = '<p class="text-gray-600 text-sm">✅ Portfolio is well balanced against equal-weight targets.</p>';
         return;
     }
 
-    const severityColors = {
-        'HIGH': 'bg-red-50 border-red-500',
-        'MEDIUM': 'bg-yellow-50 border-yellow-500',
-        'LOW': 'bg-blue-50 border-blue-500'
-    };
+    const sevColors = { HIGH:'bg-red-50 border-red-400', MEDIUM:'bg-yellow-50 border-yellow-400', LOW:'bg-blue-50 border-blue-400' };
+    const actColors = { SELL:'bg-red-100 text-red-700', BUY:'bg-green-100 text-green-700', HOLD:'bg-gray-100 text-gray-600',
+                        DIVERSIFY:'bg-yellow-100 text-yellow-700', BOOK_PROFIT:'bg-blue-100 text-blue-700' };
 
-    container.innerHTML = signals.map(signal => `
-        <div class="p-4 rounded-lg border-l-4 mb-3 ${severityColors[signal.severity]}">
-            <div class="flex justify-between items-start">
+    container.innerHTML = [...tradeable, ...portfolio].map(s => {
+        const hasTrade = s.trade_inr !== 0 && s.trade_inr != null;
+        const tradeStr = hasTrade
+            ? `<span class="text-xs ${s.trade_inr > 0 ? 'text-green-700' : 'text-red-700'} font-semibold ml-2">
+                 ${s.trade_inr > 0 ? 'Buy' : 'Sell'} ≈ ₹${Math.abs(s.trade_inr).toLocaleString()}
+                 ${s.brokerage_est ? `<span class="text-gray-400">(+₹${s.brokerage_est} brokerage)</span>` : ''}
+               </span>` : '';
+        const devStr = s.deviation != null
+            ? `<span class="text-xs text-gray-500 ml-2">${s.deviation > 0 ? '+' : ''}${s.deviation}pp vs ${s.target_weight}% target</span>`
+            : '';
+        return `<div class="p-3 rounded-lg border-l-4 mb-2 ${sevColors[s.severity] || 'bg-gray-50 border-gray-300'}">
+            <div class="flex justify-between items-start gap-2">
                 <div>
-                    <div class="font-semibold text-gray-800">${signal.symbol} - ${signal.type.replace('_', ' ')}</div>
-                    <div class="text-sm text-gray-600 mt-1">${signal.recommendation}</div>
+                    <div class="font-semibold text-gray-800 text-sm">${s.symbol} — ${s.type.replace(/_/g,' ')}</div>
+                    <div class="text-xs text-gray-600 mt-0.5">${s.recommendation}${devStr}${tradeStr}</div>
                 </div>
-                <span class="px-3 py-1 rounded text-sm font-semibold ${
-                    signal.action === 'SELL' ? 'bg-red-100 text-red-700' :
-                    signal.action === 'BUY' ? 'bg-green-100 text-green-700' :
-                    'bg-yellow-100 text-yellow-700'
-                }">${signal.action}</span>
+                <span class="text-xs px-2 py-0.5 rounded font-semibold flex-shrink-0 ${actColors[s.action] || 'bg-gray-100 text-gray-700'}">${s.action}</span>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 function displayBenchmark(benchmark) {
