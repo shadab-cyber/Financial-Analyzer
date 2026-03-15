@@ -577,56 +577,7 @@ function renderDCF(data) {
 
 </div>
 
-<script>
-async function runDCF() {
-  const filesInput = document.getElementById("pdfFiles");
-  const statusDiv = document.getElementById("status");
-  const errorDiv = document.getElementById("error");
-  const resultDiv = document.getElementById("result");
 
-  errorDiv.classList.add("hidden");
-  resultDiv.classList.add("hidden");
-
-  if (filesInput.files.length < 1) {
-    errorDiv.textContent = "Please upload at least one Annual Report PDF.";
-    errorDiv.classList.remove("hidden");
-    return;
-  }
-
-  const formData = new FormData();
-  for (const file of filesInput.files) {
-    formData.append("files", file);
-  }
-
-  statusDiv.textContent = "⏳ Extracting financials & running DCF...";
-  statusDiv.classList.remove("hidden");
-
-  try {
-    const res = await fetch("/dcf/upload", {
-      method: "POST",
-      body: formData
-    });
-
-    const data = await res.json();
-    statusDiv.classList.add("hidden");
-
-    if (data.error) {
-      errorDiv.textContent = data.error;
-      errorDiv.classList.remove("hidden");
-      return;
-    }
-
-    renderDCF(data);
-    resultDiv.classList.remove("hidden");
-
-  } catch (err) {
-    statusDiv.classList.add("hidden");
-    errorDiv.textContent = err.message;
-    errorDiv.classList.remove("hidden");
-  }
-}
-
-</script>
 
 
 <!-- =============== SHARED FOOTER =============== -->
