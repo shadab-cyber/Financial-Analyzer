@@ -403,22 +403,49 @@ async function runDCF() {
   if (shares) formData.append("shares_outstanding", shares);
   if (cmp)    formData.append("current_price",       cmp);
 
-  statusDiv.textContent = "⏳ Extracting financials & running DCF...";
+  statusDiv.textContent = "⏳ Uploading PDFs…";
   statusDiv.classList.remove("hidden");
 
   try {
-    const res  = await fetch("/dcf/upload", { method: "POST", body: formData });
-    const data = await res.json();
-    statusDiv.classList.add("hidden");
+    // Step 1: upload files + params → get job_id immediately (no timeout risk)
+    const res = await fetch("/dcf/upload", { method: "POST", body: formData });
 
-    if (data.error) {
-      errorDiv.textContent = data.error;
-      errorDiv.classList.remove("hidden");
-      return;
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Server error ${res.status}`);
     }
 
-    renderDCF(data);
-    resultDiv.classList.remove("hidden");
+    const { job_id } = await res.json();
+    if (!job_id) throw new Error("No job ID returned from server.");
+
+    // Step 2: poll /dcf/status/<job_id> every 3 seconds
+    statusDiv.textContent = "⏳ Extracting financials from PDFs… (this can take several minutes)";
+
+    await new Promise((resolve, reject) => {
+      const interval = setInterval(async () => {
+        try {
+          const poll = await fetch(`/dcf/status/${job_id}`);
+          const job  = await poll.json();
+
+          if (job.status === "processing" || job.status === "queued") {
+            const pct = job.percent || 0;
+            statusDiv.textContent = `⏳ ${job.progress || "Processing…"} (${pct}%)`;
+          } else if (job.status === "done") {
+            clearInterval(interval);
+            statusDiv.classList.add("hidden");
+            renderDCF(job.result);
+            resultDiv.classList.remove("hidden");
+            resolve();
+          } else if (job.status === "error") {
+            clearInterval(interval);
+            reject(new Error(job.error || "DCF processing failed."));
+          }
+        } catch (pollErr) {
+          clearInterval(interval);
+          reject(pollErr);
+        }
+      }, 3000);  // poll every 3 seconds
+    });
 
   } catch (err) {
     statusDiv.classList.add("hidden");
