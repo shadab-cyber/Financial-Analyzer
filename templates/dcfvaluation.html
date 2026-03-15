@@ -422,10 +422,35 @@ async function runDCF() {
     statusDiv.textContent = "⏳ Extracting financials from PDFs… (this can take several minutes)";
 
     await new Promise((resolve, reject) => {
+      let consecutiveErrors = 0;
+      let totalSeconds = 0;
+      const MAX_WAIT_SECONDS = 900;   // 15 minutes max
+      const MAX_CONSEC_ERRORS = 5;    // tolerate 5 consecutive 503s before giving up
+
       const interval = setInterval(async () => {
+        totalSeconds += 3;
+        if (totalSeconds > MAX_WAIT_SECONDS) {
+          clearInterval(interval);
+          reject(new Error('DCF analysis timed out after 15 minutes. Try uploading fewer or smaller PDFs.'));
+          return;
+        }
+
         try {
           const poll = await fetch(`/dcf/status/${job_id}`);
-          const job  = await poll.json();
+
+          // Handle 503 (server restarting) — retry silently
+          if (poll.status === 503 || poll.status === 502) {
+            consecutiveErrors++;
+            statusDiv.textContent = `⏳ Server restarting… retrying (${consecutiveErrors}/${MAX_CONSEC_ERRORS})`;
+            if (consecutiveErrors >= MAX_CONSEC_ERRORS) {
+              clearInterval(interval);
+              reject(new Error('Server is unavailable. The PDF processing may have exceeded memory limits. Try uploading 1–2 PDFs at a time.'));
+            }
+            return;
+          }
+
+          consecutiveErrors = 0;   // reset on successful response
+          const job = await poll.json();
 
           if (job.status === "processing" || job.status === "queued") {
             const pct = job.percent || 0;
@@ -441,10 +466,13 @@ async function runDCF() {
             reject(new Error(job.error || "DCF processing failed."));
           }
         } catch (pollErr) {
-          clearInterval(interval);
-          reject(pollErr);
+          consecutiveErrors++;
+          if (consecutiveErrors >= MAX_CONSEC_ERRORS) {
+            clearInterval(interval);
+            reject(pollErr);
+          }
         }
-      }, 3000);  // poll every 3 seconds
+      }, 3000);
     });
 
   } catch (err) {
