@@ -929,19 +929,41 @@ function displayRiskMetrics(metrics) {
 function displayDiversification(div) {
     const grid = document.getElementById('diversificationGrid');
     const items = [
-        { label: 'Holdings', value: div.num_holdings, desc: 'Total stocks' },
-        { label: 'Diversification Score', value: div.diversification_score.toFixed(1), desc: '0-100 scale' },
-        { label: 'Largest Position', value: div.largest_position_pct.toFixed(1) + '%', desc: 'Single stock max' },
-        { label: 'Top 5 Weight', value: div.top_5_concentration.toFixed(1) + '%', desc: 'Concentration' }
+        { label: 'Holdings',              value: div.num_holdings, desc: 'Total stocks' },
+        { label: 'Diversification Score', value: div.diversification_score != null ? div.diversification_score.toFixed(1) : 'N/A',
+          desc: div.scoring_method || '0-100 scale' },
+        { label: 'Avg Pairwise Corr',     value: div.avg_pairwise_corr != null ? div.avg_pairwise_corr.toFixed(3) : 'N/A',
+          desc: div.corr_available ? 'Lower = better independence' : 'Needs live price history' },
+        { label: 'Largest Position',      value: div.largest_position_pct != null ? div.largest_position_pct.toFixed(1) + '%' : 'N/A',
+          desc: 'Single stock max' },
     ];
-
     grid.innerHTML = items.map(item => `
         <div class="metric-card">
             <div class="text-xs text-gray-500">${item.label}</div>
             <div class="text-2xl font-bold text-gray-800 my-1">${item.value}</div>
             <div class="text-xs text-gray-500">${item.desc}</div>
-        </div>
-    `).join('');
+        </div>`).join('');
+
+    // Sub-score breakdown (HHI vs correlation)
+    const existingSub = document.getElementById('divSubScores');
+    if (existingSub) existingSub.remove();
+    if (div.hhi_score != null && div.correlation_score != null) {
+        const sub = document.createElement('div');
+        sub.id = 'divSubScores';
+        sub.className = 'grid grid-cols-2 gap-4 mt-3';
+        sub.innerHTML = `
+            <div class="metric-card" style="background:#eff6ff">
+                <div class="text-xs text-gray-500">Weight Spread (HHI)</div>
+                <div class="text-xl font-bold text-blue-700 my-1">${div.hhi_score.toFixed(1)}</div>
+                <div class="text-xs text-gray-400">How evenly weights are spread</div>
+            </div>
+            <div class="metric-card" style="background:#f0fdfa">
+                <div class="text-xs text-gray-500">Return Independence</div>
+                <div class="text-xl font-bold text-teal-700 my-1">${div.correlation_score.toFixed(1)}</div>
+                <div class="text-xs text-gray-400">Based on price correlations (lower corr = higher score)</div>
+            </div>`;
+        grid.parentNode.appendChild(sub);
+    }
 }
 
 function displayRebalancingSignals(signals) {
