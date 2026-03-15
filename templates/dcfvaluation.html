@@ -289,67 +289,121 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="pt-6">
 <div class="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow-lg">
 
-  <h1 class="text-2xl font-bold text-center mb-6">
+  <h1 class="text-2xl font-bold text-center mb-2">
     📊 Discounted Cash Flow (DCF) Valuation
   </h1>
+  <p class="text-center text-sm text-gray-500 mb-6">Enter figures from Screener.in Cash Flow statement (₹ Crore)</p>
 
-  <!-- UPLOAD -->
-  <div class="border-2 border-dashed p-6 rounded-lg mb-6 text-center">
-    <input type="file" id="pdfFiles" accept=".pdf" multiple class="mb-3" />
-    <p class="text-sm text-gray-600">
-      Upload Annual Report PDFs (minimum 5 years recommended)
-    </p>
-    <p class="text-xs text-red-700 font-semibold mt-1">
-      ⚠️ PDF extraction can take up to 30 minutes depending on file size.
-    </p>
-  </div>
-
-  <!-- DCF INPUTS -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
-    <div>
-      <label class="block text-xs font-semibold text-gray-600 mb-1">WACC (%)</label>
-      <input type="number" id="inputWACC" value="11" min="5" max="30" step="0.5"
-             class="w-full border rounded px-3 py-2 text-sm" />
-      <p class="text-xs text-gray-400 mt-1">Weighted average cost of capital</p>
-    </div>
-    <div>
-      <label class="block text-xs font-semibold text-gray-600 mb-1">Terminal Growth Rate (%)</label>
-      <input type="number" id="inputTermGrowth" value="4" min="0" max="10" step="0.5"
-             class="w-full border rounded px-3 py-2 text-sm" />
-      <p class="text-xs text-gray-400 mt-1">Must be less than WACC</p>
-    </div>
-    <div>
-      <label class="block text-xs font-semibold text-gray-600 mb-1">Net Debt (₹ Cr)</label>
-      <input type="number" id="inputNetDebt" value="0" step="1"
-             class="w-full border rounded px-3 py-2 text-sm" />
-      <p class="text-xs text-gray-400 mt-1">Total debt − cash. Negative = net cash</p>
-    </div>
-    <div>
-      <label class="block text-xs font-semibold text-gray-600 mb-1">Shares Outstanding (Cr)</label>
-      <input type="number" id="inputShares" value="" placeholder="e.g. 67.5" step="0.01"
-             class="w-full border rounded px-3 py-2 text-sm" />
-      <p class="text-xs text-gray-400 mt-1">Number of shares in crore</p>
-    </div>
-    <div>
-      <label class="block text-xs font-semibold text-gray-600 mb-1">Current Market Price (₹)</label>
-      <input type="number" id="inputCMP" value="" placeholder="e.g. 2450" step="0.01"
-             class="w-full border rounded px-3 py-2 text-sm" />
-      <p class="text-xs text-gray-400 mt-1">For margin of safety calculation</p>
-    </div>
-    <div class="flex items-end">
-      <p class="text-xs text-gray-500">
-        Net Debt and Shares are needed to compute <strong>Equity Value per share</strong>.
-        WACC and Terminal Growth control the DCF assumptions.
-      </p>
-    </div>
-  </div>
-
-  <!-- BUTTON -->
-  <div class="text-center mb-6">
-    <button onclick="runDCF()"
-      class="bg-blue-600 text-white px-8 py-2 rounded-lg hover:bg-blue-700">
-      ▶ Run DCF Valuation
+  <!-- ── MODE TABS ─────────────────────────────────────────────────── -->
+  <div class="flex gap-2 mb-6 border-b">
+    <button id="tabManual" onclick="switchTab('manual')"
+      class="px-4 py-2 text-sm font-semibold border-b-2 border-blue-600 text-blue-700">
+      ✏️ Manual Input (Recommended)
     </button>
+    <button id="tabPdf" onclick="switchTab('pdf')"
+      class="px-4 py-2 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700">
+      📄 PDF Upload (Experimental)
+    </button>
+  </div>
+
+  <!-- ── MANUAL INPUT PANEL ────────────────────────────────────────── -->
+  <div id="panelManual">
+    <p class="text-xs text-gray-500 mb-3">
+      Enter CFO and CAPEX for each year (oldest → newest). Get these from
+      <a href="https://screener.in" target="_blank" class="text-blue-600 underline">Screener.in</a>
+      → Cash Flow tab. At least 3 years required; 5 years recommended.
+    </p>
+
+    <!-- Year rows -->
+    <div class="overflow-x-auto mb-4">
+      <table class="w-full text-sm border">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="border p-2 text-left">Year</th>
+            <th class="border p-2">CFO (₹ Cr)<br><span class="font-normal text-xs text-gray-400">Cash from Operations</span></th>
+            <th class="border p-2">CAPEX (₹ Cr)<br><span class="font-normal text-xs text-gray-400">Fixed Assets Purchased</span></th>
+          </tr>
+        </thead>
+        <tbody id="fcfRows">
+          <!-- Rows injected by JS -->
+        </tbody>
+      </table>
+    </div>
+    <button onclick="addYear()" class="text-xs text-blue-600 mb-4 hover:underline">+ Add year</button>
+
+    <!-- Valuation params -->
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">WACC (%)</label>
+        <input type="number" id="inputWACC" value="11" min="5" max="30" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
+        <p class="text-xs text-gray-400 mt-1">Cost of capital</p>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Terminal Growth (%)</label>
+        <input type="number" id="inputTermGrowth" value="4" min="0" max="10" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
+        <p class="text-xs text-gray-400 mt-1">Must be &lt; WACC</p>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Net Debt (₹ Cr)</label>
+        <input type="number" id="inputNetDebt" value="0" step="1" class="w-full border rounded px-3 py-2 text-sm" />
+        <p class="text-xs text-gray-400 mt-1">Debt − Cash (negative = net cash)</p>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Shares Outstanding (Cr)</label>
+        <input type="number" id="inputShares" value="" placeholder="e.g. 67.5" step="0.01" class="w-full border rounded px-3 py-2 text-sm" />
+        <p class="text-xs text-gray-400 mt-1">From Screener → Shares</p>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Current Market Price (₹)</label>
+        <input type="number" id="inputCMP" value="" placeholder="e.g. 2450" step="0.01" class="w-full border rounded px-3 py-2 text-sm" />
+        <p class="text-xs text-gray-400 mt-1">For margin of safety</p>
+      </div>
+    </div>
+
+    <div class="text-center mb-6">
+      <button onclick="runManualDCF()" class="bg-blue-600 text-white px-8 py-2 rounded-lg hover:bg-blue-700">
+        ▶ Run DCF Valuation
+      </button>
+    </div>
+  </div>
+
+  <!-- ── PDF UPLOAD PANEL ─────────────────────────────────────────── -->
+  <div id="panelPdf" class="hidden">
+    <div class="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4 text-sm text-yellow-800">
+      ⚠️ PDF extraction is experimental on this server. Use <strong>Manual Input</strong> for reliable results.
+      Only upload 1 PDF at a time and use text-based (not scanned) annual reports.
+    </div>
+    <div class="border-2 border-dashed p-6 rounded-lg mb-4 text-center">
+      <input type="file" id="pdfFiles" accept=".pdf" class="mb-2" />
+      <p class="text-xs text-gray-500">One text-based annual report PDF (not scanned)</p>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">WACC (%)</label>
+        <input type="number" id="inputWACCPdf" value="11" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Terminal Growth (%)</label>
+        <input type="number" id="inputTermGrowthPdf" value="4" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Net Debt (₹ Cr)</label>
+        <input type="number" id="inputNetDebtPdf" value="0" class="w-full border rounded px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Shares (Cr)</label>
+        <input type="number" id="inputSharesPdf" placeholder="e.g. 67.5" class="w-full border rounded px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">CMP (₹)</label>
+        <input type="number" id="inputCMPPdf" placeholder="e.g. 2450" class="w-full border rounded px-3 py-2 text-sm" />
+      </div>
+    </div>
+    <div class="text-center mb-6">
+      <button onclick="runPdfDCF()" class="bg-gray-600 text-white px-8 py-2 rounded-lg hover:bg-gray-700">
+        ▶ Run DCF from PDF
+      </button>
+    </div>
   </div>
 
   <!-- STATUS / ERROR -->
@@ -367,7 +421,97 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <script>
-async function runDCF() {
+// ── Tab switching ──────────────────────────────────────────────────────────
+function switchTab(tab) {
+  const isManual = tab === 'manual';
+  document.getElementById('panelManual').classList.toggle('hidden', !isManual);
+  document.getElementById('panelPdf').classList.toggle('hidden', isManual);
+  document.getElementById('tabManual').className = isManual
+    ? 'px-4 py-2 text-sm font-semibold border-b-2 border-blue-600 text-blue-700'
+    : 'px-4 py-2 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
+  document.getElementById('tabPdf').className = !isManual
+    ? 'px-4 py-2 text-sm font-semibold border-b-2 border-blue-600 text-blue-700'
+    : 'px-4 py-2 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
+}
+
+// ── Year rows ──────────────────────────────────────────────────────────────
+let yearCount = 0;
+function addYear(cfo='', capex='') {
+  yearCount++;
+  const tbody = document.getElementById('fcfRows');
+  const tr = document.createElement('tr');
+  tr.id = `yearRow${yearCount}`;
+  tr.innerHTML = `
+    <td class="border p-2 text-center text-gray-500 text-xs">Year ${yearCount}</td>
+    <td class="border p-1"><input type="number" id="cfo${yearCount}" value="${cfo}" placeholder="e.g. 1200" step="0.01"
+        class="w-full border-0 px-2 py-1 text-sm text-center focus:outline-none" /></td>
+    <td class="border p-1"><input type="number" id="capex${yearCount}" value="${capex}" placeholder="e.g. 300" step="0.01"
+        class="w-full border-0 px-2 py-1 text-sm text-center focus:outline-none" /></td>`;
+  tbody.appendChild(tr);
+}
+
+// Pre-populate 5 year rows on load
+document.addEventListener('DOMContentLoaded', () => {
+  for (let i = 0; i < 5; i++) addYear();
+});
+
+// ── Manual DCF ─────────────────────────────────────────────────────────────
+async function runManualDCF() {
+  const statusDiv = document.getElementById('status');
+  const errorDiv  = document.getElementById('error');
+  const resultDiv = document.getElementById('result');
+  errorDiv.classList.add('hidden');
+  resultDiv.classList.add('hidden');
+
+  const wacc        = parseFloat(document.getElementById('inputWACC').value) / 100;
+  const termGrowth  = parseFloat(document.getElementById('inputTermGrowth').value) / 100;
+  const netDebt     = parseFloat(document.getElementById('inputNetDebt').value) || 0;
+  const shares      = parseFloat(document.getElementById('inputShares').value) || null;
+  const cmp         = parseFloat(document.getElementById('inputCMP').value) || null;
+
+  if (termGrowth >= wacc) {
+    errorDiv.textContent = `Terminal growth (${(termGrowth*100).toFixed(1)}%) must be less than WACC (${(wacc*100).toFixed(1)}%).`;
+    errorDiv.classList.remove('hidden');
+    return;
+  }
+
+  const cfo = [], capex = [];
+  for (let i = 1; i <= yearCount; i++) {
+    const c = parseFloat(document.getElementById(`cfo${i}`)?.value);
+    const k = parseFloat(document.getElementById(`capex${i}`)?.value);
+    if (!isNaN(c) && !isNaN(k)) { cfo.push(c); capex.push(k); }
+  }
+
+  if (cfo.length < 2) {
+    errorDiv.textContent = 'Please enter at least 2 years of CFO and CAPEX data.';
+    errorDiv.classList.remove('hidden');
+    return;
+  }
+
+  statusDiv.textContent = '⏳ Calculating DCF…';
+  statusDiv.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/dcf/manual', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ cfo, capex, wacc, terminal_growth: termGrowth,
+                             net_debt: netDebt, shares, current_price: cmp })
+    });
+    const data = await res.json();
+    statusDiv.classList.add('hidden');
+    if (data.error) { errorDiv.textContent = data.error; errorDiv.classList.remove('hidden'); return; }
+    renderDCF(data);
+    resultDiv.classList.remove('hidden');
+  } catch (err) {
+    statusDiv.classList.add('hidden');
+    errorDiv.textContent = err.message;
+    errorDiv.classList.remove('hidden');
+  }
+}
+
+// ── PDF DCF ────────────────────────────────────────────────────────────────
+async function runPdfDCF() {
   const filesInput  = document.getElementById("pdfFiles");
   const statusDiv   = document.getElementById("status");
   const errorDiv    = document.getElementById("error");
@@ -382,12 +526,11 @@ async function runDCF() {
     return;
   }
 
-  // Read user inputs
-  const wacc        = parseFloat(document.getElementById("inputWACC").value) / 100;
-  const termGrowth  = parseFloat(document.getElementById("inputTermGrowth").value) / 100;
-  const netDebt     = parseFloat(document.getElementById("inputNetDebt").value) || 0;
-  const shares      = parseFloat(document.getElementById("inputShares").value) || null;
-  const cmp         = parseFloat(document.getElementById("inputCMP").value) || null;
+  const wacc        = parseFloat(document.getElementById("inputWACCPdf").value) / 100;
+  const termGrowth  = parseFloat(document.getElementById("inputTermGrowthPdf").value) / 100;
+  const netDebt     = parseFloat(document.getElementById("inputNetDebtPdf").value) || 0;
+  const shares      = parseFloat(document.getElementById("inputSharesPdf").value) || null;
+  const cmp         = parseFloat(document.getElementById("inputCMPPdf").value) || null;
 
   if (termGrowth >= wacc) {
     errorDiv.textContent = `Terminal growth (${(termGrowth*100).toFixed(1)}%) must be less than WACC (${(wacc*100).toFixed(1)}%). Please adjust.`;
@@ -582,21 +725,8 @@ function renderDCF(data) {
     </div>`;
 }
 </script>
-  <div class="text-center mb-6">
-    <button
-      onclick="runDCF()"
-      class="bg-blue-600 text-white px-8 py-2 rounded-lg hover:bg-blue-700">
-      ▶ Run DCF Valuation
-    </button>
-  </div>
 
-  <!-- STATUS -->
-  <div id="status" class="text-center font-semibold mb-4 hidden"></div>
-
-  <!-- ERROR -->
-  <div id="error" class="text-red-600 font-semibold mb-4 hidden"></div>
-
-  <!-- RESULT -->
+  <!-- RESULT (second instance, unused) -->
   <div id="result" class="hidden">
     <h2 class="text-xl font-bold mb-4">📈 DCF Results</h2>
     <div id="summary" class="mb-6"></div>
