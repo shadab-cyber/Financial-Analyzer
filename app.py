@@ -460,45 +460,47 @@ def debug_pdf_run():
 # =============================================================================
 # DCF API
 # =============================================================================
-@app.route('/dcf/upload', methods=['POST'])
-def dcf_from_pdf():
-    paths = []
+# =============================================================================
+# DCF — background job (PDF extraction can take several minutes;
+# running it synchronously causes a 502 on Render's 30-second proxy timeout)
+# =============================================================================
+
+def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
+                 net_debt, shares, cmp_price):
+    """Background worker: extract text from PDFs, run DCF, store result."""
     try:
-        if 'files' not in request.files:
-            return jsonify({'error': 'No PDF files uploaded'}), 400
-
-        files = request.files.getlist('files')
+        _set_job(job_id, {'status': 'processing',
+                          'progress': 'Extracting text from PDFs…', 'percent': 10})
         all_text_blocks = []
-
-        for file in files:
-            if not file or not allowed_pdf(file.filename):
-                continue
-            path = save_temp_file(file, UPLOAD_FOLDER_DCF)
-            paths.append(path)
-
-            extracted   = extract_financials_from_pdf(path)
-            text_blocks = extracted['structured_financials']['raw_text']
-            all_text_blocks.extend(text_blocks)
+        n = len(paths)
+        for idx, path in enumerate(paths):
+            _set_job(job_id, {
+                'status':   'processing',
+                'progress': f'Reading PDF {idx+1}/{n}…',
+                'percent':  10 + int(60 * idx / n)
+            })
+            try:
+                extracted = extract_financials_from_pdf(path)
+                all_text_blocks.extend(
+                    extracted['structured_financials']['raw_text']
+                )
+            except Exception as e:
+                app.logger.warning(f'DCF PDF extraction failed for {path}: {e}')
+            finally:
+                cleanup(path)
 
         if not all_text_blocks:
-            return jsonify({'error': 'Could not extract text from the uploaded PDFs. '
-                            'Please ensure the files are readable annual reports.'}), 400
+            _set_job(job_id, {
+                'status': 'error',
+                'error':  'Could not extract text from the uploaded PDFs. '
+                          'Please ensure the files are readable annual reports.'
+            })
+            return
 
-        # Read optional user inputs passed via FormData
-        def _float(key, default=None):
-            v = request.form.get(key)
-            try:
-                return float(v) if v not in (None, '') else default
-            except (ValueError, TypeError):
-                return default
+        _set_job(job_id, {'status': 'processing',
+                          'progress': 'Running DCF calculation…', 'percent': 80})
 
-        wacc            = _float('wacc')
-        terminal_growth = _float('terminal_growth')
-        net_debt        = _float('net_debt', 0)
-        shares          = _float('shares_outstanding')
-        cmp_price       = _float('current_price')
-
-        dcf_result = run_dcf_from_pdf_text(
+        result = run_dcf_from_pdf_text(
             all_text_blocks,
             net_debt=net_debt,
             shares_outstanding=shares,
@@ -506,14 +508,68 @@ def dcf_from_pdf():
             wacc=wacc,
             terminal_growth=terminal_growth,
         )
-        return jsonify(dcf_result)
+        _set_job(job_id, {'status': 'done', 'result': result, 'percent': 100})
 
     except Exception as e:
-        app.logger.error(f'dcf error: {e}')
-        return err('DCF calculation failed', 500)
-    finally:
-        for p in paths:
+        app.logger.error(f'DCF job {job_id} failed: {e}')
+        _set_job(job_id, {'status': 'error', 'error': str(e)})
+        for p in paths:          # ensure cleanup even on error
             cleanup(p)
+
+
+@app.route('/dcf/upload', methods=['POST'])
+def dcf_from_pdf():
+    """
+    Accept PDFs + DCF parameters, start a background job, return job_id immediately.
+    Client polls /dcf/status/<job_id> every 3 seconds.
+    """
+    if 'files' not in request.files:
+        return jsonify({'error': 'No PDF files uploaded'}), 400
+
+    files = request.files.getlist('files')
+    paths = []
+    for file in files:
+        if not file or not allowed_pdf(file.filename):
+            continue
+        path = save_temp_file(file, UPLOAD_FOLDER_DCF)
+        paths.append(path)
+
+    if not paths:
+        return jsonify({'error': 'No valid PDF files uploaded'}), 400
+
+    def _float(key, default=None):
+        v = request.form.get(key)
+        try:
+            return float(v) if v not in (None, '') else default
+        except (ValueError, TypeError):
+            return default
+
+    wacc            = _float('wacc')
+    terminal_growth = _float('terminal_growth')
+    net_debt        = _float('net_debt', 0)
+    shares          = _float('shares_outstanding')
+    cmp_price       = _float('current_price')
+
+    job_id = str(uuid.uuid4())
+    _set_job(job_id, {'status': 'queued', 'progress': 'Job queued…', 'percent': 0})
+
+    t = threading.Thread(
+        target=_run_dcf_job,
+        args=(job_id, paths, wacc, terminal_growth, net_debt, shares, cmp_price),
+        daemon=True,
+    )
+    t.start()
+
+    return jsonify({'job_id': job_id}), 202
+
+
+@app.route('/dcf/status/<job_id>', methods=['GET'])
+def dcf_status(job_id):
+    """Poll for DCF job progress / result."""
+    job = _get_job(job_id)
+    if job is None:
+        return jsonify({'status': 'error', 'error': 'Job not found or expired.'}), 404
+    return jsonify(job)
 
 
 # =============================================================================
