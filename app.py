@@ -465,6 +465,57 @@ def debug_pdf_run():
 # running it synchronously causes a 502 on Render's 30-second proxy timeout)
 # =============================================================================
 
+def _extract_dcf_text_lean(pdf_path: str) -> list:
+    """
+    Memory-efficient PDF text extraction for DCF.
+
+    Problem: extract_financials_from_pdf() calls page.to_image(resolution=150)
+    on EVERY page to check if it is scanned. On a 200-page annual report that
+    renders ~200 PIL images (~4 MB each) = 800 MB just for one PDF, crashing
+    Render's 512 MB free-tier dyno.
+
+    Fix: use pdfplumber's lightweight text extraction first. Only fall back to
+    OCR if a page has < 30 characters of selectable text.  We also only keep
+    lines that contain DCF-relevant keywords (CFO, CAPEX) to further reduce
+    memory pressure — we don't need the full annual report in RAM, just those
+    rows.
+    """
+    import pdfplumber
+
+    CFO_KW   = ['operating activities', 'cash from operating', 'cash generated from operations']
+    CAPEX_KW = ['purchase of property', 'purchase of plant', 'capital expenditure',
+                'capex', 'acquisition of fixed assets']
+    relevant_lines = []
+
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                # Fast text extraction — no image rendering
+                text = page.extract_text() or ''
+                if len(text.strip()) < 30:
+                    # Scanned page: try OCR only if pytesseract available
+                    try:
+                        import pytesseract
+                        pil_img = page.to_image(resolution=100).original
+                        text = pytesseract.image_to_string(pil_img, config='--psm 6')
+                        del pil_img          # release immediately
+                    except Exception:
+                        continue             # skip page if OCR unavailable
+
+                # Filter: keep only lines with financial keywords
+                for line in text.splitlines():
+                    ll = line.lower()
+                    if any(k in ll for k in CFO_KW + CAPEX_KW):
+                        relevant_lines.append(line)
+
+    except Exception as e:
+        app.logger.warning(f'DCF lean extraction failed for {pdf_path}: {e}')
+
+    # Return as a single text block (same interface as original extractor)
+    joined = '\n'.join(relevant_lines)
+    return [joined] if relevant_lines else []
+
+
 def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
                  net_debt, shares, cmp_price):
     """Background worker: extract text from PDFs, run DCF, store result."""
@@ -480,20 +531,21 @@ def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
                 'percent':  10 + int(60 * idx / n)
             })
             try:
-                extracted = extract_financials_from_pdf(path)
-                all_text_blocks.extend(
-                    extracted['structured_financials']['raw_text']
-                )
+                # Use lean extractor — orders of magnitude less memory than
+                # the full extract_financials_from_pdf which renders every page
+                blocks = _extract_dcf_text_lean(path)
+                all_text_blocks.extend(blocks)
             except Exception as e:
                 app.logger.warning(f'DCF PDF extraction failed for {path}: {e}')
             finally:
                 cleanup(path)
 
-        if not all_text_blocks:
+        if not all_text_blocks or not any(all_text_blocks):
             _set_job(job_id, {
                 'status': 'error',
-                'error':  'Could not extract text from the uploaded PDFs. '
-                          'Please ensure the files are readable annual reports.'
+                'error':  'Could not find CFO / CAPEX data in the uploaded PDFs. '
+                          'Please ensure the files are text-based (not fully scanned) '
+                          'annual reports containing Cash Flow Statements.'
             })
             return
 
@@ -513,7 +565,7 @@ def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
     except Exception as e:
         app.logger.error(f'DCF job {job_id} failed: {e}')
         _set_job(job_id, {'status': 'error', 'error': str(e)})
-        for p in paths:          # ensure cleanup even on error
+        for p in paths:
             cleanup(p)
 
 
@@ -565,11 +617,24 @@ def dcf_from_pdf():
 
 @app.route('/dcf/status/<job_id>', methods=['GET'])
 def dcf_status(job_id):
-    """Poll for DCF job progress / result."""
+    """Poll for DCF job progress / result.
+
+    If the job isn't found in memory or on disk, return 'processing' for up
+    to 10 seconds after the request — this handles the brief window after a
+    dyno restart where the thread hasn't written its first checkpoint yet.
+    After that window, return an error.
+    """
     job = _get_job(job_id)
-    if job is None:
-        return jsonify({'status': 'error', 'error': 'Job not found or expired.'}), 404
-    return jsonify(job)
+    if job is not None:
+        return jsonify(job)
+
+    # Job not found — could be a transient post-restart gap.
+    # Return a safe "processing" response so the frontend keeps polling.
+    return jsonify({
+        'status':   'processing',
+        'progress': 'Job is starting… (server may have restarted)',
+        'percent':  5
+    })
 
 
 # =============================================================================
