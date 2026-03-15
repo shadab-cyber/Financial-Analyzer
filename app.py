@@ -12,9 +12,7 @@ from datetime import datetime, timedelta
 
 from Financial_Modelling import (
     run_historical_fs, run_ratio_analysis, run_common_size_statement,
-    run_forecasting, run_fcff, run_wacc, run_terminal_value_dcf,
-    run_altman_zscore, run_scenario_analysis,
-    run_roic, run_piotroski, run_dupont
+    run_forecasting, run_fcff, run_wacc, run_terminal_value_dcf, run_scenario_analysis
 )
 from Technical_Analysis import run_technical_analysis
 from Portfolio_Management import run_portfolio_analysis, fetch_price_for_symbol
@@ -62,11 +60,13 @@ logging.basicConfig(
 )
 
 # Upload folders
-import tempfile as _tempfile
-UPLOAD_FOLDER_ANALYZER = _tempfile.gettempdir()   # /tmp — always exists, no permissions issues
-UPLOAD_FOLDER_DCF      = _tempfile.gettempdir()
+UPLOAD_FOLDER_ANALYZER = 'uploads'
+UPLOAD_FOLDER_DCF      = 'uploads_dcf'
 ALLOWED_EXTENSIONS_PDF  = {'pdf'}
 ALLOWED_EXTENSIONS_EXCEL = {'xlsx', 'xls'}
+
+os.makedirs(UPLOAD_FOLDER_ANALYZER, exist_ok=True)
+os.makedirs(UPLOAD_FOLDER_DCF,      exist_ok=True)
 
 app.config['UPLOAD_FOLDER_ANALYZER'] = UPLOAD_FOLDER_ANALYZER
 app.config['UPLOAD_FOLDER_DCF']      = UPLOAD_FOLDER_DCF
@@ -80,15 +80,9 @@ def allowed_pdf(filename):
 def allowed_excel(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS_EXCEL
 
-def save_temp_file(file, folder: str = None) -> str:
-    """Save uploaded file to a guaranteed-unique temp path.
-    Uses tempfile.mkstemp so it works on any server (Render, Heroku, etc.)
-    regardless of working directory or folder permissions.
-    """
-    import tempfile
-    suffix = os.path.splitext(secure_filename(file.filename or 'upload.xlsx'))[1] or '.xlsx'
-    fd, path = tempfile.mkstemp(suffix=suffix)
-    os.close(fd)          # close the OS file descriptor; we'll write via Flask
+def save_temp_file(file, folder: str) -> str:
+    filename = secure_filename(file.filename)
+    path = os.path.join(folder, filename)
     file.save(path)
     return path
 
@@ -521,46 +515,11 @@ def _excel_upload_route(run_fn, extra_params=None):
         return jsonify(result)
 
     except Exception as e:
-        import traceback
-        tb = traceback.format_exc()
-        app.logger.error(f'{run_fn.__name__} error: {e}\n{tb}')
-        # Return full traceback in response so browser console shows the real error
-        return jsonify({'error': str(e), 'traceback': tb, 'function': run_fn.__name__}), 500
+        app.logger.error(f'{run_fn.__name__} error: {e}')
+        return err(f'{run_fn.__name__} failed', 500)
     finally:
         cleanup(path)
 
-
-
-
-@app.route('/financial-modelling/terminal-value/debug', methods=['POST'])
-def terminal_value_debug():
-    """Debug endpoint — returns full Python traceback so we can see the real error."""
-    import traceback
-    path = None
-    try:
-        file = request.files.get('file')
-        if not file:
-            return jsonify({'error': 'no file'}), 400
-        path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
-
-        cost_of_equity = float(request.form.get('cost_of_equity', 13.0))
-        growth_rate    = float(request.form.get('growth_rate', 4.0))
-        forecast_years = int(request.form.get('forecast_years', 5))
-
-        result = run_terminal_value_dcf(
-            path,
-            cost_of_equity=cost_of_equity,
-            growth_rate=growth_rate,
-            forecast_years=forecast_years,
-        )
-        return jsonify({'status': 'ok', 'keys': list(result.keys())})
-    except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'traceback': traceback.format_exc(),
-        }), 500
-    finally:
-        cleanup(path)
 
 @app.route('/financial-modelling/upload', methods=['POST'])
 def financial_modelling():
@@ -585,49 +544,16 @@ def fcff():
 
 @app.route('/financial-modelling/wacc/upload', methods=['POST'])
 def wacc():
-    # Accept CAPM inputs from the form (all optional — sensible defaults)
-    beta     = request.form.get('beta')
-    rf       = request.form.get('risk_free_rate')
-    erp      = request.form.get('equity_risk_premium')
-    coe_ovr  = request.form.get('cost_of_equity_override')
-    params = {}
-    if beta:    params['beta']                    = float(beta)
-    if rf:      params['risk_free_rate']          = float(rf)
-    if erp:     params['equity_risk_premium']     = float(erp)
-    if coe_ovr: params['cost_of_equity_override'] = float(coe_ovr)
-    return _excel_upload_route(run_wacc, params)
+    return _excel_upload_route(run_wacc)
 
 @app.route('/financial-modelling/terminal-value/upload', methods=['POST'])
 def terminal_value():
-    params = {}
-    coe      = request.form.get('cost_of_equity')
-    growth   = request.form.get('growth_rate')
-    fc_years = request.form.get('forecast_years')
-    if coe:      params['cost_of_equity'] = float(coe)
-    if growth:   params['growth_rate']    = float(growth)
-    if fc_years: params['forecast_years'] = int(fc_years)
-    return _excel_upload_route(run_terminal_value_dcf, params)
+    return _excel_upload_route(run_terminal_value_dcf)
 
 @app.route('/financial-modelling/scenario-analysis/upload', methods=['POST'])
 def scenario_analysis():
     years = int(request.form.get('forecast_years', 5))
     return _excel_upload_route(run_scenario_analysis, {'forecast_years': years})
-
-@app.route('/financial-modelling/altman-zscore/upload', methods=['POST'])
-def altman_zscore():
-    return _excel_upload_route(run_altman_zscore)
-
-@app.route('/financial-modelling/roic/upload', methods=['POST'])
-def roic():
-    return _excel_upload_route(run_roic)
-
-@app.route('/financial-modelling/piotroski/upload', methods=['POST'])
-def piotroski():
-    return _excel_upload_route(run_piotroski)
-
-@app.route('/financial-modelling/dupont/upload', methods=['POST'])
-def dupont():
-    return _excel_upload_route(run_dupont)
 
 
 # =============================================================================
@@ -670,10 +596,14 @@ def portfolio_management():
         result = run_portfolio_analysis(holdings)
 
         if result.get('success'):
+            # Store ONLY the lightweight input in the session cookie —
+            # NOT the full analysis result (which can be 20+ KB and blows
+            # the 4096-byte cookie limit on Render).
+            # The /portfolio-management/get-data endpoint re-runs analysis
+            # from the stored holdings when needed.
             session['portfolio_data'] = {
-                'holdings':        holdings,
-                'analysis_result': result,
-                'timestamp':       datetime.now().isoformat()
+                'holdings':  holdings,            # compact input only
+                'timestamp': datetime.now().isoformat()
             }
 
         return jsonify(result)
@@ -690,7 +620,13 @@ def get_portfolio_data():
         if not portfolio_data:
             return jsonify({'error': 'No portfolio data found. '
                             'Please analyse your portfolio first.'}), 404
-        return jsonify(portfolio_data)
+        # Re-run analysis from stored holdings — analysis_result is no longer
+        # cached in the session cookie to keep it under the 4096-byte limit.
+        holdings = portfolio_data.get('holdings', [])
+        if not holdings:
+            return jsonify({'error': 'Stored holdings are empty.'}), 404
+        result = run_portfolio_analysis(holdings)
+        return jsonify(result)
     except Exception as e:
         app.logger.error(f'get_portfolio_data error: {e}')
         return err('Could not retrieve portfolio data', 500)
