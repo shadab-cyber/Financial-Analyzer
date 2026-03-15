@@ -467,90 +467,130 @@ def debug_pdf_run():
 
 def _extract_dcf_text_lean(pdf_path: str) -> list:
     """
-    Memory-efficient PDF text extraction for DCF.
+    Ultra-lean PDF text extraction for DCF on memory-constrained servers.
 
-    Problem: extract_financials_from_pdf() calls page.to_image(resolution=150)
-    on EVERY page to check if it is scanned. On a 200-page annual report that
-    renders ~200 PIL images (~4 MB each) = 800 MB just for one PDF, crashing
-    Render's 512 MB free-tier dyno.
+    Design constraints (Render free tier = 512 MB):
+    · NO OCR at all — page.to_image() allocates ~4 MB per page; 5 PDFs × 200
+      pages = 4 GB peak, instant OOM crash.
+    · Process one page at a time, delete page object after each, call gc.
+    · Stop scanning after finding cash flow data (saves reading 150+ pages of
+      notes, director reports, etc. that come after the financials).
+    · Only keep lines containing CFO / CAPEX keywords.
 
-    Fix: use pdfplumber's lightweight text extraction first. Only fall back to
-    OCR if a page has < 30 characters of selectable text.  We also only keep
-    lines that contain DCF-relevant keywords (CFO, CAPEX) to further reduce
-    memory pressure — we don't need the full annual report in RAM, just those
-    rows.
+    If the PDF is fully scanned (no selectable text anywhere), we return []
+    and the job reports a clear error rather than crashing the dyno.
     """
-    import pdfplumber
+    import gc
 
-    CFO_KW   = ['operating activities', 'cash from operating', 'cash generated from operations']
-    CAPEX_KW = ['purchase of property', 'purchase of plant', 'capital expenditure',
-                'capex', 'acquisition of fixed assets']
+    CFO_KW   = [
+        'operating activities', 'cash from operating',
+        'cash generated from operations', 'net cash from operating',
+    ]
+    CAPEX_KW = [
+        'purchase of property', 'purchase of plant',
+        'capital expenditure', 'capex', 'acquisition of fixed assets',
+        'fixed assets purchased',
+    ]
+    ALL_KW = CFO_KW + CAPEX_KW
+
     relevant_lines = []
+    cash_flow_hits = 0          # how many keyword lines found so far
+    pages_since_last_hit = 0    # stop early if keywords disappear (past CF section)
+    MAX_PAGES_WITHOUT_HIT = 40  # stop after 40 consecutive non-keyword pages
 
     try:
+        import pdfplumber
         with pdfplumber.open(pdf_path) as pdf:
-            for page in pdf.pages:
-                # Fast text extraction — no image rendering
-                text = page.extract_text() or ''
-                if len(text.strip()) < 30:
-                    # Scanned page: try OCR only if pytesseract available
-                    try:
-                        import pytesseract
-                        pil_img = page.to_image(resolution=100).original
-                        text = pytesseract.image_to_string(pil_img, config='--psm 6')
-                        del pil_img          # release immediately
-                    except Exception:
-                        continue             # skip page if OCR unavailable
+            total_pages = len(pdf.pages)
+            for page_num in range(total_pages):
+                page = pdf.pages[page_num]
+                try:
+                    text = page.extract_text() or ''
+                finally:
+                    # Explicitly release page to free pdfplumber's internal cache
+                    page.flush_cache()
+                    del page
 
-                # Filter: keep only lines with financial keywords
+                if not text.strip():
+                    pages_since_last_hit += 1
+                    if pages_since_last_hit > MAX_PAGES_WITHOUT_HIT and cash_flow_hits > 0:
+                        break   # already past the cash flow section
+                    continue
+
+                found_on_page = False
                 for line in text.splitlines():
                     ll = line.lower()
-                    if any(k in ll for k in CFO_KW + CAPEX_KW):
+                    if any(k in ll for k in ALL_KW):
                         relevant_lines.append(line)
+                        cash_flow_hits += 1
+                        found_on_page = True
+
+                if found_on_page:
+                    pages_since_last_hit = 0
+                else:
+                    pages_since_last_hit += 1
+                    if pages_since_last_hit > MAX_PAGES_WITHOUT_HIT and cash_flow_hits > 0:
+                        break
+
+                # Collect every 20 pages to prevent memory build-up
+                if page_num % 20 == 0:
+                    gc.collect()
+
+        gc.collect()
 
     except Exception as e:
         app.logger.warning(f'DCF lean extraction failed for {pdf_path}: {e}')
+        gc.collect()
 
-    # Return as a single text block (same interface as original extractor)
     joined = '\n'.join(relevant_lines)
     return [joined] if relevant_lines else []
 
 
 def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
                  net_debt, shares, cmp_price):
-    """Background worker: extract text from PDFs, run DCF, store result."""
+    """Background worker: extract text from PDFs one at a time, run DCF."""
+    import gc
     try:
         _set_job(job_id, {'status': 'processing',
-                          'progress': 'Extracting text from PDFs…', 'percent': 10})
+                          'progress': 'Starting PDF extraction…', 'percent': 5})
         all_text_blocks = []
         n = len(paths)
+
         for idx, path in enumerate(paths):
+            pct = 10 + int(55 * idx / n)
             _set_job(job_id, {
                 'status':   'processing',
-                'progress': f'Reading PDF {idx+1}/{n}…',
-                'percent':  10 + int(60 * idx / n)
+                'progress': f'Reading PDF {idx+1}/{n} (text-only, no OCR)…',
+                'percent':  pct,
             })
             try:
-                # Use lean extractor — orders of magnitude less memory than
-                # the full extract_financials_from_pdf which renders every page
                 blocks = _extract_dcf_text_lean(path)
                 all_text_blocks.extend(blocks)
+                app.logger.info(
+                    f'DCF job {job_id}: PDF {idx+1}/{n} → '
+                    f'{len(blocks[0].splitlines()) if blocks else 0} keyword lines'
+                )
             except Exception as e:
-                app.logger.warning(f'DCF PDF extraction failed for {path}: {e}')
+                app.logger.warning(f'DCF PDF {idx+1} failed: {e}')
             finally:
                 cleanup(path)
+                gc.collect()   # release memory between files
 
-        if not all_text_blocks or not any(all_text_blocks):
+        if not all_text_blocks or not any(b.strip() for b in all_text_blocks):
             _set_job(job_id, {
                 'status': 'error',
-                'error':  'Could not find CFO / CAPEX data in the uploaded PDFs. '
-                          'Please ensure the files are text-based (not fully scanned) '
-                          'annual reports containing Cash Flow Statements.'
+                'error':  (
+                    'No CFO / CAPEX data found in the uploaded PDFs. '
+                    'This tool requires text-based (not fully scanned) annual reports. '
+                    'Tip: use the Screener.in exported PDF or the company\'s '
+                    'digital annual report — not a photographed scan.'
+                )
             })
             return
 
         _set_job(job_id, {'status': 'processing',
                           'progress': 'Running DCF calculation…', 'percent': 80})
+        gc.collect()
 
         result = run_dcf_from_pdf_text(
             all_text_blocks,
@@ -567,6 +607,7 @@ def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
         _set_job(job_id, {'status': 'error', 'error': str(e)})
         for p in paths:
             cleanup(p)
+        import gc; gc.collect()
 
 
 @app.route('/dcf/upload', methods=['POST'])
