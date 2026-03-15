@@ -610,7 +610,61 @@ def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
         import gc; gc.collect()
 
 
-@app.route('/dcf/upload', methods=['POST'])
+@app.route('/dcf/manual', methods=['POST'])
+def dcf_manual():
+    """
+    Run DCF from manually entered CFO and CAPEX arrays — no PDF, instant response.
+    Expects JSON: { cfo: [n1,n2,...], capex: [n1,n2,...], net_debt, shares,
+                    current_price, wacc, terminal_growth }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        cfo_list   = [float(x) for x in data.get('cfo', [])   if x not in (None, '')]
+        capex_list = [float(x) for x in data.get('capex', []) if x not in (None, '')]
+
+        if len(cfo_list) < 2 or len(capex_list) < 2:
+            return jsonify({'error': 'Please enter at least 2 years of CFO and CAPEX data.'}), 400
+
+        def _f(key, default=None):
+            v = data.get(key)
+            try: return float(v) if v not in (None, '') else default
+            except (ValueError, TypeError): return default
+
+        wacc            = _f('wacc')
+        terminal_growth = _f('terminal_growth')
+        net_debt        = _f('net_debt', 0)
+        shares          = _f('shares')
+        cmp_price       = _f('current_price')
+
+        # Build synthetic text blocks from the numbers so the existing
+        # DCF engine (which was designed for PDF-extracted text) still works.
+        # Format matches what extract_cfo / extract_capex expect.
+        text_lines = []
+        years = min(len(cfo_list), len(capex_list))
+        for i in range(years):
+            text_lines.append(f"Net cash from operating activities {cfo_list[i]}")
+            text_lines.append(f"Purchase of property plant equipment {capex_list[i]}")
+        text_blocks = ['\n'.join(text_lines)]
+
+        result = run_dcf_from_pdf_text(
+            text_blocks,
+            net_debt=net_debt,
+            shares_outstanding=shares,
+            current_price=cmp_price,
+            wacc=wacc,
+            terminal_growth=terminal_growth,
+        )
+        return jsonify(result)
+
+    except Exception as e:
+        app.logger.error(f'DCF manual error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+
 def dcf_from_pdf():
     """
     Accept PDFs + DCF parameters, start a background job, return job_id immediately.
