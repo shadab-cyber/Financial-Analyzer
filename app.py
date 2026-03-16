@@ -484,15 +484,24 @@ def _extract_dcf_text_lean(pdf_path: str) -> list:
     import gc
 
     CFO_KW = [
-        'operating activities', 'cash from operating',
-        'cash generated from operations', 'net cash from operating',
-        'cash flow from operations',
+        'net cash from operating', 'net cash generated from operating',
+        'net cash used in operating', 'net cash flow from operating',
+        'net cash flows from operating', 'cash generated from operations',
+        'cash inflow from operations', 'net cash from operations',
+        'cash flow from operating activities', 'cash flows from operating activities',
+        'cash from operating activit', 'operating cash flow',
+        # broader fallback — catches "total operating activities" lines
+        'operating activities',
     ]
     CAPEX_KW = [
-        'purchase of property', 'purchase of plant',
-        'capital expenditure', 'capex', 'acquisition of fixed assets',
-        'fixed assets purchased', 'additions to fixed assets',
-        'payment for property',
+        'purchase of property', 'purchase of plant', 'purchase of ppe',
+        'purchase of fixed assets', 'purchase of tangible', 'purchase of intangible',
+        'acquisition of property', 'acquisition of plant', 'acquisition of fixed assets',
+        'payment for property', 'payment for plant', 'payment for fixed assets',
+        'additions to property', 'additions to fixed assets', 'addition to fixed assets',
+        'capital expenditure', 'capex', 'purchase of capital assets',
+        'investment in fixed assets', 'cash paid for property',
+        'fixed assets purchased', 'addition to tangible',
     ]
     ALL_KW = CFO_KW + CAPEX_KW
 
