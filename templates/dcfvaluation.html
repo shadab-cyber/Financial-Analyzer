@@ -622,79 +622,91 @@ async function runPdfDCF() {
   if (shares) formData.append("shares_outstanding", shares);
   if (cmp)    formData.append("current_price",       cmp);
 
-  statusDiv.textContent = "⏳ Uploading PDFs…";
+  statusDiv.innerHTML = `<div class="text-sm font-semibold text-blue-700">Uploading ${filesInput.files.length} PDFs…</div>`;
   statusDiv.classList.remove("hidden");
 
   try {
-    // Step 1: upload files + params → get job_id immediately (no timeout risk)
-    const res = await fetch("/dcf/upload", { method: "POST", body: formData });
+      // Step 1: upload files + params → get job_id immediately (no timeout risk)
+      const res = await fetch("/dcf/upload", { method: "POST", body: formData });
 
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Server error ${res.status}`);
-    }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Server error ${res.status}`);
+      }
 
-    const { job_id } = await res.json();
-    if (!job_id) throw new Error("No job ID returned from server.");
+      const { job_id } = await res.json();
+      if (!job_id) throw new Error("No job ID returned from server.");
 
-    // Step 2: poll /dcf/status/<job_id> every 3 seconds
-    statusDiv.textContent = "⏳ Extracting financials from PDFs… (this can take several minutes)";
+      // Step 2: poll /dcf/status/<job_id> every 2 seconds
+      statusDiv.textContent = "Extracting financials from PDFs…";
 
-    await new Promise((resolve, reject) => {
-      let consecutiveErrors = 0;
-      let totalSeconds = 0;
-      const MAX_WAIT_SECONDS = 900;   // 15 minutes max
-      const MAX_CONSEC_ERRORS = 5;    // tolerate 5 consecutive 503s before giving up
+      await new Promise((resolve, reject) => {
+        let consecutiveErrors = 0;
+        let totalSeconds      = 0;
+        const N               = filesInput.files.length;
+        const MAX_WAIT_SECONDS  = N * 100;   // 100s per PDF (generous ceiling)
+        const MAX_CONSEC_ERRORS = 5;
 
-      const interval = setInterval(async () => {
-        totalSeconds += 3;
-        if (totalSeconds > MAX_WAIT_SECONDS) {
-          clearInterval(interval);
-          reject(new Error('DCF analysis timed out after 15 minutes. Try uploading fewer or smaller PDFs.'));
-          return;
-        }
-
-        try {
-          const poll = await fetch(`/dcf/status/${job_id}`);
-
-          // Handle 503 (server restarting) — retry silently
-          if (poll.status === 503 || poll.status === 502) {
-            consecutiveErrors++;
-            statusDiv.textContent = `⏳ Server restarting… retrying (${consecutiveErrors}/${MAX_CONSEC_ERRORS})`;
-            if (consecutiveErrors >= MAX_CONSEC_ERRORS) {
-              clearInterval(interval);
-              reject(new Error('Server is unavailable. The PDF processing may have exceeded memory limits. Try uploading 1–2 PDFs at a time.'));
-            }
+        const interval = setInterval(async () => {
+          totalSeconds += 2;
+          if (totalSeconds > MAX_WAIT_SECONDS) {
+            clearInterval(interval);
+            reject(new Error(
+              `Analysis timed out after ${Math.round(MAX_WAIT_SECONDS/60)} minutes. ` +
+              `Try uploading Screener.in-exported PDFs instead of full annual reports — ` +
+              `they contain only the financial statements and extract in seconds.`
+            ));
             return;
           }
 
-          consecutiveErrors = 0;   // reset on successful response
-          const job = await poll.json();
+          try {
+            const poll = await fetch(`/dcf/status/${job_id}`);
 
-          if (job.status === "processing" || job.status === "queued") {
-            const pct = job.percent || 0;
-            statusDiv.textContent = `⏳ ${job.progress || "Processing…"} (${pct}%)`;
-          } else if (job.status === "done") {
-            clearInterval(interval);
-            statusDiv.classList.add("hidden");
-            renderDCF(job.result);
-            resultDiv.classList.remove("hidden");
-            resolve();
-          } else if (job.status === "error") {
-            clearInterval(interval);
-            reject(new Error(job.error || "DCF processing failed."));
+            if (poll.status === 503 || poll.status === 502) {
+              consecutiveErrors++;
+              statusDiv.textContent = `Server restarting… retrying (${consecutiveErrors}/${MAX_CONSEC_ERRORS})`;
+              if (consecutiveErrors >= MAX_CONSEC_ERRORS) {
+                clearInterval(interval);
+                reject(new Error('Server unavailable. Try uploading 1–2 PDFs at a time.'));
+              }
+              return;
+            }
+
+            consecutiveErrors = 0;
+            const job = await poll.json();
+
+            if (job.status === "processing" || job.status === "queued") {
+              const pct  = job.percent || 0;
+              const msg  = job.progress || "Processing…";
+              statusDiv.innerHTML = `
+                <div class="text-sm font-semibold text-blue-700 mb-1">${msg}</div>
+                <div class="w-full bg-gray-200 rounded-full h-2 mt-1">
+                  <div class="bg-blue-500 h-2 rounded-full transition-all" style="width:${pct}%"></div>
+                </div>
+                <div class="text-xs text-gray-400 mt-1">${pct}% complete · ${Math.round((MAX_WAIT_SECONDS - totalSeconds)/60)}min remaining max</div>`;
+            } else if (job.status === "done") {
+              clearInterval(interval);
+              statusDiv.classList.add("hidden");
+              statusDiv.textContent = '';
+              renderDCF(job.result);
+              resultDiv.classList.remove("hidden");
+              resolve();
+            } else if (job.status === "error") {
+              clearInterval(interval);
+              reject(new Error(job.error || "DCF processing failed."));
+            }
+          } catch (pollErr) {
+            consecutiveErrors++;
+            if (consecutiveErrors >= MAX_CONSEC_ERRORS) {
+              clearInterval(interval);
+              reject(pollErr);
+            }
           }
-        } catch (pollErr) {
-          consecutiveErrors++;
-          if (consecutiveErrors >= MAX_CONSEC_ERRORS) {
-            clearInterval(interval);
-            reject(pollErr);
-          }
-        }
-      }, 3000);
-    });
+        }, 2000);
+      });
 
   } catch (err) {
+    statusDiv.innerHTML = '';
     statusDiv.classList.add("hidden");
     errorDiv.textContent = err.message;
     errorDiv.classList.remove("hidden");
