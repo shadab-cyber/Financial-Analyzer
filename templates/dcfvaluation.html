@@ -76,13 +76,23 @@ button, .btn, a[class*="btn"] {
 </style>
 
 <script type="module">
-  import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {getAuth,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  const auth=getAuth(initializeApp({apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",authDomain:"financial-analyzer-afb07.firebaseapp.com",projectId:"financial-analyzer-afb07",storageBucket:"financial-analyzer-afb07.firebasestorage.app",messagingSenderId:"572544893192",appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"}));
-  document.documentElement.style.visibility="hidden";
-  onAuthStateChanged(auth,user=>{
-    if(user){
-      document.documentElement.style.visibility="visible";
+  /* Single Firebase initialisation — consolidates the previous two modules */
+  import {initializeApp,getApps} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {getAuth,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  const _fbCfg={apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",authDomain:"financial-analyzer-afb07.firebaseapp.com",projectId:"financial-analyzer-afb07",storageBucket:"financial-analyzer-afb07.firebasestorage.app",messagingSenderId:"572544893192",appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"};
+  const app = getApps().length ? getApps()[0] : initializeApp(_fbCfg);
+  const auth = getAuth(app);
+
+  /* Show skeleton immediately; redirect only after Firebase confirms no user */
+  let _authChecked = false;
+  const _authTimeout = setTimeout(() => {
+    if (!_authChecked) window.location.href = "/login?next=" + encodeURIComponent(window.location.pathname + window.location.search);
+  }, 5000);
+
+  onAuthStateChanged(auth, user => {
+    _authChecked = true;
+    clearTimeout(_authTimeout);
+    if (user) {
       const n=document.getElementById("_uname"); if(n) n.textContent=user.displayName||user.email;
       const a=document.getElementById("_uavatar"); if(a&&user.photoURL){a.src=user.photoURL;a.style.display="inline-block";}
       const mn=document.getElementById("_mName"); if(mn) mn.textContent=user.displayName||user.email;
@@ -91,12 +101,8 @@ button, .btn, a[class*="btn"] {
       window.location.href="/login?next="+encodeURIComponent(window.location.pathname+window.location.search);
     }
   });
-</script>
-<script type="module">
-  import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {getAuth,signOut} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  const _a=getAuth(initializeApp({apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",authDomain:"financial-analyzer-afb07.firebaseapp.com",projectId:"financial-analyzer-afb07",storageBucket:"financial-analyzer-afb07.firebasestorage.app",messagingSenderId:"572544893192",appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"}));
-  window._signOut=()=>signOut(_a).then(()=>{fetch("/auth/logout",{method:"POST"});window.location.href="/login";});
+
+  window._signOut = () => signOut(auth).then(() => { fetch("/auth/logout",{method:"POST"}); window.location.href="/login"; });
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -290,7 +296,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow-lg">
 
   <h1 class="text-2xl font-bold text-center mb-2">
-    📊 Discounted Cash Flow (DCF) Valuation
+    Discounted Cash Flow (DCF) Valuation
   </h1>
   <p class="text-center text-sm text-gray-500 mb-6">Enter figures from Screener.in Cash Flow statement (₹ Crore)</p>
 
@@ -369,13 +375,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
   <!-- ── PDF UPLOAD PANEL ─────────────────────────────────────────── -->
   <div id="panelPdf" class="hidden">
-    <div class="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4 text-sm text-yellow-800">
-      ⚠️ PDF extraction is experimental on this server. Use <strong>Manual Input</strong> for reliable results.
-      Only upload 1 PDF at a time and use text-based (not scanned) annual reports.
+    <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-sm text-blue-800">
+      Upload <strong>5 or more</strong> annual report PDFs (one per financial year, oldest to newest) for a reliable multi-year DCF. Text-based PDFs only — scanned image PDFs are not supported.
     </div>
-    <div class="border-2 border-dashed p-6 rounded-lg mb-4 text-center">
-      <input type="file" id="pdfFiles" accept=".pdf" class="mb-2" />
-      <p class="text-xs text-gray-500">One text-based annual report PDF (not scanned)</p>
+    <div class="border-2 border-dashed p-6 rounded-lg mb-4 text-center" id="pdfDropZone"
+         ondragover="event.preventDefault();this.classList.add('border-blue-400','bg-blue-50')"
+         ondragleave="this.classList.remove('border-blue-400','bg-blue-50')"
+         ondrop="handlePdfDrop(event)">
+      <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto mb-2 text-gray-400" width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <label for="pdfFiles" class="cursor-pointer text-blue-600 font-semibold hover:underline">Click to select PDFs</label>
+      <span class="text-gray-500 text-sm"> or drag and drop here</span>
+      <input type="file" id="pdfFiles" accept=".pdf" multiple class="hidden" onchange="updatePdfFileList()" />
+      <p class="text-xs text-gray-400 mt-2">Minimum 5 PDFs · One annual report per year · Max 500 MB total</p>
+    </div>
+    <!-- File list preview -->
+    <div id="pdfFileList" class="hidden mb-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-600" id="pdfFileCount"></span>
+        <button onclick="clearPdfFiles()" class="text-xs text-red-500 hover:underline">Clear all</button>
+      </div>
+      <ul id="pdfFileItems" class="text-xs text-gray-600 border rounded divide-y max-h-40 overflow-y-auto bg-gray-50"></ul>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
       <div>
@@ -434,15 +455,22 @@ function switchTab(tab) {
     : 'px-4 py-2 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
 }
 
-// ── Year rows ──────────────────────────────────────────────────────────────
+// ── Year rows — use actual fiscal years ───────────────────────────────────
 let yearCount = 0;
+const currentFY = new Date().getFullYear();
+
 function addYear(cfo='', capex='') {
   yearCount++;
+  const fy = currentFY - (6 - yearCount); // oldest to newest, ending last year
   const tbody = document.getElementById('fcfRows');
   const tr = document.createElement('tr');
   tr.id = `yearRow${yearCount}`;
   tr.innerHTML = `
-    <td class="border p-2 text-center text-gray-500 text-xs">Year ${yearCount}</td>
+    <td class="border p-2 text-center text-gray-500 text-xs">
+      FY${fy}
+      <input type="number" id="fyLabel${yearCount}" value="${fy}" min="2000" max="2099"
+        class="block mx-auto mt-1 w-16 border rounded text-xs text-center px-1 py-0.5 text-gray-600" title="Edit fiscal year"/>
+    </td>
     <td class="border p-1"><input type="number" id="cfo${yearCount}" value="${cfo}" placeholder="e.g. 1200" step="0.01"
         class="w-full border-0 px-2 py-1 text-sm text-center focus:outline-none" /></td>
     <td class="border p-1"><input type="number" id="capex${yearCount}" value="${capex}" placeholder="e.g. 300" step="0.01"
@@ -510,6 +538,54 @@ async function runManualDCF() {
   }
 }
 
+// ── PDF file list helpers ──────────────────────────────────────────────────
+function updatePdfFileList() {
+  const input   = document.getElementById('pdfFiles');
+  const listDiv = document.getElementById('pdfFileList');
+  const countEl = document.getElementById('pdfFileCount');
+  const itemsEl = document.getElementById('pdfFileItems');
+  const files   = Array.from(input.files);
+
+  if (!files.length) { listDiv.classList.add('hidden'); return; }
+
+  const totalMB = (files.reduce((a, f) => a + f.size, 0) / 1024 / 1024).toFixed(1);
+  const ok      = files.length >= 5;
+  countEl.innerHTML = `<span class="${ok ? 'text-green-600' : 'text-red-600'}">${files.length} file${files.length !== 1 ? 's' : ''} selected</span> &nbsp;·&nbsp; ${totalMB} MB total${!ok ? ' &nbsp;<span class="text-red-500">(minimum 5 required)</span>' : ''}`;
+
+  itemsEl.innerHTML = files.map((f, i) => {
+    const mb   = (f.size / 1024 / 1024).toFixed(1);
+    const icon = f.size > 0 ? '📄' : '⚠️';
+    return `<li class="px-3 py-1.5 flex items-center justify-between gap-2">
+      <span>${icon} ${f.name}</span>
+      <span class="text-gray-400 flex-shrink-0">${mb} MB</span>
+    </li>`;
+  }).join('');
+
+  listDiv.classList.remove('hidden');
+}
+
+function clearPdfFiles() {
+  const input = document.getElementById('pdfFiles');
+  input.value = '';
+  document.getElementById('pdfFileList').classList.add('hidden');
+}
+
+function handlePdfDrop(event) {
+  event.preventDefault();
+  const zone  = document.getElementById('pdfDropZone');
+  zone.classList.remove('border-blue-400', 'bg-blue-50');
+  const input = document.getElementById('pdfFiles');
+  const dt    = new DataTransfer();
+  // Add existing files
+  Array.from(input.files).forEach(f => dt.items.add(f));
+  // Add dropped files (PDFs only)
+  Array.from(event.dataTransfer.files)
+    .filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
+    .forEach(f => dt.items.add(f));
+  input.files = dt.files;
+  updatePdfFileList();
+}
+
 // ── PDF DCF ────────────────────────────────────────────────────────────────
 async function runPdfDCF() {
   const filesInput  = document.getElementById("pdfFiles");
@@ -520,8 +596,8 @@ async function runPdfDCF() {
   errorDiv.classList.add("hidden");
   resultDiv.classList.add("hidden");
 
-  if (filesInput.files.length < 1) {
-    errorDiv.textContent = "Please upload at least one Annual Report PDF.";
+  if (filesInput.files.length < 5) {
+    errorDiv.textContent = `Please upload at least 5 annual report PDFs (one per year). You have selected ${filesInput.files.length} file${filesInput.files.length === 1 ? '' : 's'}.`;
     errorDiv.classList.remove("hidden");
     return;
   }
@@ -626,7 +702,6 @@ async function runPdfDCF() {
 }
 
 function renderDCF(data) {
-  // ── Summary cards ──────────────────────────────────────────────────────────
   const ev   = data["Enterprise Value (₹ Cr)"];
   const eqv  = data["Equity Value (₹ Cr)"];
   const ivps = data["Intrinsic Value per Share (₹)"];
@@ -639,99 +714,191 @@ function renderDCF(data) {
 
   const mosColor  = mos === null ? 'text-gray-500' : mos > 0 ? 'text-green-600' : 'text-red-600';
   const mosLabel  = mos === null ? 'N/A' : (mos > 0 ? '+' : '') + mos + '%';
-  const ivpsLabel = ivps !== null ? '₹' + ivps : 'Provide shares outstanding';
+  const ivpsLabel = ivps !== null ? '₹' + ivps.toLocaleString('en-IN') : '—';
+  const confColor = conf >= 80 ? 'text-green-600' : conf >= 50 ? 'text-yellow-600' : 'text-red-600';
 
   document.getElementById("summary").innerHTML = `
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-      <div class="metric-card border-l-4 border-blue-500">
-        <div class="text-xs text-gray-500">Enterprise Value</div>
-        <div class="text-xl font-bold text-gray-800">₹${ev?.toLocaleString()} Cr</div>
-        <div class="text-xs text-gray-400">EV = Equity + Net Debt</div>
+      <div class="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500">
+        <div class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Enterprise Value</div>
+        <div class="text-2xl font-bold text-gray-800">₹${ev?.toLocaleString('en-IN')} Cr</div>
+        <div class="text-xs text-gray-400 mt-1">EV = Equity + Net Debt</div>
       </div>
-      <div class="metric-card border-l-4 border-indigo-500">
-        <div class="text-xs text-gray-500">Equity Value</div>
-        <div class="text-xl font-bold text-indigo-700">₹${eqv?.toLocaleString()} Cr</div>
-        <div class="text-xs text-gray-400">EV − Net Debt (₹${asmp["Net Debt (₹ Cr)"]} Cr)</div>
+      <div class="bg-indigo-50 rounded-lg p-4 border-l-4 border-indigo-500">
+        <div class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Equity Value</div>
+        <div class="text-2xl font-bold text-indigo-700">₹${eqv?.toLocaleString('en-IN')} Cr</div>
+        <div class="text-xs text-gray-400 mt-1">EV − Net Debt (₹${asmp["Net Debt (₹ Cr)"]} Cr)</div>
       </div>
-      <div class="metric-card border-l-4 border-teal-500">
-        <div class="text-xs text-gray-500">Intrinsic Value / Share</div>
-        <div class="text-xl font-bold text-teal-700">${ivpsLabel}</div>
-        <div class="text-xs text-gray-400">${asmp["Shares (Cr)"] ? asmp["Shares (Cr)"] + ' Cr shares' : 'Enter shares above'}</div>
+      <div class="bg-teal-50 rounded-lg p-4 border-l-4 border-teal-500">
+        <div class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Intrinsic Value / Share</div>
+        <div class="text-2xl font-bold text-teal-700">${ivpsLabel}</div>
+        <div class="text-xs text-gray-400 mt-1">${asmp["Shares (Cr)"] ? asmp["Shares (Cr)"] + ' Cr shares' : 'Enter shares above'}</div>
       </div>
-      <div class="metric-card border-l-4 ${mos > 0 ? 'border-green-500' : mos < 0 ? 'border-red-500' : 'border-gray-300'}">
-        <div class="text-xs text-gray-500">Margin of Safety</div>
-        <div class="text-xl font-bold ${mosColor}">${mosLabel}</div>
-        <div class="text-xs text-gray-400">${cmp ? 'vs CMP ₹' + cmp : 'Enter CMP above'}</div>
+      <div class="rounded-lg p-4 border-l-4 ${mos > 0 ? 'bg-green-50 border-green-500' : mos < 0 ? 'bg-red-50 border-red-500' : 'bg-gray-50 border-gray-300'}">
+        <div class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Margin of Safety</div>
+        <div class="text-2xl font-bold ${mosColor}">${mosLabel}</div>
+        <div class="text-xs text-gray-400 mt-1">${cmp ? 'vs CMP ₹' + cmp.toLocaleString('en-IN') : 'Enter CMP above'}</div>
       </div>
     </div>
-    <div class="grid grid-cols-3 gap-4 mb-4">
-      <div class="metric-card">
-        <div class="text-xs text-gray-500">Terminal Value</div>
-        <div class="text-lg font-bold text-gray-700">₹${tv?.toLocaleString()} Cr</div>
-        <div class="text-xs text-gray-400">@ g=${asmp["Terminal Growth (%)"]}%</div>
+    <div class="grid grid-cols-3 gap-4 mb-6">
+      <div class="bg-gray-50 rounded-lg p-3 text-center">
+        <div class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Terminal Value</div>
+        <div class="text-lg font-bold text-gray-700">₹${tv?.toLocaleString('en-IN')} Cr</div>
+        <div class="text-xs text-gray-400">@ g = ${asmp["Terminal Growth (%)"]}%</div>
       </div>
-      <div class="metric-card">
-        <div class="text-xs text-gray-500">Avg FCF Growth</div>
+      <div class="bg-gray-50 rounded-lg p-3 text-center">
+        <div class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Avg FCF Growth</div>
         <div class="text-lg font-bold text-gray-700">${g}%</div>
         <div class="text-xs text-gray-400">Historical (capped ±50%)</div>
       </div>
-      <div class="metric-card">
-        <div class="text-xs text-gray-500">Extraction Confidence</div>
-        <div class="text-lg font-bold ${conf >= 80 ? 'text-green-600' : conf >= 50 ? 'text-yellow-600' : 'text-red-600'}">${conf}%</div>
+      <div class="bg-gray-50 rounded-lg p-3 text-center">
+        <div class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Confidence Score</div>
+        <div class="text-lg font-bold ${confColor}">${conf}%</div>
         <div class="text-xs text-gray-400">WACC ${asmp["WACC (%)"]}% · ${asmp["Forecast Years"]}yr forecast</div>
       </div>
     </div>`;
 
-  // ── Warnings ────────────────────────────────────────────────────────────────
+  // Warnings
   const warnings = data["Growth Warnings"] || [];
-  const warnDiv  = document.getElementById("warnings");
-  if (warnings.length) {
-    warnDiv.innerHTML = warnings.map(w =>
-      `<div class="text-sm px-4 py-2 rounded mb-2 ${w.includes('⚠️') ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' : 'bg-blue-50 text-blue-800 border border-blue-200'}">${w}</div>`
-    ).join('');
-  } else {
-    warnDiv.innerHTML = '';
-  }
+  document.getElementById("warnings").innerHTML = warnings.length
+    ? warnings.map(w => `<div class="text-sm px-4 py-2 rounded mb-2 ${w.includes('⚠️') ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' : 'bg-blue-50 text-blue-800 border border-blue-200'}">${w}</div>`).join('')
+    : '';
 
-  // ── FCF table ───────────────────────────────────────────────────────────────
-  const hist    = data["Historical FCF (₹ Cr)"] || [];
-  const forecast = data["Forecast FCF (₹ Cr)"] || [];
+  // Fiscal year labels
+  const hist       = data["Historical FCF (₹ Cr)"] || [];
+  const forecast   = data["Forecast FCF (₹ Cr)"] || [];
   const discounted = data["Discounted FCF (₹ Cr)"] || [];
+  const baseYear   = new Date().getFullYear() - hist.length;
+  const histLabels     = hist.map((_,i)    => `FY${baseYear + i}`);
+  const forecastLabels = forecast.map((_,i) => `FY${baseYear + hist.length + i} (F)`);
 
-  let histRows = hist.map((v, i) =>
-    `<tr><td class="border p-2 text-center text-gray-500">Historical Y${i+1}</td>
-     <td class="border p-2 text-center">${v}</td>
-     <td class="border p-2 text-center text-gray-400">—</td></tr>`
-  ).join('');
-
-  let forecastRows = forecast.map((v, i) =>
-    `<tr class="bg-blue-50"><td class="border p-2 text-center font-semibold">Forecast Y${i+1}</td>
-     <td class="border p-2 text-center font-semibold">${v}</td>
-     <td class="border p-2 text-center text-indigo-700 font-semibold">${discounted[i] || '—'}</td></tr>`
-  ).join('');
+  // Build output container with chart + sensitivity + detail table
+  const allLabels = [...histLabels, ...forecastLabels];
+  const allFCF    = [...hist, ...forecast];
+  const allColors = [
+    ...hist.map(v     => v >= 0 ? 'rgba(59,130,246,0.7)'  : 'rgba(239,68,68,0.7)'),
+    ...forecast.map(v => v >= 0 ? 'rgba(20,184,166,0.7)' : 'rgba(239,68,68,0.7)')
+  ];
+  const allBorders = [
+    ...hist.map(v     => v >= 0 ? '#3b82f6' : '#ef4444'),
+    ...forecast.map(v => v >= 0 ? '#14b8a6' : '#ef4444')
+  ];
 
   document.getElementById("tables").innerHTML = `
-    <div class="table-responsive overflow-x-auto">
-      <table class="w-full border text-sm">
-        <thead class="bg-gray-200">
-          <tr>
-            <th class="border p-2">Period</th>
-            <th class="border p-2">FCF (₹ Cr)</th>
-            <th class="border p-2">Discounted FCF (₹ Cr)</th>
-          </tr>
-        </thead>
-        <tbody>${histRows}${forecastRows}</tbody>
-      </table>
+    <div class="mb-6">
+      <h3 class="text-base font-bold text-gray-700 mb-1">Free Cash Flow — History &amp; Forecast</h3>
+      <p class="text-xs text-gray-400 mb-3">Blue = historical &nbsp;·&nbsp; Teal = forecast &nbsp;·&nbsp; Red = negative FCF</p>
+      <div style="position:relative;width:100%;height:260px;"><canvas id="fcfChart"></canvas></div>
+    </div>
+    <div class="mb-6">
+      <h3 class="text-base font-bold text-gray-700 mb-1">Sensitivity Analysis — Intrinsic Value per Share (₹)</h3>
+      <p class="text-xs text-gray-400 mb-3">WACC (rows) × Terminal Growth rate (columns). Highlighted cell = your base case. ${ivps ? 'Green = 20%+ upside vs CMP · Red = 20%+ downside.' : 'Enter shares outstanding to see per-share values.'}</p>
+      <div class="overflow-x-auto" id="sensitivityContainer"></div>
+    </div>
+    <div class="mb-4">
+      <h3 class="text-base font-bold text-gray-700 mb-3">DCF Cash Flow Detail</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full border text-sm">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="border p-2 text-left">Year</th>
+              <th class="border p-2 text-right">FCF (₹ Cr)</th>
+              <th class="border p-2 text-right">Discounted FCF (₹ Cr)</th>
+              <th class="border p-2 text-right">% of PV Sum</th>
+            </tr>
+          </thead>
+          <tbody id="fcfTableBody"></tbody>
+        </table>
+      </div>
     </div>`;
+
+  // Draw chart after DOM is updated
+  requestAnimationFrame(() => {
+    const ctx = document.getElementById('fcfChart')?.getContext('2d');
+    if (!ctx) return;
+    if (window._fcfChartInst) { window._fcfChartInst.destroy(); }
+    window._fcfChartInst = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: allLabels,
+        datasets: [{ label: 'FCF (₹ Cr)', data: allFCF, backgroundColor: allColors, borderColor: allBorders, borderWidth: 1.5, borderRadius: 3 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { autoSkip: false, maxRotation: 45, font: { size: 11 } }, grid: { display: false } },
+          y: { ticks: { font: { size: 11 }, callback: v => '₹' + Number(v).toLocaleString('en-IN') }, grid: { color: 'rgba(0,0,0,0.05)' } }
+        }
+      }
+    });
+  });
+
+  // Sensitivity table
+  const baseWACC = asmp["WACC (%)"] / 100;
+  const baseG    = asmp["Terminal Growth (%)"] / 100;
+  const fYears   = asmp["Forecast Years"] || 5;
+  const waccSteps = [-0.02, -0.01, 0, +0.01, +0.02];
+  const gSteps    = [-0.02, -0.01, 0, +0.01, +0.02];
+
+  let tHtml = '<table class="w-full border text-sm text-center"><thead><tr><th class="border p-2 bg-gray-100 text-xs font-semibold">WACC \\ g</th>';
+  gSteps.forEach(gs => { tHtml += `<th class="border p-2 bg-gray-100 text-xs font-semibold">${((baseG + gs) * 100).toFixed(1)}%</th>`; });
+  tHtml += '</tr></thead><tbody>';
+
+  waccSteps.forEach(ws => {
+    const w = baseWACC + ws;
+    tHtml += `<tr><td class="border p-2 bg-gray-50 font-semibold text-xs">${(w * 100).toFixed(1)}%</td>`;
+    gSteps.forEach(gs => {
+      const g2 = baseG + gs;
+      if (g2 >= w) { tHtml += '<td class="border p-2 text-xs text-gray-300">—</td>'; return; }
+      const lastFcf   = forecast[forecast.length - 1];
+      const tv2       = (lastFcf * (1 + g2)) / (w - g2);
+      const pvFcf2    = forecast.reduce((a, v, i) => a + v / Math.pow(1 + w, i + 1), 0);
+      const pvTv2     = tv2 / Math.pow(1 + w, fYears);
+      const eq2       = (pvFcf2 + pvTv2) - (asmp["Net Debt (₹ Cr)"] || 0);
+      const isBase    = (ws === 0 && gs === 0);
+      const shares    = asmp["Shares (Cr)"];
+      if (!shares || shares <= 0) {
+        tHtml += `<td class="border p-2 text-xs ${isBase ? 'bg-blue-100 font-bold' : ''}">₹${Math.round(eq2).toLocaleString('en-IN')} Cr</td>`;
+      } else {
+        const iv2 = eq2 / shares;
+        const cellCls = isBase ? 'bg-blue-100 font-bold' :
+                        (cmp && iv2 > cmp * 1.2) ? 'bg-green-50 text-green-800' :
+                        (cmp && iv2 < cmp * 0.8) ? 'bg-red-50 text-red-800' : '';
+        tHtml += `<td class="border p-2 text-xs ${cellCls}">₹${Math.round(iv2).toLocaleString('en-IN')}</td>`;
+      }
+    });
+    tHtml += '</tr>';
+  });
+  tHtml += '</tbody></table>';
+  document.getElementById('sensitivityContainer').innerHTML = tHtml;
+
+  // Detail table
+  const pvSum = discounted.reduce((a, v) => a + v, 0);
+  let tbHtml = hist.map((v, i) =>
+    `<tr class="bg-white hover:bg-gray-50">
+      <td class="border p-2 text-gray-500 text-xs">${histLabels[i]}</td>
+      <td class="border p-2 text-right font-mono text-xs ${v < 0 ? 'text-red-600' : ''}">${v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="border p-2 text-right text-gray-400 text-xs">—</td>
+      <td class="border p-2 text-right text-gray-400 text-xs">—</td>
+    </tr>`).join('');
+  tbHtml += forecast.map((v, i) => {
+    const pct = pvSum > 0 ? (discounted[i] / pvSum * 100).toFixed(1) + '%' : '—';
+    return `<tr class="bg-blue-50 hover:bg-blue-100">
+      <td class="border p-2 text-xs font-semibold">${forecastLabels[i]}</td>
+      <td class="border p-2 text-right font-mono text-xs font-semibold ${v < 0 ? 'text-red-600' : ''}">${v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="border p-2 text-right text-indigo-700 font-semibold text-xs">${discounted[i]?.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="border p-2 text-right text-indigo-500 text-xs">${pct}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('fcfTableBody').innerHTML = tbHtml;
+
+  // Update results heading
+  const h2 = document.querySelector('#result h2');
+  if (h2) h2.textContent = 'DCF Valuation Results';
 }
 </script>
 
-  <!-- RESULT (second instance, unused) -->
-  <div id="result" class="hidden">
-    <h2 class="text-xl font-bold mb-4">📈 DCF Results</h2>
-    <div id="summary" class="mb-6"></div>
-    <div id="tables"></div>
-  </div>
 
 </div>
 
@@ -794,5 +961,7 @@ footer.fa-footer{background:#1d3557;color:#a8b8cc;padding:56px 24px 28px;margin-
 </footer>
 <!-- =============== FOOTER END =============== -->
 
+<!-- Chart.js for FCF visualisation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 </body>
 </html>
