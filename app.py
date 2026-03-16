@@ -665,6 +665,7 @@ def dcf_manual():
 
 
 
+@app.route('/dcf/upload', methods=['POST'])
 def dcf_from_pdf():
     """
     Accept PDFs + DCF parameters, start a background job, return job_id immediately.
