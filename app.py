@@ -467,89 +467,120 @@ def debug_pdf_run():
 
 def _extract_dcf_text_lean(pdf_path: str) -> list:
     """
-    Ultra-lean PDF text extraction for DCF on memory-constrained servers.
+    Fast PDF text extraction using PyMuPDF (fitz).
 
-    Design constraints (Render free tier = 512 MB):
-    · NO OCR at all — page.to_image() allocates ~4 MB per page; 5 PDFs × 200
-      pages = 4 GB peak, instant OOM crash.
-    · Process one page at a time, delete page object after each, call gc.
-    · Stop scanning after finding cash flow data (saves reading 150+ pages of
-      notes, director reports, etc. that come after the financials).
-    · Only keep lines containing CFO / CAPEX keywords.
+    Speed vs old pdfplumber approach:
+    · PyMuPDF extracts text ~5–10× faster than pdfplumber.
+    · Hard cap: scan at most MAX_PAGES pages per PDF (cash flow statements
+      are never beyond page 150 in any Indian annual report).
+    · Early stop: quit after MAX_PAGES_WITHOUT_HIT consecutive pages with
+      no keyword match AND we have already found some data.
+    · Only retain lines that contain CFO / CAPEX keywords — keeps the
+      text block tiny for the DCF parser downstream.
 
-    If the PDF is fully scanned (no selectable text anywhere), we return []
-    and the job reports a clear error rather than crashing the dyno.
+    Falls back to pdfplumber if fitz is unavailable.
+    Returns [] if PDF has no selectable text (fully scanned).
     """
     import gc
 
-    CFO_KW   = [
+    CFO_KW = [
         'operating activities', 'cash from operating',
         'cash generated from operations', 'net cash from operating',
+        'cash flow from operations',
     ]
     CAPEX_KW = [
         'purchase of property', 'purchase of plant',
         'capital expenditure', 'capex', 'acquisition of fixed assets',
-        'fixed assets purchased',
+        'fixed assets purchased', 'additions to fixed assets',
+        'payment for property',
     ]
     ALL_KW = CFO_KW + CAPEX_KW
 
-    relevant_lines = []
-    cash_flow_hits = 0          # how many keyword lines found so far
-    pages_since_last_hit = 0    # stop early if keywords disappear (past CF section)
-    MAX_PAGES_WITHOUT_HIT = 40  # stop after 40 consecutive non-keyword pages
+    MAX_PAGES           = 150   # hard cap — never scan beyond page 150
+    MAX_PAGES_WITHOUT_HIT = 15  # stop early once past the CF section
 
+    relevant_lines    = []
+    cash_flow_hits    = 0
+    pages_since_hit   = 0
+
+    def _process_text(text):
+        nonlocal cash_flow_hits, pages_since_hit
+        if not text or not text.strip():
+            pages_since_hit += 1
+            return
+        found = False
+        for line in text.splitlines():
+            ll = line.lower().strip()
+            if ll and any(k in ll for k in ALL_KW):
+                relevant_lines.append(line.strip())
+                cash_flow_hits += 1
+                found = True
+        if found:
+            pages_since_hit = 0
+        else:
+            pages_since_hit += 1
+
+    # ── Primary: PyMuPDF (fast) ───────────────────────────────────────────
+    try:
+        import fitz  # PyMuPDF
+        doc = fitz.open(pdf_path)
+        total = min(len(doc), MAX_PAGES)
+        for page_num in range(total):
+            page = doc[page_num]
+            text = page.get_text("text")
+            page = None  # release
+            _process_text(text)
+            if pages_since_hit > MAX_PAGES_WITHOUT_HIT and cash_flow_hits > 0:
+                break
+            if page_num % 30 == 0:
+                gc.collect()
+        doc.close()
+        del doc
+        gc.collect()
+        if relevant_lines:
+            return ['\n'.join(relevant_lines)]
+        # If fitz found nothing, fall through to pdfplumber (different parser)
+    except ImportError:
+        pass
+    except Exception as e:
+        app.logger.warning(f'PyMuPDF extraction failed for {pdf_path}: {e}')
+
+    # ── Fallback: pdfplumber ──────────────────────────────────────────────
+    relevant_lines  = []
+    cash_flow_hits  = 0
+    pages_since_hit = 0
     try:
         import pdfplumber
         with pdfplumber.open(pdf_path) as pdf:
-            total_pages = len(pdf.pages)
-            for page_num in range(total_pages):
+            total = min(len(pdf.pages), MAX_PAGES)
+            for page_num in range(total):
                 page = pdf.pages[page_num]
                 try:
                     text = page.extract_text() or ''
                 finally:
-                    # Explicitly release page to free pdfplumber's internal cache
                     page.flush_cache()
                     del page
-
-                if not text.strip():
-                    pages_since_last_hit += 1
-                    if pages_since_last_hit > MAX_PAGES_WITHOUT_HIT and cash_flow_hits > 0:
-                        break   # already past the cash flow section
-                    continue
-
-                found_on_page = False
-                for line in text.splitlines():
-                    ll = line.lower()
-                    if any(k in ll for k in ALL_KW):
-                        relevant_lines.append(line)
-                        cash_flow_hits += 1
-                        found_on_page = True
-
-                if found_on_page:
-                    pages_since_last_hit = 0
-                else:
-                    pages_since_last_hit += 1
-                    if pages_since_last_hit > MAX_PAGES_WITHOUT_HIT and cash_flow_hits > 0:
-                        break
-
-                # Collect every 20 pages to prevent memory build-up
+                _process_text(text)
+                if pages_since_hit > MAX_PAGES_WITHOUT_HIT and cash_flow_hits > 0:
+                    break
                 if page_num % 20 == 0:
                     gc.collect()
-
         gc.collect()
-
     except Exception as e:
-        app.logger.warning(f'DCF lean extraction failed for {pdf_path}: {e}')
+        app.logger.warning(f'pdfplumber fallback failed for {pdf_path}: {e}')
         gc.collect()
 
-    joined = '\n'.join(relevant_lines)
-    return [joined] if relevant_lines else []
+    return ['\n'.join(relevant_lines)] if relevant_lines else []
 
 
 def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
                  net_debt, shares, cmp_price):
     """Background worker: extract text from PDFs one at a time, run DCF."""
     import gc
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
+
+    PDF_TIMEOUT_SECS = 90  # max time allowed per PDF
+
     try:
         _set_job(job_id, {'status': 'processing',
                           'progress': 'Starting PDF extraction…', 'percent': 5})
@@ -560,21 +591,39 @@ def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
             pct = 10 + int(55 * idx / n)
             _set_job(job_id, {
                 'status':   'processing',
-                'progress': f'Reading PDF {idx+1}/{n} (text-only, no OCR)…',
+                'progress': f'Extracting PDF {idx+1} of {n}…',
                 'percent':  pct,
             })
             try:
-                blocks = _extract_dcf_text_lean(path)
-                all_text_blocks.extend(blocks)
-                app.logger.info(
-                    f'DCF job {job_id}: PDF {idx+1}/{n} → '
-                    f'{len(blocks[0].splitlines()) if blocks else 0} keyword lines'
-                )
+                # Run extraction in a thread so we can enforce a hard timeout
+                with ThreadPoolExecutor(max_workers=1) as ex:
+                    future = ex.submit(_extract_dcf_text_lean, path)
+                    try:
+                        blocks = future.result(timeout=PDF_TIMEOUT_SECS)
+                        all_text_blocks.extend(blocks)
+                        hits = len(blocks[0].splitlines()) if blocks else 0
+                        app.logger.info(
+                            f'DCF job {job_id}: PDF {idx+1}/{n} → {hits} keyword lines'
+                        )
+                        if hits == 0:
+                            app.logger.warning(
+                                f'DCF job {job_id}: PDF {idx+1} yielded 0 keyword lines — '
+                                f'may be a scanned PDF'
+                            )
+                    except FutureTimeout:
+                        app.logger.warning(
+                            f'DCF job {job_id}: PDF {idx+1} timed out after {PDF_TIMEOUT_SECS}s — skipping'
+                        )
+                        _set_job(job_id, {
+                            'status':   'processing',
+                            'progress': f'PDF {idx+1} of {n} took too long — skipped. Continuing…',
+                            'percent':  pct,
+                        })
             except Exception as e:
                 app.logger.warning(f'DCF PDF {idx+1} failed: {e}')
             finally:
                 cleanup(path)
-                gc.collect()   # release memory between files
+                gc.collect()
 
         if not all_text_blocks or not any(b.strip() for b in all_text_blocks):
             _set_job(job_id, {
@@ -604,7 +653,8 @@ def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
 
     except Exception as e:
         app.logger.error(f'DCF job {job_id} failed: {e}')
-        _set_job(job_id, {'status': 'error', 'error': str(e)})
+        _set_job(job_id, {'status': 'error', 'error': str(e)})\
+        
         for p in paths:
             cleanup(p)
         import gc; gc.collect()
