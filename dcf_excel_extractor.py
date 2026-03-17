@@ -1,0 +1,181 @@
+# dcf_excel_extractor.py
+"""
+Extract CFO and CAPEX from a Screener.in Excel export for DCF valuation.
+Uses the same sheet-reading logic as Financial_Modelling.py.
+"""
+import pandas as pd
+import numpy as np
+
+
+def fmt(v):
+    if pd.isna(v):
+        return 0.0
+    return float(v)
+
+
+def _read_cf_sheet(file):
+    """Try all known Screener Cash Flow sheet names."""
+    for name in ("Cash Flow Data", "Cash Flow Statement", "Cash Flows",
+                 "Cashflow", "Cash flow", "Cash Flow"):
+        try:
+            return pd.read_excel(file, engine="openpyxl",
+                                 sheet_name=name, header=None)
+        except Exception:
+            continue
+    return pd.DataFrame()
+
+
+def _find_year_row(df, start_col=1, min_dates=3):
+    for row_idx in range(min(df.shape[0], 40)):
+        date_count = 0
+        for col in range(start_col, df.shape[1]):
+            val = df.iloc[row_idx, col]
+            if pd.isna(val):
+                continue
+            if hasattr(val, 'year'):
+                date_count += 1
+            elif isinstance(val, str):
+                try:
+                    pd.to_datetime(val)
+                    date_count += 1
+                except Exception:
+                    pass
+            if date_count >= min_dates:
+                return row_idx
+    return 0
+
+
+def find_row(df, label):
+    """Find row by exact then partial label match."""
+    if df.empty:
+        return None
+    label_l = label.strip().lower()
+    for i in range(df.shape[0]):
+        val = df.iloc[i, 0]
+        if isinstance(val, str) and val.strip().lower() == label_l:
+            return i
+    for i in range(df.shape[0]):
+        val = df.iloc[i, 0]
+        if isinstance(val, str) and label_l in val.strip().lower():
+            return i
+    return None
+
+
+# Screener.in uses these exact row labels
+CFO_LABELS = [
+    "Cash from Operating Activity",
+    "Cash from Operating Activities",
+    "Net Cash from Operating Activities",
+    "Cash Generated from Operations",
+    "Net cash from operating",
+    "Operating Cash Flow",
+    "CFO",
+]
+
+CAPEX_LABELS = [
+    "Fixed Assets Purchased",
+    "Purchase of Fixed Assets",
+    "Capital Expenditure",
+    "Capex",
+    "Purchase of Property, Plant",
+    "Addition to Fixed Assets",
+    "Net Fixed Assets Purchased",
+]
+
+
+def _find_any_row(df, labels):
+    for label in labels:
+        r = find_row(df, label)
+        if r is not None:
+            return r
+    return None
+
+
+def extract_dcf_from_excel(filepath):
+    """
+    Read a Screener.in Excel file and return:
+    {
+        'years':  ['Mar 2019', 'Mar 2020', ...],
+        'cfo':    [1234.5, 1456.2, ...],
+        'capex':  [300.1, 450.0, ...],   # always positive
+        'fcf':    [934.4, 1006.2, ...],
+        'source': 'excel'
+    }
+    Raises ValueError with a helpful message if data cannot be found.
+    """
+    cf_df = _read_cf_sheet(filepath)
+
+    if cf_df.empty:
+        # Try reading Balance Sheet sheet which also has CFO in some exports
+        try:
+            cf_df = pd.read_excel(filepath, engine="openpyxl",
+                                  sheet_name="Balance Sheet & P&L", header=None)
+        except Exception:
+            pass
+
+    if cf_df.empty:
+        raise ValueError(
+            "No Cash Flow sheet found in this Excel file.\n"
+            "Please upload a Screener.in Excel export — go to any company page on "
+            "Screener.in → click 'Export to Excel' at the top."
+        )
+
+    YEAR_ROW  = _find_year_row(cf_df)
+    START_COL = 1
+
+    # Extract year labels
+    years = []
+    for col in range(START_COL, cf_df.shape[1]):
+        val = cf_df.iloc[YEAR_ROW, col]
+        if pd.isna(val):
+            break
+        try:
+            years.append(pd.to_datetime(val).strftime("Mar %Y"))
+        except Exception:
+            years.append(str(val))
+
+    n = len(years)
+    if n == 0:
+        raise ValueError(
+            "Could not detect year columns in the Excel file. "
+            "Make sure this is a Screener.in export."
+        )
+
+    def row_values(row_idx):
+        return [fmt(cf_df.iloc[row_idx, START_COL + i]) for i in range(n)]
+
+    # ── Find CFO ──────────────────────────────────────────────────────────
+    cfo_row = _find_any_row(cf_df, CFO_LABELS)
+    if cfo_row is None:
+        raise ValueError(
+            "Could not find Cash from Operating Activities in the Excel.\n"
+            "Expected one of: " + ", ".join(f'"{l}"' for l in CFO_LABELS[:4]) + "\n"
+            "Make sure you are uploading a Screener.in Excel export."
+        )
+    cfo = row_values(cfo_row)
+
+    # ── Find CAPEX ────────────────────────────────────────────────────────
+    capex_row = _find_any_row(cf_df, CAPEX_LABELS)
+    if capex_row is None:
+        raise ValueError(
+            "Could not find Capital Expenditure / Fixed Assets Purchased in the Excel.\n"
+            "Expected one of: " + ", ".join(f'"{l}"' for l in CAPEX_LABELS[:4]) + "\n"
+            "Make sure you are uploading a Screener.in Excel export."
+        )
+    capex_raw = row_values(capex_row)
+    capex = [abs(v) for v in capex_raw]   # always positive
+
+    # ── Compute FCF ───────────────────────────────────────────────────────
+    fcf = [round(cfo[i] - capex[i], 2) for i in range(n)]
+
+    # Strip trailing zeros (years with no data)
+    while len(years) > 2 and cfo[-1] == 0 and capex[-1] == 0:
+        years.pop(); cfo.pop(); capex.pop(); fcf.pop()
+
+    return {
+        "years":  years,
+        "cfo":    [round(v, 2) for v in cfo],
+        "capex":  [round(v, 2) for v in capex],
+        "fcf":    fcf,
+        "source": "excel",
+    }
