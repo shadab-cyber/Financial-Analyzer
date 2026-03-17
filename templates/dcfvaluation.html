@@ -300,20 +300,19 @@ document.addEventListener('DOMContentLoaded', function() {
   </h1>
   <p class="text-center text-sm text-gray-500 mb-6">Enter figures from Screener.in Cash Flow statement (₹ Crore)</p>
 
-  <!-- ── MODE TABS ─────────────────────────────────────────────────── -->
   <div class="flex gap-2 mb-6 border-b">
-    <button id="tabManual" onclick="switchTab('manual')"
-      class="px-4 py-2 text-sm font-semibold border-b-2 border-blue-600 text-blue-700">
-      ✏️ Manual Input (Recommended)
+    <button id="tabExcel" onclick="switchTab('excel')"
+      class="px-4 py-2 text-sm font-semibold border-b-2 border-green-600 text-green-700">
+      📊 Screener.in Excel Upload
     </button>
-    <button id="tabPdf" onclick="switchTab('pdf')"
+    <button id="tabManual" onclick="switchTab('manual')"
       class="px-4 py-2 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700">
-      📄 PDF Upload (Experimental)
+      ✏️ Manual Input
     </button>
   </div>
 
-  <!-- ── MANUAL INPUT PANEL ────────────────────────────────────────── -->
-  <div id="panelManual">
+  <!-- ── MANUAL INPUT PANEL ─────────────────────────────────────────────── -->
+  <div id="panelManual" class="hidden">
     <p class="text-xs text-gray-500 mb-3">
       Enter CFO and CAPEX for each year (oldest → newest). Get these from
       <a href="https://screener.in" target="_blank" class="text-blue-600 underline">Screener.in</a>
@@ -373,56 +372,61 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
 
-  <!-- ── PDF UPLOAD PANEL ─────────────────────────────────────────── -->
-  <div id="panelPdf" class="hidden">
-    <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-sm text-blue-800">
-      Upload <strong>5 or more</strong> annual report PDFs (one per financial year, oldest to newest) for a reliable multi-year DCF. Text-based PDFs only — scanned image PDFs are not supported.
+  <!-- ── EXCEL UPLOAD PANEL (default) ─────────────────────────────────── -->
+  <div id="panelExcel">
+    <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">
+      Upload the <strong>Screener.in Excel export</strong> for any stock. Go to Screener.in &rarr; search the company &rarr; click <strong>Export to Excel</strong>. CFO and CAPEX are read automatically from the Cash Flow sheet.
     </div>
-    <div class="border-2 border-dashed p-6 rounded-lg mb-4 text-center" id="pdfDropZone"
-         ondragover="event.preventDefault();this.classList.add('border-blue-400','bg-blue-50')"
-         ondragleave="this.classList.remove('border-blue-400','bg-blue-50')"
-         ondrop="handlePdfDrop(event)">
-      <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto mb-2 text-gray-400" width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+
+    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 mb-4 text-center cursor-pointer hover:border-green-400 hover:bg-green-50 transition"
+         id="excelDropZone"
+         ondragover="event.preventDefault();this.classList.add('border-green-400','bg-green-50')"
+         ondragleave="this.classList.remove('border-green-400','bg-green-50')"
+         ondrop="handleExcelDrop(event)">
+      <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto mb-3 text-gray-400" width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
       </svg>
-      <label for="pdfFiles" class="cursor-pointer text-blue-600 font-semibold hover:underline">Click to select PDFs</label>
-      <span class="text-gray-500 text-sm"> or drag and drop here</span>
-      <input type="file" id="pdfFiles" accept=".pdf" multiple class="hidden" onchange="updatePdfFileList()" />
-      <p class="text-xs text-gray-400 mt-2">Minimum 5 PDFs · One annual report per year · Max 500 MB total</p>
+      <label for="excelFile" class="cursor-pointer text-green-600 font-semibold hover:underline text-sm">Click to select Excel file</label>
+      <span class="text-gray-500 text-sm"> or drag and drop</span>
+      <input type="file" id="excelFile" accept=".xlsx,.xls" class="hidden" onchange="onExcelSelected()" />
+      <p class="text-xs text-gray-400 mt-2">.xlsx from Screener.in &middot; Reads CFO &amp; CAPEX automatically</p>
     </div>
-    <!-- File list preview -->
-    <div id="pdfFileList" class="hidden mb-4">
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-xs font-semibold text-gray-600" id="pdfFileCount"></span>
-        <button onclick="clearPdfFiles()" class="text-xs text-red-500 hover:underline">Clear all</button>
-      </div>
-      <ul id="pdfFileItems" class="text-xs text-gray-600 border rounded divide-y max-h-40 overflow-y-auto bg-gray-50"></ul>
+
+    <div id="excelFilePreview" class="hidden mb-4 flex items-center gap-3 bg-gray-50 border rounded-lg px-4 py-3">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#16a34a" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      <span id="excelFileName" class="text-sm font-medium text-gray-700 flex-1"></span>
+      <button onclick="clearExcelFile()" class="text-xs text-red-500 hover:underline">Remove</button>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-5 p-4 bg-gray-50 rounded-lg">
       <div>
         <label class="block text-xs font-semibold text-gray-600 mb-1">WACC (%)</label>
-        <input type="number" id="inputWACCPdf" value="11" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
+        <input type="number" id="inputWACCExcel" value="11" min="5" max="30" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
+        <p class="text-xs text-gray-400 mt-1">Cost of capital</p>
       </div>
       <div>
         <label class="block text-xs font-semibold text-gray-600 mb-1">Terminal Growth (%)</label>
-        <input type="number" id="inputTermGrowthPdf" value="4" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
+        <input type="number" id="inputTermGrowthExcel" value="4" min="0" max="10" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
+        <p class="text-xs text-gray-400 mt-1">Must be &lt; WACC</p>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Net Debt (₹ Cr)</label>
-        <input type="number" id="inputNetDebtPdf" value="0" class="w-full border rounded px-3 py-2 text-sm" />
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Net Debt (&#8377; Cr)</label>
+        <input type="number" id="inputNetDebtExcel" value="0" step="1" class="w-full border rounded px-3 py-2 text-sm" />
+        <p class="text-xs text-gray-400 mt-1">Debt &minus; Cash (negative = net cash)</p>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Shares (Cr)</label>
-        <input type="number" id="inputSharesPdf" placeholder="e.g. 67.5" class="w-full border rounded px-3 py-2 text-sm" />
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Shares Outstanding (Cr)</label>
+        <input type="number" id="inputSharesExcel" placeholder="e.g. 67.5" step="0.01" class="w-full border rounded px-3 py-2 text-sm" />
       </div>
       <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">CMP (₹)</label>
-        <input type="number" id="inputCMPPdf" placeholder="e.g. 2450" class="w-full border rounded px-3 py-2 text-sm" />
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Current Market Price (&#8377;)</label>
+        <input type="number" id="inputCMPExcel" placeholder="e.g. 2450" step="0.01" class="w-full border rounded px-3 py-2 text-sm" />
       </div>
     </div>
+
     <div class="text-center mb-6">
-      <button onclick="runPdfDCF()" class="bg-gray-600 text-white px-8 py-2 rounded-lg hover:bg-gray-700">
-        ▶ Run DCF from PDF
+      <button onclick="runExcelDCF()" class="bg-green-600 text-white px-8 py-2.5 rounded-lg hover:bg-green-700 font-semibold text-sm">
+        &#9654; Run DCF from Excel
       </button>
     </div>
   </div>
@@ -433,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   <!-- RESULT -->
   <div id="result" class="hidden">
-    <h2 class="text-xl font-bold mb-4">📈 DCF Results</h2>
+    <h2 class="text-xl font-bold mb-4">DCF Valuation Results</h2>
     <div id="summary" class="mb-6"></div>
     <div id="warnings" class="mb-4"></div>
     <div id="tables"></div>
@@ -444,13 +448,13 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 // ── Tab switching ──────────────────────────────────────────────────────────
 function switchTab(tab) {
-  const isManual = tab === 'manual';
-  document.getElementById('panelManual').classList.toggle('hidden', !isManual);
-  document.getElementById('panelPdf').classList.toggle('hidden', isManual);
-  document.getElementById('tabManual').className = isManual
-    ? 'px-4 py-2 text-sm font-semibold border-b-2 border-blue-600 text-blue-700'
+  const isExcel = tab === 'excel';
+  document.getElementById('panelExcel').classList.toggle('hidden', !isExcel);
+  document.getElementById('panelManual').classList.toggle('hidden', isExcel);
+  document.getElementById('tabExcel').className = isExcel
+    ? 'px-4 py-2 text-sm font-semibold border-b-2 border-green-600 text-green-700'
     : 'px-4 py-2 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
-  document.getElementById('tabPdf').className = !isManual
+  document.getElementById('tabManual').className = !isExcel
     ? 'px-4 py-2 text-sm font-semibold border-b-2 border-blue-600 text-blue-700'
     : 'px-4 py-2 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
 }
@@ -538,180 +542,139 @@ async function runManualDCF() {
   }
 }
 
-// ── PDF file list helpers ──────────────────────────────────────────────────
-function updatePdfFileList() {
-  const input   = document.getElementById('pdfFiles');
-  const listDiv = document.getElementById('pdfFileList');
-  const countEl = document.getElementById('pdfFileCount');
-  const itemsEl = document.getElementById('pdfFileItems');
-  const files   = Array.from(input.files);
-
-  if (!files.length) { listDiv.classList.add('hidden'); return; }
-
-  const totalMB = (files.reduce((a, f) => a + f.size, 0) / 1024 / 1024).toFixed(1);
-  const ok      = files.length >= 5;
-  countEl.innerHTML = `<span class="${ok ? 'text-green-600' : 'text-red-600'}">${files.length} file${files.length !== 1 ? 's' : ''} selected</span> &nbsp;·&nbsp; ${totalMB} MB total${!ok ? ' &nbsp;<span class="text-red-500">(minimum 5 required)</span>' : ''}`;
-
-  itemsEl.innerHTML = files.map((f, i) => {
-    const mb   = (f.size / 1024 / 1024).toFixed(1);
-    const icon = f.size > 0 ? '📄' : '⚠️';
-    return `<li class="px-3 py-1.5 flex items-center justify-between gap-2">
-      <span>${icon} ${f.name}</span>
-      <span class="text-gray-400 flex-shrink-0">${mb} MB</span>
-    </li>`;
-  }).join('');
-
-  listDiv.classList.remove('hidden');
+// ── Excel file helpers ────────────────────────────────────────────────────
+function onExcelSelected() {
+  const input   = document.getElementById('excelFile');
+  const preview = document.getElementById('excelFilePreview');
+  const nameEl  = document.getElementById('excelFileName');
+  if (input.files.length) {
+    const f = input.files[0];
+    nameEl.textContent = f.name + '  (' + (f.size / 1024 / 1024).toFixed(1) + ' MB)';
+    preview.classList.remove('hidden');
+  } else {
+    preview.classList.add('hidden');
+  }
 }
 
-function clearPdfFiles() {
-  const input = document.getElementById('pdfFiles');
-  input.value = '';
-  document.getElementById('pdfFileList').classList.add('hidden');
+function clearExcelFile() {
+  document.getElementById('excelFile').value = '';
+  document.getElementById('excelFilePreview').classList.add('hidden');
 }
 
-function handlePdfDrop(event) {
+function handleExcelDrop(event) {
   event.preventDefault();
-  const zone  = document.getElementById('pdfDropZone');
-  zone.classList.remove('border-blue-400', 'bg-blue-50');
-  const input = document.getElementById('pdfFiles');
-  const dt    = new DataTransfer();
-  // Add existing files
-  Array.from(input.files).forEach(f => dt.items.add(f));
-  // Add dropped files (PDFs only)
-  Array.from(event.dataTransfer.files)
-    .filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
-    .forEach(f => dt.items.add(f));
+  const zone  = document.getElementById('excelDropZone');
+  zone.classList.remove('border-green-400', 'bg-green-50');
+  const input = document.getElementById('excelFile');
+  const files = Array.from(event.dataTransfer.files)
+    .filter(f => f.name.toLowerCase().endsWith('.xlsx') || f.name.toLowerCase().endsWith('.xls'));
+  if (!files.length) return;
+  const dt = new DataTransfer();
+  dt.items.add(files[0]);
   input.files = dt.files;
-  updatePdfFileList();
+  onExcelSelected();
 }
 
-// ── PDF DCF ────────────────────────────────────────────────────────────────
-async function runPdfDCF() {
-  const filesInput  = document.getElementById("pdfFiles");
-  const statusDiv   = document.getElementById("status");
-  const errorDiv    = document.getElementById("error");
-  const resultDiv   = document.getElementById("result");
+// ── Excel DCF ─────────────────────────────────────────────────────────────
+async function runExcelDCF() {
+  const fileInput = document.getElementById('excelFile');
+  const statusDiv = document.getElementById('status');
+  const errorDiv  = document.getElementById('error');
+  const resultDiv = document.getElementById('result');
 
-  errorDiv.classList.add("hidden");
-  resultDiv.classList.add("hidden");
+  errorDiv.classList.add('hidden');
+  resultDiv.classList.add('hidden');
+  statusDiv.classList.add('hidden');
 
-  if (filesInput.files.length < 5) {
-    errorDiv.textContent = `Please upload at least 5 annual report PDFs (one per year). You have selected ${filesInput.files.length} file${filesInput.files.length === 1 ? '' : 's'}.`;
-    errorDiv.classList.remove("hidden");
+  if (!fileInput.files.length) {
+    errorDiv.textContent = 'Please select a Screener.in Excel file first.';
+    errorDiv.classList.remove('hidden');
     return;
   }
 
-  const wacc        = parseFloat(document.getElementById("inputWACCPdf").value) / 100;
-  const termGrowth  = parseFloat(document.getElementById("inputTermGrowthPdf").value) / 100;
-  const netDebt     = parseFloat(document.getElementById("inputNetDebtPdf").value) || 0;
-  const shares      = parseFloat(document.getElementById("inputSharesPdf").value) || null;
-  const cmp         = parseFloat(document.getElementById("inputCMPPdf").value) || null;
+  const wacc       = parseFloat(document.getElementById('inputWACCExcel').value) / 100;
+  const termGrowth = parseFloat(document.getElementById('inputTermGrowthExcel').value) / 100;
+  const netDebt    = parseFloat(document.getElementById('inputNetDebtExcel').value) || 0;
+  const shares     = parseFloat(document.getElementById('inputSharesExcel').value) || null;
+  const cmp        = parseFloat(document.getElementById('inputCMPExcel').value) || null;
 
+  if (isNaN(wacc) || wacc <= 0) {
+    errorDiv.textContent = 'Please enter a valid WACC (%).';
+    errorDiv.classList.remove('hidden');
+    return;
+  }
   if (termGrowth >= wacc) {
-    errorDiv.textContent = `Terminal growth (${(termGrowth*100).toFixed(1)}%) must be less than WACC (${(wacc*100).toFixed(1)}%). Please adjust.`;
-    errorDiv.classList.remove("hidden");
+    errorDiv.textContent = `Terminal growth (${(termGrowth*100).toFixed(1)}%) must be less than WACC (${(wacc*100).toFixed(1)}%).`;
+    errorDiv.classList.remove('hidden');
     return;
   }
 
   const formData = new FormData();
-  for (const file of filesInput.files) formData.append("files", file);
-  formData.append("wacc",           wacc);
-  formData.append("terminal_growth", termGrowth);
-  formData.append("net_debt",        netDebt);
-  if (shares) formData.append("shares_outstanding", shares);
-  if (cmp)    formData.append("current_price",       cmp);
+  formData.append('file',             fileInput.files[0]);
+  formData.append('wacc',             wacc);
+  formData.append('terminal_growth',  termGrowth);
+  formData.append('net_debt',         netDebt);
+  if (shares) formData.append('shares_outstanding', shares);
+  if (cmp)    formData.append('current_price',       cmp);
 
-  statusDiv.innerHTML = `<div class="text-sm font-semibold text-blue-700">Uploading ${filesInput.files.length} PDFs…</div>`;
-  statusDiv.classList.remove("hidden");
+  statusDiv.innerHTML = '<div class="text-sm font-semibold text-green-700">Reading Excel file…</div>';
+  statusDiv.classList.remove('hidden');
 
   try {
-      // Step 1: upload files + params → get job_id immediately (no timeout risk)
-      const res = await fetch("/dcf/upload", { method: "POST", body: formData });
+    const res  = await fetch('/dcf/excel', { method: 'POST', body: formData });
+    const data = await res.json();
+    statusDiv.classList.add('hidden');
+    statusDiv.innerHTML = '';
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Server error ${res.status}`);
+    if (data.error) {
+      errorDiv.textContent = data.error;
+      errorDiv.classList.remove('hidden');
+      return;
+    }
+
+    // Show extracted data preview before results
+    if (data['Extracted CFO'] && data['Extracted Years']) {
+      const years  = data['Extracted Years'];
+      const cfos   = data['Extracted CFO'];
+      const capexs = data['Extracted CAPEX'];
+      let previewHtml = `<div class="mb-5 p-4 bg-gray-50 border rounded-lg">
+        <p class="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">Extracted from Excel — verify before proceeding</p>
+        <div class="overflow-x-auto">
+        <table class="w-full text-xs border">
+          <thead class="bg-gray-100"><tr>
+            <th class="border p-2 text-left">Year</th>
+            <th class="border p-2 text-right">CFO (&#8377; Cr)</th>
+            <th class="border p-2 text-right">CAPEX proxy (&#8377; Cr)</th>
+            <th class="border p-2 text-right">FCF (&#8377; Cr)</th>
+          </tr></thead><tbody>`;
+      for (let i = 0; i < years.length; i++) {
+        const fcf = (cfos[i] - capexs[i]).toFixed(2);
+        const fcfColor = fcf < 0 ? 'text-red-600' : 'text-green-700';
+        previewHtml += `<tr>
+          <td class="border p-2">${years[i]}</td>
+          <td class="border p-2 text-right">${Number(cfos[i]).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+          <td class="border p-2 text-right">${Number(capexs[i]).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+          <td class="border p-2 text-right font-semibold ${fcfColor}">${Number(fcf).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+        </tr>`;
       }
+      previewHtml += `</tbody></table></div>
+        <p class="text-xs text-gray-400 mt-2">CAPEX = absolute value of Cash from Investing Activity (includes acquisitions). If this overstates CAPEX, switch to Manual Input.</p>
+      </div>`;
+      document.getElementById('warnings').innerHTML = previewHtml + (document.getElementById('warnings').innerHTML || '');
+    }
 
-      const { job_id } = await res.json();
-      if (!job_id) throw new Error("No job ID returned from server.");
-
-      // Step 2: poll /dcf/status/<job_id> every 2 seconds
-      statusDiv.textContent = "Extracting financials from PDFs…";
-
-      await new Promise((resolve, reject) => {
-        let consecutiveErrors = 0;
-        let totalSeconds      = 0;
-        const N               = filesInput.files.length;
-        const MAX_WAIT_SECONDS  = N * 100;   // 100s per PDF (generous ceiling)
-        const MAX_CONSEC_ERRORS = 5;
-
-        const interval = setInterval(async () => {
-          totalSeconds += 2;
-          if (totalSeconds > MAX_WAIT_SECONDS) {
-            clearInterval(interval);
-            reject(new Error(
-              `Analysis timed out after ${Math.round(MAX_WAIT_SECONDS/60)} minutes. ` +
-              `Try uploading Screener.in-exported PDFs instead of full annual reports — ` +
-              `they contain only the financial statements and extract in seconds.`
-            ));
-            return;
-          }
-
-          try {
-            const poll = await fetch(`/dcf/status/${job_id}`);
-
-            if (poll.status === 503 || poll.status === 502) {
-              consecutiveErrors++;
-              statusDiv.textContent = `Server restarting… retrying (${consecutiveErrors}/${MAX_CONSEC_ERRORS})`;
-              if (consecutiveErrors >= MAX_CONSEC_ERRORS) {
-                clearInterval(interval);
-                reject(new Error('Server unavailable. Try uploading 1–2 PDFs at a time.'));
-              }
-              return;
-            }
-
-            consecutiveErrors = 0;
-            const job = await poll.json();
-
-            if (job.status === "processing" || job.status === "queued") {
-              const pct  = job.percent || 0;
-              const msg  = job.progress || "Processing…";
-              statusDiv.innerHTML = `
-                <div class="text-sm font-semibold text-blue-700 mb-1">${msg}</div>
-                <div class="w-full bg-gray-200 rounded-full h-2 mt-1">
-                  <div class="bg-blue-500 h-2 rounded-full transition-all" style="width:${pct}%"></div>
-                </div>
-                <div class="text-xs text-gray-400 mt-1">${pct}% complete · ${Math.round((MAX_WAIT_SECONDS - totalSeconds)/60)}min remaining max</div>`;
-            } else if (job.status === "done") {
-              clearInterval(interval);
-              statusDiv.classList.add("hidden");
-              statusDiv.textContent = '';
-              renderDCF(job.result);
-              resultDiv.classList.remove("hidden");
-              resolve();
-            } else if (job.status === "error") {
-              clearInterval(interval);
-              reject(new Error(job.error || "DCF processing failed."));
-            }
-          } catch (pollErr) {
-            consecutiveErrors++;
-            if (consecutiveErrors >= MAX_CONSEC_ERRORS) {
-              clearInterval(interval);
-              reject(pollErr);
-            }
-          }
-        }, 2000);
-      });
+    renderDCF(data);
+    resultDiv.classList.remove('hidden');
+    resultDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   } catch (err) {
     statusDiv.innerHTML = '';
-    statusDiv.classList.add("hidden");
-    errorDiv.textContent = err.message;
-    errorDiv.classList.remove("hidden");
+    statusDiv.classList.add('hidden');
+    errorDiv.textContent = 'Error: ' + err.message;
+    errorDiv.classList.remove('hidden');
   }
 }
+
 
 function renderDCF(data) {
   const ev   = data["Enterprise Value (₹ Cr)"];
