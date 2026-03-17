@@ -467,98 +467,83 @@ def debug_pdf_run():
 
 def _extract_dcf_text_lean(pdf_path: str) -> list:
     """
-    Fast PDF text extraction using PyMuPDF (fitz).
+    Extract the cash flow statement section(s) from a PDF.
 
-    Speed vs old pdfplumber approach:
-    · PyMuPDF extracts text ~5–10× faster than pdfplumber.
-    · Hard cap: scan at most MAX_PAGES pages per PDF (cash flow statements
-      are never beyond page 150 in any Indian annual report).
-    · Early stop: quit after MAX_PAGES_WITHOUT_HIT consecutive pages with
-      no keyword match AND we have already found some data.
-    · Only retain lines that contain CFO / CAPEX keywords — keeps the
-      text block tiny for the DCF parser downstream.
+    KEY DESIGN CHANGE from previous version:
+    ─────────────────────────────────────────
+    Old approach: cherry-pick only lines that match CFO/CAPEX keywords.
+    Problem: numbers sit on the line AFTER the label in most Indian reports.
+    Cherry-picking labels without their adjacent number lines gave dcf_valuation.py
+    context-free fragments it could never parse.
 
-    Falls back to pdfplumber if fitz is unavailable.
-    Returns [] if PDF has no selectable text (fully scanned).
+    New approach:
+    1. Scan for pages that contain a cash flow statement section header
+       (very broad — "cash flow", "statement of cash", "cash from operations" etc.)
+    2. For those pages, keep the ENTIRE page text so dcf_valuation.py has
+       full line context (label line + number line + continuation lines).
+    3. Also keep any page that contains investing-activities keywords (CAPEX lives there).
+    4. Hard cap at MAX_PAGES. Early-stop after MAX_PAGES_NO_CFS consecutive
+       pages with no section header match once we've already found CFS pages.
+
+    Falls back to pdfplumber if fitz unavailable.
+    Returns [] only if PDF has zero selectable text (fully scanned image PDF).
     """
     import gc
 
-    CFO_KW = [
-        'net cash from operating', 'net cash generated from operating',
-        'net cash used in operating', 'net cash flow from operating',
-        'net cash flows from operating', 'cash generated from operations',
-        'cash inflow from operations', 'net cash from operations',
-        'cash flow from operating activities', 'cash flows from operating activities',
-        'cash from operating activit', 'operating cash flow',
-        # broader fallback — catches "total operating activities" lines
+    # Section-level triggers — these identify CFS pages (keep whole page)
+    CFS_SECTION_KW = [
+        'cash flow statement',
+        'statement of cash flow',
+        'cash flow from operating',
+        'cash flows from operating',
+        'cash flow from investing',
+        'cash flows from investing',
+        'cash flow from financing',
+        'cash flows from financing',
         'operating activities',
+        'investing activities',
+        'financing activities',
+        'cash generated from operations',
+        'cash and cash equivalents',
     ]
-    CAPEX_KW = [
-        'purchase of property', 'purchase of plant', 'purchase of ppe',
-        'purchase of fixed assets', 'purchase of tangible', 'purchase of intangible',
-        'acquisition of property', 'acquisition of plant', 'acquisition of fixed assets',
-        'payment for property', 'payment for plant', 'payment for fixed assets',
-        'additions to property', 'additions to fixed assets', 'addition to fixed assets',
-        'capital expenditure', 'capex', 'purchase of capital assets',
-        'investment in fixed assets', 'cash paid for property',
-        'fixed assets purchased', 'addition to tangible',
-    ]
-    ALL_KW = CFO_KW + CAPEX_KW
 
-    MAX_PAGES           = 150   # hard cap — never scan beyond page 150
-    MAX_PAGES_WITHOUT_HIT = 15  # stop early once past the CF section
+    MAX_PAGES          = 150
+    MAX_PAGES_NO_CFS   = 20   # stop after 20 consecutive non-CFS pages (once CFS found)
 
-    relevant_lines    = []
-    cash_flow_hits    = 0
-    pages_since_hit   = 0
+    cfs_pages      = []   # full text of pages that look like CFS pages
+    cfs_found      = False
+    pages_since_cfs = 0
 
-    def _process_text(text):
-        nonlocal cash_flow_hits, pages_since_hit
-        if not text or not text.strip():
-            pages_since_hit += 1
-            return
-        found = False
-        for line in text.splitlines():
-            ll = line.lower().strip()
-            if ll and any(k in ll for k in ALL_KW):
-                relevant_lines.append(line.strip())
-                cash_flow_hits += 1
-                found = True
-        if found:
-            pages_since_hit = 0
-        else:
-            pages_since_hit += 1
+    def _is_cfs_page(text):
+        tl = text.lower()
+        return any(k in tl for k in CFS_SECTION_KW)
 
-    # ── Primary: PyMuPDF (fast) ───────────────────────────────────────────
-    try:
-        import fitz  # PyMuPDF
-        doc = fitz.open(pdf_path)
+    def _extract_with_fitz():
+        nonlocal cfs_found, pages_since_cfs
+        import fitz
+        doc   = fitz.open(pdf_path)
         total = min(len(doc), MAX_PAGES)
         for page_num in range(total):
             page = doc[page_num]
             text = page.get_text("text")
-            page = None  # release
-            _process_text(text)
-            if pages_since_hit > MAX_PAGES_WITHOUT_HIT and cash_flow_hits > 0:
-                break
+            page = None
+            if text and _is_cfs_page(text):
+                cfs_pages.append(text)
+                cfs_found      = True
+                pages_since_cfs = 0
+            else:
+                if cfs_found:
+                    pages_since_cfs += 1
+                    if pages_since_cfs > MAX_PAGES_NO_CFS:
+                        break
             if page_num % 30 == 0:
                 gc.collect()
         doc.close()
         del doc
         gc.collect()
-        if relevant_lines:
-            return ['\n'.join(relevant_lines)]
-        # If fitz found nothing, fall through to pdfplumber (different parser)
-    except ImportError:
-        pass
-    except Exception as e:
-        app.logger.warning(f'PyMuPDF extraction failed for {pdf_path}: {e}')
 
-    # ── Fallback: pdfplumber ──────────────────────────────────────────────
-    relevant_lines  = []
-    cash_flow_hits  = 0
-    pages_since_hit = 0
-    try:
+    def _extract_with_pdfplumber():
+        nonlocal cfs_found, pages_since_cfs
         import pdfplumber
         with pdfplumber.open(pdf_path) as pdf:
             total = min(len(pdf.pages), MAX_PAGES)
@@ -569,17 +554,48 @@ def _extract_dcf_text_lean(pdf_path: str) -> list:
                 finally:
                     page.flush_cache()
                     del page
-                _process_text(text)
-                if pages_since_hit > MAX_PAGES_WITHOUT_HIT and cash_flow_hits > 0:
-                    break
+                if text and _is_cfs_page(text):
+                    cfs_pages.append(text)
+                    cfs_found       = True
+                    pages_since_cfs = 0
+                else:
+                    if cfs_found:
+                        pages_since_cfs += 1
+                        if pages_since_cfs > MAX_PAGES_NO_CFS:
+                            break
                 if page_num % 20 == 0:
                     gc.collect()
         gc.collect()
-    except Exception as e:
-        app.logger.warning(f'pdfplumber fallback failed for {pdf_path}: {e}')
-        gc.collect()
 
-    return ['\n'.join(relevant_lines)] if relevant_lines else []
+    # ── Try PyMuPDF first (fast) ──────────────────────────────────────────
+    try:
+        _extract_with_fitz()
+    except ImportError:
+        pass
+    except Exception as e:
+        app.logger.warning(f'PyMuPDF extraction failed for {pdf_path}: {e}')
+        cfs_pages.clear()
+        cfs_found       = False
+        pages_since_cfs = 0
+
+    # ── Fallback to pdfplumber if fitz found nothing ──────────────────────
+    if not cfs_pages:
+        try:
+            _extract_with_pdfplumber()
+        except Exception as e:
+            app.logger.warning(f'pdfplumber fallback failed for {pdf_path}: {e}')
+            gc.collect()
+
+    if not cfs_pages:
+        app.logger.warning(f'No CFS pages found in {pdf_path} — may be scanned PDF')
+        return []
+
+    combined = '\n'.join(cfs_pages)
+    app.logger.info(
+        f'DCF extractor: {pdf_path} → {len(cfs_pages)} CFS page(s), '
+        f'{len(combined.splitlines())} lines'
+    )
+    return [combined]
 
 
 def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
@@ -667,6 +683,70 @@ def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
         for p in paths:
             cleanup(p)
         import gc; gc.collect()
+
+
+@app.route('/dcf/debug-extract', methods=['POST'])
+def dcf_debug_extract():
+    """
+    Debug endpoint: upload one PDF, see exactly what text gets extracted
+    and whether CFO/CAPEX keywords match.
+    Visit /dcf in browser, open DevTools → Network, or hit with curl:
+      curl -F "file=@annual_report.pdf" https://your-app.onrender.com/dcf/debug-extract
+    Returns plain text — safe to paste into any text editor.
+    """
+    if 'file' not in request.files:
+        return 'No file uploaded', 400
+    file = request.files['file']
+    if not allowed_pdf(file.filename):
+        return 'Must be a PDF', 400
+
+    path = save_temp_file(file, UPLOAD_FOLDER_DCF)
+    out  = []
+    try:
+        blocks = _extract_dcf_text_lean(path)
+        if not blocks or not blocks[0].strip():
+            out.append('ERROR: extractor returned empty — likely a scanned PDF.')
+            return '\n'.join(out), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+        lines = blocks[0].splitlines()
+        out.append(f'=== EXTRACTED {len(lines)} lines from {file.filename} ===\n')
+
+        # Show all lines
+        for i, ln in enumerate(lines):
+            out.append(f'[{i:04d}] {ln}')
+
+        # Show which lines matched CFO patterns
+        from dcf_valuation import _CFO_RE, _CAPEX_RE, _EXCL_RE, _matches_any
+        out.append('\n\n=== CFO KEYWORD MATCHES ===')
+        for i, ln in enumerate(lines):
+            if _matches_any(ln.lower(), _CFO_RE):
+                excl = ' [EXCLUDED]' if _matches_any(ln.lower(), _EXCL_RE) else ''
+                out.append(f'[{i:04d}]{excl} {ln}')
+
+        out.append('\n=== CAPEX KEYWORD MATCHES ===')
+        for i, ln in enumerate(lines):
+            if _matches_any(ln.lower(), _CAPEX_RE):
+                out.append(f'[{i:04d}] {ln}')
+
+        # Run the actual extractor and show results
+        out.append('\n=== DCF EXTRACTION RESULT ===')
+        try:
+            from dcf_valuation import extract_cfo, extract_capex
+            cfo   = extract_cfo(blocks)
+            capex = extract_capex(blocks)
+            out.append(f'CFO values found:   {cfo}')
+            out.append(f'CAPEX values found: {capex}')
+            if not cfo:
+                out.append('PROBLEM: No CFO value extracted — check CFO KEYWORD MATCHES above')
+            if not capex:
+                out.append('PROBLEM: No CAPEX value extracted — check CAPEX KEYWORD MATCHES above')
+        except Exception as e:
+            out.append(f'Extraction error: {e}')
+
+    finally:
+        cleanup(path)
+
+    return '\n'.join(out), 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
 @app.route('/dcf/manual', methods=['POST'])
