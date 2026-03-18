@@ -407,38 +407,172 @@ document.addEventListener('DOMContentLoaded', function() {
       <button onclick="clearExcelFile()" class="text-xs text-red-500 hover:underline">Remove</button>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-5 p-4 bg-gray-50 rounded-lg">
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">WACC (%)</label>
-        <input type="number" id="inputWACCExcel" value="11" min="5" max="30" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
-        <p class="text-xs text-gray-400 mt-1">Cost of capital</p>
+    <!-- ── WACC BUILDER ──────────────────────────────────────────── -->
+    <div class="mb-5">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-700 uppercase tracking-wide">WACC Builder</span>
+        <button onclick="toggleWaccBuilder()" id="waccToggleBtn" class="text-xs text-blue-600 hover:underline">Show builder</button>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Terminal Growth (%)</label>
-        <input type="number" id="inputTermGrowthExcel" value="4" min="0" max="10" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
-        <p class="text-xs text-gray-400 mt-1">Must be &lt; WACC</p>
+      <!-- Collapsed: single WACC input -->
+      <div id="waccSimple" class="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">WACC (%)
+            <span class="font-normal text-gray-400 ml-1" title="Weighted Average Cost of Capital — your required rate of return">?</span>
+          </label>
+          <input type="number" id="inputWACCExcel" value="11" min="5" max="30" step="0.1" class="w-full border rounded px-3 py-2 text-sm" oninput="syncWaccFromSimple()" />
+          <p class="text-xs text-gray-400 mt-1">Or use builder →</p>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Terminal Growth (%)
+            <span class="font-normal text-gray-400 ml-1" title="Long-run FCF growth rate after forecast period. Must be < WACC. India GDP growth ≈ 6–7%.">?</span>
+          </label>
+          <input type="number" id="inputTermGrowthExcel" value="4" min="0" max="10" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
+          <p class="text-xs text-gray-400 mt-1">Must be &lt; WACC</p>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Net Debt (&#8377; Cr)
+            <span class="font-normal text-gray-400 ml-1" title="Total Debt minus Cash & Equivalents. Negative = net cash position.">?</span>
+          </label>
+          <input type="number" id="inputNetDebtExcel" value="0" step="1" class="w-full border rounded px-3 py-2 text-sm" />
+          <p class="text-xs text-gray-400 mt-1">Debt − Cash</p>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Shares Outstanding (Cr)
+            <span class="font-normal text-gray-400 ml-1" title="Total shares in Crore. Find on Screener → Key Metrics.">?</span>
+          </label>
+          <input type="number" id="inputSharesExcel" placeholder="e.g. 67.5" step="0.01" class="w-full border rounded px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Current Market Price (&#8377;)
+            <span class="font-normal text-gray-400 ml-1" title="Used only to compute Margin of Safety = (Intrinsic Value − CMP) / CMP.">?</span>
+          </label>
+          <input type="number" id="inputCMPExcel" placeholder="e.g. 2450" step="0.01" class="w-full border rounded px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Forecast Period</label>
+          <select id="inputForecastYearsExcel" class="w-full border rounded px-3 py-2 text-sm bg-white">
+            <option value="5">5 years (standard)</option>
+            <option value="7">7 years</option>
+            <option value="10">10 years (high-growth)</option>
+          </select>
+        </div>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Net Debt (&#8377; Cr)</label>
-        <input type="number" id="inputNetDebtExcel" value="0" step="1" class="w-full border rounded px-3 py-2 text-sm" />
-        <p class="text-xs text-gray-400 mt-1">Debt &minus; Cash (negative = net cash)</p>
+
+      <!-- Expanded: full WACC builder -->
+      <div id="waccBuilder" class="hidden p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <p class="text-xs text-blue-700 mb-3 font-semibold">WACC = [Ke × E/(D+E)] + [Kd × (1−t) × D/(D+E)]</p>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Beta (β)
+              <span class="font-normal text-gray-400" title="Market sensitivity. Find on Screener, NSE, or Moneycontrol. 1.0 = market average.">?</span>
+            </label>
+            <input type="number" id="wbBeta" value="1.0" min="0.1" max="3" step="0.05" class="w-full border rounded px-3 py-2 text-sm bg-white" oninput="calcWACC()" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Risk-Free Rate (%)
+              <span class="font-normal text-gray-400" title="10-year Indian G-Sec yield. Currently ~7%. Check RBI website.">?</span>
+            </label>
+            <input type="number" id="wbRf" value="7.0" min="1" max="15" step="0.1" class="w-full border rounded px-3 py-2 text-sm bg-white" oninput="calcWACC()" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Equity Risk Premium (%)
+              <span class="font-normal text-gray-400" title="India ERP ≈ 6–8%. Damodaran's estimate for India is ~7%.">?</span>
+            </label>
+            <input type="number" id="wbErp" value="7.0" min="1" max="15" step="0.1" class="w-full border rounded px-3 py-2 text-sm bg-white" oninput="calcWACC()" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Cost of Debt (%)
+              <span class="font-normal text-gray-400" title="Pre-tax cost of borrowings = Interest / Total Debt. Auto-filled from Excel if available.">?</span>
+            </label>
+            <input type="number" id="wbKd" value="8.0" min="0" max="30" step="0.1" class="w-full border rounded px-3 py-2 text-sm bg-white" oninput="calcWACC()" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Tax Rate (%)
+              <span class="font-normal text-gray-400" title="Effective tax rate = Tax / PBT. Auto-filled from Excel if available.">?</span>
+            </label>
+            <input type="number" id="wbTax" value="25.0" min="0" max="50" step="0.5" class="w-full border rounded px-3 py-2 text-sm bg-white" oninput="calcWACC()" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Debt / (Debt + Equity) (%)
+              <span class="font-normal text-gray-400" title="Capital structure weight of debt. Auto-filled from Excel if available.">?</span>
+            </label>
+            <input type="number" id="wbDw" value="30.0" min="0" max="95" step="1" class="w-full border rounded px-3 py-2 text-sm bg-white" oninput="calcWACC()" />
+          </div>
+        </div>
+        <div class="flex items-center gap-4 p-3 bg-white rounded border border-blue-200">
+          <div>
+            <span class="text-xs text-gray-500">Computed WACC</span>
+            <div class="text-xl font-bold text-blue-700" id="waccResult">—</div>
+          </div>
+          <div class="flex-1 text-xs text-gray-400" id="waccBreakdown"></div>
+          <button onclick="applyWACC()" class="text-sm font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+            Use this WACC
+          </button>
+        </div>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Shares Outstanding (Cr)</label>
-        <input type="number" id="inputSharesExcel" placeholder="e.g. 67.5" step="0.01" class="w-full border rounded px-3 py-2 text-sm" />
+    </div>
+
+    <!-- ── 2-STAGE GROWTH MODEL ───────────────────────────────────── -->
+    <div class="mb-5 p-4 bg-gray-50 rounded-lg">
+      <div class="flex items-center gap-3 mb-3">
+        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-700">
+          <input type="checkbox" id="enable2Stage" onchange="toggle2Stage()" class="w-4 h-4" />
+          Enable 2-Stage Growth Model
+        </label>
+        <span class="text-xs text-gray-400">(recommended for high-growth or turnaround stocks)</span>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Current Market Price (&#8377;)</label>
-        <input type="number" id="inputCMPExcel" placeholder="e.g. 2450" step="0.01" class="w-full border rounded px-3 py-2 text-sm" />
+      <div id="twoStageInputs" class="hidden grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Stage 1 Growth Rate (%)</label>
+          <input type="number" id="inputStage1Growth" placeholder="e.g. 20" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
+          <p class="text-xs text-gray-400 mt-1">Phase 1 explicit growth</p>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Stage 1 Length (years)</label>
+          <select id="inputStage1Years" class="w-full border rounded px-3 py-2 text-sm bg-white">
+            <option value="3">3 years</option>
+            <option value="5" selected>5 years</option>
+            <option value="7">7 years</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Stage 2 Growth Rate (%)</label>
+          <input type="number" id="inputStage2Growth" placeholder="e.g. 10" step="0.5" class="w-full border rounded px-3 py-2 text-sm" />
+          <p class="text-xs text-gray-400 mt-1">Phase 2 fade-out growth</p>
+        </div>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Forecast Period</label>
-        <select id="inputForecastYearsExcel" class="w-full border rounded px-3 py-2 text-sm bg-white">
-          <option value="5">5 years (standard)</option>
-          <option value="7">7 years</option>
-          <option value="10">10 years (high-growth)</option>
-        </select>
-        <p class="text-xs text-gray-400 mt-1">Projection window</p>
+    </div>
+
+    <!-- ── SCENARIO ANALYSIS ─────────────────────────────────────── -->
+    <div class="mb-5 p-4 bg-gray-50 rounded-lg">
+      <div class="flex items-center gap-3 mb-3">
+        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-700">
+          <input type="checkbox" id="enableScenarios" class="w-4 h-4" />
+          Run Bull / Base / Bear Scenarios
+        </label>
+        <span class="text-xs text-gray-400">(auto-derived or enter manually)</span>
+      </div>
+      <div id="scenarioInputs" class="hidden">
+        <p class="text-xs text-gray-500 mb-3">Leave blank to auto-derive: Bear = 50% of trend, Base = trend, Bull = 150% of trend.</p>
+        <table class="w-full text-sm border">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="border p-2 text-left text-xs">Scenario</th>
+              <th class="border p-2 text-xs">Growth Rate (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="border p-2 text-xs font-semibold text-red-700">Bear</td>
+              <td class="border p-1"><input type="number" id="bearG1" placeholder="auto" step="0.5" class="w-full border-0 px-2 py-1 text-xs text-center focus:outline-none" /></td>
+            </tr>
+            <tr class="bg-blue-50"><td class="border p-2 text-xs font-semibold text-blue-700">Base</td>
+              <td class="border p-1"><input type="number" id="baseG1" placeholder="auto" step="0.5" class="w-full border-0 px-2 py-1 text-xs text-center focus:outline-none" /></td>
+            </tr>
+            <tr><td class="border p-2 text-xs font-semibold text-green-700">Bull</td>
+              <td class="border p-1"><input type="number" id="bullG1" placeholder="auto" step="0.5" class="w-full border-0 px-2 py-1 text-xs text-center focus:outline-none" /></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -465,6 +599,8 @@ document.addEventListener('DOMContentLoaded', function() {
         Export PDF
       </button>
     </div>
+    <!-- Scenario comparison (shown only when scenarios were run) -->
+    <div id="scenarioResults" class="hidden mb-6"></div>
     <div id="summary" class="mb-6"></div>
     <div id="warnings" class="mb-4"></div>
     <div id="tables"></div>
@@ -580,6 +716,7 @@ function onExcelSelected() {
     const f = input.files[0];
     nameEl.textContent = f.name + '  (' + (f.size / 1024 / 1024).toFixed(1) + ' MB)';
     preview.classList.remove('hidden');
+    prefillWaccFromExcel(f);
   } else {
     preview.classList.add('hidden');
   }
@@ -610,9 +747,11 @@ async function runExcelDCF() {
   const statusDiv = document.getElementById('status');
   const errorDiv  = document.getElementById('error');
   const resultDiv = document.getElementById('result');
+  const scenDiv   = document.getElementById('scenarioResults');
 
   errorDiv.classList.add('hidden');
   resultDiv.classList.add('hidden');
+  scenDiv.classList.add('hidden');
   statusDiv.classList.add('hidden');
 
   if (!fileInput.files.length) {
@@ -621,12 +760,14 @@ async function runExcelDCF() {
     return;
   }
 
-  const wacc       = parseFloat(document.getElementById('inputWACCExcel').value) / 100;
-  const termGrowth = parseFloat(document.getElementById('inputTermGrowthExcel').value) / 100;
-  const netDebt    = parseFloat(document.getElementById('inputNetDebtExcel').value) || 0;
-  const shares     = parseFloat(document.getElementById('inputSharesExcel').value) || null;
-  const cmp        = parseFloat(document.getElementById('inputCMPExcel').value) || null;
+  const wacc        = parseFloat(document.getElementById('inputWACCExcel').value) / 100;
+  const termGrowth  = parseFloat(document.getElementById('inputTermGrowthExcel').value) / 100;
+  const netDebt     = parseFloat(document.getElementById('inputNetDebtExcel').value) || 0;
+  const shares      = parseFloat(document.getElementById('inputSharesExcel').value) || null;
+  const cmp         = parseFloat(document.getElementById('inputCMPExcel').value) || null;
   const forecastYrs = parseInt(document.getElementById('inputForecastYearsExcel').value) || 5;
+  const use2Stage   = document.getElementById('enable2Stage').checked;
+  const useScenarios= document.getElementById('enableScenarios').checked;
 
   if (isNaN(wacc) || wacc <= 0) {
     errorDiv.textContent = 'Please enter a valid WACC (%).';
@@ -640,19 +781,40 @@ async function runExcelDCF() {
   }
 
   const formData = new FormData();
-  formData.append('file',             fileInput.files[0]);
-  formData.append('wacc',             wacc);
-  formData.append('terminal_growth',  termGrowth);
-  formData.append('net_debt',         netDebt);
-  formData.append('forecast_years',   forecastYrs);
+  formData.append('file',            fileInput.files[0]);
+  formData.append('wacc',            wacc);
+  formData.append('terminal_growth', termGrowth);
+  formData.append('net_debt',        netDebt);
+  formData.append('forecast_years',  forecastYrs);
   if (shares) formData.append('shares_outstanding', shares);
   if (cmp)    formData.append('current_price',       cmp);
 
-  statusDiv.innerHTML = '<div class="text-sm font-semibold text-green-700">Reading Excel file…</div>';
+  // 2-stage params
+  if (use2Stage) {
+    formData.append('use_2stage',  'true');
+    formData.append('stage1_years', document.getElementById('inputStage1Years').value);
+    const g1 = parseFloat(document.getElementById('inputStage1Growth').value);
+    const g2 = parseFloat(document.getElementById('inputStage2Growth').value);
+    if (!isNaN(g1)) formData.append('base_g1', g1 / 100);
+    if (!isNaN(g2)) formData.append('base_g2', g2 / 100);
+  }
+
+  // Scenario-specific growth overrides
+  if (useScenarios) {
+    const bg = parseFloat(document.getElementById('bearG1').value);
+    const sg = parseFloat(document.getElementById('baseG1').value);
+    const ug = parseFloat(document.getElementById('bullG1').value);
+    if (!isNaN(bg)) formData.append('bear_g1', bg / 100);
+    if (!isNaN(sg)) formData.append('base_g1', sg / 100);
+    if (!isNaN(ug)) formData.append('bull_g1', ug / 100);
+  }
+
+  const endpoint = useScenarios ? '/dcf/scenarios' : '/dcf/excel';
+  statusDiv.innerHTML = '<div class="text-sm font-semibold text-green-700">Reading Excel and running DCF…</div>';
   statusDiv.classList.remove('hidden');
 
   try {
-    const res  = await fetch('/dcf/excel', { method: 'POST', body: formData });
+    const res  = await fetch(endpoint, { method: 'POST', body: formData });
     const data = await res.json();
     statusDiv.classList.add('hidden');
     statusDiv.innerHTML = '';
@@ -663,11 +825,12 @@ async function runExcelDCF() {
       return;
     }
 
-    // Show extracted data preview before results
-    if (data['Extracted CFO'] && data['Extracted Years']) {
-      const years  = data['Extracted Years'];
-      const cfos   = data['Extracted CFO'];
-      const capexs = data['Extracted CAPEX'];
+    // Show extracted data preview
+    const previewSrc = useScenarios ? data.Base : data;
+    if (previewSrc?.['Extracted CFO'] && previewSrc?.['Extracted Years']) {
+      const years  = previewSrc['Extracted Years'];
+      const cfos   = previewSrc['Extracted CFO'];
+      const capexs = previewSrc['Extracted CAPEX'];
       let previewHtml = `<div class="mb-5 p-4 bg-gray-50 border rounded-lg">
         <p class="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">Extracted from Excel — verify before proceeding</p>
         <div class="overflow-x-auto">
@@ -675,7 +838,7 @@ async function runExcelDCF() {
           <thead class="bg-gray-100"><tr>
             <th class="border p-2 text-left">Year</th>
             <th class="border p-2 text-right">CFO (&#8377; Cr)</th>
-            <th class="border p-2 text-right">CAPEX proxy (&#8377; Cr)</th>
+            <th class="border p-2 text-right">CAPEX (&#8377; Cr)</th>
             <th class="border p-2 text-right">FCF (&#8377; Cr)</th>
           </tr></thead><tbody>`;
       for (let i = 0; i < years.length; i++) {
@@ -683,18 +846,24 @@ async function runExcelDCF() {
         const fcfColor = fcf < 0 ? 'text-red-600' : 'text-green-700';
         previewHtml += `<tr>
           <td class="border p-2">${years[i]}</td>
-          <td class="border p-2 text-right">${Number(cfos[i]).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-          <td class="border p-2 text-right">${Number(capexs[i]).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-          <td class="border p-2 text-right font-semibold ${fcfColor}">${Number(fcf).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+          <td class="border p-2 text-right">${Number(cfos[i]).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+          <td class="border p-2 text-right">${Number(capexs[i]).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+          <td class="border p-2 text-right font-semibold ${fcfColor}">${Number(fcf).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
         </tr>`;
       }
-      previewHtml += `</tbody></table></div>
-        <p class="text-xs text-gray-400 mt-2">CAPEX = absolute value of Cash from Investing Activity (includes acquisitions). If this overstates CAPEX, switch to Manual Input.</p>
-      </div>`;
-      document.getElementById('warnings').innerHTML = previewHtml + (document.getElementById('warnings').innerHTML || '');
+      previewHtml += `</tbody></table></div></div>`;
+      document.getElementById('warnings').innerHTML = previewHtml;
+    } else {
+      document.getElementById('warnings').innerHTML = '';
     }
 
-    renderDCF(data);
+    if (useScenarios) {
+      renderScenarios(data);
+      renderDCF(data.Base);  // show base case in the main results panel
+    } else {
+      renderDCF(data);
+    }
+
     resultDiv.classList.remove('hidden');
     resultDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -707,6 +876,137 @@ async function runExcelDCF() {
 }
 
 
+
+// ── WACC Builder ──────────────────────────────────────────────────────────
+function toggleWaccBuilder() {
+  const simple  = document.getElementById('waccSimple');
+  const builder = document.getElementById('waccBuilder');
+  const btn     = document.getElementById('waccToggleBtn');
+  const showing = !builder.classList.contains('hidden');
+  builder.classList.toggle('hidden', showing);
+  btn.textContent = showing ? 'Show builder' : 'Hide builder';
+  if (!showing) calcWACC();
+}
+
+function calcWACC() {
+  const beta = parseFloat(document.getElementById('wbBeta').value)  || 1;
+  const rf   = parseFloat(document.getElementById('wbRf').value)    || 7;
+  const erp  = parseFloat(document.getElementById('wbErp').value)   || 7;
+  const kd   = parseFloat(document.getElementById('wbKd').value)    || 8;
+  const tax  = parseFloat(document.getElementById('wbTax').value)   || 25;
+  const dw   = parseFloat(document.getElementById('wbDw').value)    || 30;
+
+  const ew  = 100 - dw;
+  const ke  = rf + beta * erp;                      // CAPM
+  const kdAt= kd * (1 - tax / 100);                // after-tax cost of debt
+  const wacc= (ke * ew / 100) + (kdAt * dw / 100); // weighted average
+
+  document.getElementById('waccResult').textContent = wacc.toFixed(2) + '%';
+  document.getElementById('waccBreakdown').textContent =
+    `Ke = ${ke.toFixed(1)}%  ·  Kd(AT) = ${kdAt.toFixed(1)}%  ·  ` +
+    `E: ${ew}%  D: ${dw}%`;
+}
+
+function applyWACC() {
+  const val = document.getElementById('waccResult').textContent.replace('%', '');
+  if (val && val !== '—') {
+    document.getElementById('inputWACCExcel').value = parseFloat(val).toFixed(2);
+    toggleWaccBuilder();
+  }
+}
+
+function syncWaccFromSimple() {
+  // keep builder in sync if user edits the simple input directly
+  calcWACC();
+}
+
+// Auto-fill WACC builder from Excel when file is selected
+async function prefillWaccFromExcel(file) {
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res  = await fetch('/dcf/wacc-inputs', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) return;
+
+    if (data.tax_rate !== null)  document.getElementById('wbTax').value = data.tax_rate;
+    if (data.interest !== null && data.debt !== null && data.debt > 0) {
+      document.getElementById('wbKd').value = (data.interest / data.debt * 100).toFixed(1);
+    }
+    if (data.debt !== null && data.equity !== null && (data.debt + data.equity) > 0) {
+      document.getElementById('wbDw').value = (data.debt / (data.debt + data.equity) * 100).toFixed(1);
+    }
+    calcWACC();
+  } catch (e) { /* silent — prefill is best-effort */ }
+}
+
+// ── 2-Stage Toggle ────────────────────────────────────────────────────────
+function toggle2Stage() {
+  const on = document.getElementById('enable2Stage').checked;
+  document.getElementById('twoStageInputs').classList.toggle('hidden', !on);
+}
+
+// ── Scenario Toggle ───────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('enableScenarios').addEventListener('change', function() {
+    document.getElementById('scenarioInputs').classList.toggle('hidden', !this.checked);
+  });
+});
+
+// ── Render scenario comparison table ─────────────────────────────────────
+function renderScenarios(data) {
+  const rates = data.growth_rates || {};
+  const scens = ['Bear', 'Base', 'Bull'];
+  const colors = { Bear: '#fee2e2', Base: '#eff6ff', Bull: '#dcfce7' };
+  const txtCol = { Bear: '#991b1b', Base: '#1e40af', Bull: '#166534' };
+  const cmp    = data.Base?.["Current Market Price (₹)"];
+
+  let html = `<h3 class="text-base font-bold text-gray-700 mb-3">Bull / Base / Bear Scenario Comparison</h3>
+    <div class="overflow-x-auto mb-2">
+    <table class="w-full border text-sm">
+      <thead>
+        <tr class="bg-gray-100">
+          <th class="border p-2 text-left text-xs">Metric</th>`;
+  scens.forEach(s => {
+    const g = rates[s];
+    const label = g?.g2 != null
+      ? `Stage 1: ${g.g1}% → Stage 2: ${g.g2}%`
+      : `Growth: ${g?.g1 ?? '—'}%`;
+    html += `<th class="border p-2 text-xs text-center" style="background:${colors[s]};color:${txtCol[s]}">${s}<br><span class="font-normal text-xs opacity-80">${label}</span></th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  const rows = [
+    ['Enterprise Value (₹ Cr)', d => d?.["Enterprise Value (₹ Cr)"] != null ? '₹' + d["Enterprise Value (₹ Cr)"].toLocaleString('en-IN') + ' Cr' : '—'],
+    ['Equity Value (₹ Cr)',     d => d?.["Equity Value (₹ Cr)"]     != null ? '₹' + d["Equity Value (₹ Cr)"].toLocaleString('en-IN') + ' Cr' : '—'],
+    ['Intrinsic Value / Share', d => d?.["Intrinsic Value per Share (₹)"] != null ? '₹' + d["Intrinsic Value per Share (₹)"].toLocaleString('en-IN') : '—'],
+    ['Margin of Safety',        d => {
+      const m = d?.["Margin of Safety (%)"];
+      if (m == null) return '—';
+      const color = m > 0 ? 'color:#166534' : 'color:#991b1b';
+      return `<span style="${color};font-weight:600">${m > 0 ? '+' : ''}${m}%</span>`;
+    }],
+    ['Terminal Value (₹ Cr)',   d => d?.["Terminal Value (₹ Cr)"] != null ? '₹' + d["Terminal Value (₹ Cr)"].toLocaleString('en-IN') + ' Cr' : '—'],
+  ];
+
+  rows.forEach(([label, fn]) => {
+    html += `<tr><td class="border p-2 text-xs font-semibold text-gray-600">${label}</td>`;
+    scens.forEach(s => {
+      html += `<td class="border p-2 text-center text-xs" style="background:${colors[s]}20">${fn(data[s])}</td>`;
+    });
+    html += '</tr>';
+  });
+
+  if (cmp) {
+    html += `<tr class="bg-gray-50"><td class="border p-2 text-xs font-semibold text-gray-600">Current Market Price</td>`;
+    scens.forEach(() => { html += `<td class="border p-2 text-center text-xs font-semibold">₹${Number(cmp).toLocaleString('en-IN')}</td>`; });
+    html += '</tr>';
+  }
+
+  html += '</tbody></table></div>';
+  document.getElementById('scenarioResults').innerHTML = html;
+  document.getElementById('scenarioResults').classList.remove('hidden');
+}
 
 // ── Export DCF results as PDF via browser print ────────────────────────
 let _lastDCFData = null;  // store last result for export
