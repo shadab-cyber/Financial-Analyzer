@@ -363,6 +363,15 @@ document.addEventListener('DOMContentLoaded', function() {
         <input type="number" id="inputCMP" value="" placeholder="e.g. 2450" step="0.01" class="w-full border rounded px-3 py-2 text-sm" />
         <p class="text-xs text-gray-400 mt-1">For margin of safety</p>
       </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Forecast Period</label>
+        <select id="inputForecastYears" class="w-full border rounded px-3 py-2 text-sm bg-white">
+          <option value="5">5 years (standard)</option>
+          <option value="7">7 years</option>
+          <option value="10">10 years (high-growth)</option>
+        </select>
+        <p class="text-xs text-gray-400 mt-1">Projection window</p>
+      </div>
     </div>
 
     <div class="text-center mb-6">
@@ -422,6 +431,15 @@ document.addEventListener('DOMContentLoaded', function() {
         <label class="block text-xs font-semibold text-gray-600 mb-1">Current Market Price (&#8377;)</label>
         <input type="number" id="inputCMPExcel" placeholder="e.g. 2450" step="0.01" class="w-full border rounded px-3 py-2 text-sm" />
       </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Forecast Period</label>
+        <select id="inputForecastYearsExcel" class="w-full border rounded px-3 py-2 text-sm bg-white">
+          <option value="5">5 years (standard)</option>
+          <option value="7">7 years</option>
+          <option value="10">10 years (high-growth)</option>
+        </select>
+        <p class="text-xs text-gray-400 mt-1">Projection window</p>
+      </div>
     </div>
 
     <div class="text-center mb-6">
@@ -437,7 +455,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
   <!-- RESULT -->
   <div id="result" class="hidden">
-    <h2 class="text-xl font-bold mb-4">DCF Valuation Results</h2>
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-bold">DCF Valuation Results</h2>
+      <button onclick="exportDCF()" id="exportBtn"
+        class="flex items-center gap-2 text-sm font-semibold border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-50 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        Export PDF
+      </button>
+    </div>
     <div id="summary" class="mb-6"></div>
     <div id="warnings" class="mb-4"></div>
     <div id="tables"></div>
@@ -500,6 +527,7 @@ async function runManualDCF() {
   const netDebt     = parseFloat(document.getElementById('inputNetDebt').value) || 0;
   const shares      = parseFloat(document.getElementById('inputShares').value) || null;
   const cmp         = parseFloat(document.getElementById('inputCMP').value) || null;
+  const forecastYrs = parseInt(document.getElementById('inputForecastYears').value) || 5;
 
   if (termGrowth >= wacc) {
     errorDiv.textContent = `Terminal growth (${(termGrowth*100).toFixed(1)}%) must be less than WACC (${(wacc*100).toFixed(1)}%).`;
@@ -528,7 +556,8 @@ async function runManualDCF() {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ cfo, capex, wacc, terminal_growth: termGrowth,
-                             net_debt: netDebt, shares, current_price: cmp })
+                             net_debt: netDebt, shares, current_price: cmp,
+                             forecast_years: forecastYrs })
     });
     const data = await res.json();
     statusDiv.classList.add('hidden');
@@ -597,6 +626,7 @@ async function runExcelDCF() {
   const netDebt    = parseFloat(document.getElementById('inputNetDebtExcel').value) || 0;
   const shares     = parseFloat(document.getElementById('inputSharesExcel').value) || null;
   const cmp        = parseFloat(document.getElementById('inputCMPExcel').value) || null;
+  const forecastYrs = parseInt(document.getElementById('inputForecastYearsExcel').value) || 5;
 
   if (isNaN(wacc) || wacc <= 0) {
     errorDiv.textContent = 'Please enter a valid WACC (%).';
@@ -614,6 +644,7 @@ async function runExcelDCF() {
   formData.append('wacc',             wacc);
   formData.append('terminal_growth',  termGrowth);
   formData.append('net_debt',         netDebt);
+  formData.append('forecast_years',   forecastYrs);
   if (shares) formData.append('shares_outstanding', shares);
   if (cmp)    formData.append('current_price',       cmp);
 
@@ -675,6 +706,34 @@ async function runExcelDCF() {
   }
 }
 
+
+
+// ── Export DCF results as PDF via browser print ────────────────────────
+let _lastDCFData = null;  // store last result for export
+
+function exportDCF() {
+  const result = document.getElementById('result');
+  if (!result || result.classList.contains('hidden')) return;
+
+  const style = document.createElement('style');
+  style.id = '_print_style';
+  style.textContent = `
+    @media print {
+      nav, #exportBtn, #panelManual, #panelExcel, .file-drop,
+      #status, #error, button:not(#exportBtn) { display: none !important; }
+      body { background: white !important; }
+      #result { display: block !important; }
+      table { font-size: 11px !important; }
+      .overflow-x-auto { overflow: visible !important; }
+      @page { margin: 1.5cm; size: A4; }
+    }`;
+  document.head.appendChild(style);
+  window.print();
+  setTimeout(() => {
+    const s = document.getElementById('_print_style');
+    if (s) s.remove();
+  }, 1000);
+}
 
 function renderDCF(data) {
   const ev   = data["Enterprise Value (₹ Cr)"];
@@ -809,43 +868,70 @@ function renderDCF(data) {
     });
   });
 
-  // Sensitivity table
-  const baseWACC = asmp["WACC (%)"] / 100;
-  const baseG    = asmp["Terminal Growth (%)"] / 100;
-  const fYears   = asmp["Forecast Years"] || 5;
+  // Sensitivity table — full heatmap colouring
+  const baseWACC  = asmp["WACC (%)"] / 100;
+  const baseG     = asmp["Terminal Growth (%)"] / 100;
+  const fYears    = asmp["Forecast Years"] || 5;
   const waccSteps = [-0.02, -0.01, 0, +0.01, +0.02];
   const gSteps    = [-0.02, -0.01, 0, +0.01, +0.02];
+
+  // Pre-compute all values to find min/max for gradient
+  const allIV = [];
+  waccSteps.forEach(ws => {
+    gSteps.forEach(gs => {
+      const w = baseWACC + ws, g2 = baseG + gs;
+      if (g2 >= w) { allIV.push(null); return; }
+      const lastFcf = forecast[forecast.length - 1];
+      const tv2     = (lastFcf * (1 + g2)) / (w - g2);
+      const pvFcf2  = forecast.reduce((a, v, i) => a + v / Math.pow(1 + w, i + 1), 0);
+      const pvTv2   = tv2 / Math.pow(1 + w, fYears);
+      const eq2     = (pvFcf2 + pvTv2) - (asmp["Net Debt (₹ Cr)"] || 0);
+      const shares  = asmp["Shares (Cr)"];
+      allIV.push(shares && shares > 0 ? eq2 / shares : Math.round(eq2));
+    });
+  });
+  const validIV = allIV.filter(v => v !== null);
+  const ivMin = Math.min(...validIV), ivMax = Math.max(...validIV);
+
+  function heatColor(val) {
+    if (val === null) return '';
+    const t = ivMax === ivMin ? 0.5 : (val - ivMin) / (ivMax - ivMin);
+    if (t > 0.66) return 'background:#d1fae5;color:#065f46;';
+    if (t > 0.33) return 'background:#fef9c3;color:#713f12;';
+    return 'background:#fee2e2;color:#991b1b;';
+  }
 
   let tHtml = '<table class="w-full border text-sm text-center"><thead><tr><th class="border p-2 bg-gray-100 text-xs font-semibold">WACC \\ g</th>';
   gSteps.forEach(gs => { tHtml += `<th class="border p-2 bg-gray-100 text-xs font-semibold">${((baseG + gs) * 100).toFixed(1)}%</th>`; });
   tHtml += '</tr></thead><tbody>';
 
+  let idx = 0;
   waccSteps.forEach(ws => {
     const w = baseWACC + ws;
     tHtml += `<tr><td class="border p-2 bg-gray-50 font-semibold text-xs">${(w * 100).toFixed(1)}%</td>`;
     gSteps.forEach(gs => {
       const g2 = baseG + gs;
-      if (g2 >= w) { tHtml += '<td class="border p-2 text-xs text-gray-300">—</td>'; return; }
-      const lastFcf   = forecast[forecast.length - 1];
-      const tv2       = (lastFcf * (1 + g2)) / (w - g2);
-      const pvFcf2    = forecast.reduce((a, v, i) => a + v / Math.pow(1 + w, i + 1), 0);
-      const pvTv2     = tv2 / Math.pow(1 + w, fYears);
-      const eq2       = (pvFcf2 + pvTv2) - (asmp["Net Debt (₹ Cr)"] || 0);
-      const isBase    = (ws === 0 && gs === 0);
-      const shares    = asmp["Shares (Cr)"];
-      if (!shares || shares <= 0) {
-        tHtml += `<td class="border p-2 text-xs ${isBase ? 'bg-blue-100 font-bold' : ''}">₹${Math.round(eq2).toLocaleString('en-IN')} Cr</td>`;
-      } else {
-        const iv2 = eq2 / shares;
-        const cellCls = isBase ? 'bg-blue-100 font-bold' :
-                        (cmp && iv2 > cmp * 1.2) ? 'bg-green-50 text-green-800' :
-                        (cmp && iv2 < cmp * 0.8) ? 'bg-red-50 text-red-800' : '';
-        tHtml += `<td class="border p-2 text-xs ${cellCls}">₹${Math.round(iv2).toLocaleString('en-IN')}</td>`;
-      }
+      const iv = allIV[idx++];
+      if (iv === null) { tHtml += '<td class="border p-2 text-xs text-gray-300">—</td>'; return; }
+      const isBase = (ws === 0 && gs === 0);
+      const heat   = heatColor(iv);
+      const border = isBase ? 'border: 2px solid #2563eb;' : '';
+      const fw     = isBase ? 'font-weight:700;' : '';
+      const prefix = asmp["Shares (Cr)"] > 0 ? '₹' : '₹';
+      const disp   = asmp["Shares (Cr)"] > 0
+        ? '₹' + Math.round(iv).toLocaleString('en-IN')
+        : '₹' + Math.round(iv).toLocaleString('en-IN') + ' Cr';
+      tHtml += `<td class="border p-2 text-xs" style="${heat}${border}${fw}">${disp}</td>`;
     });
     tHtml += '</tr>';
   });
   tHtml += '</tbody></table>';
+  tHtml += '<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:#6b7280">' +
+    '<span><span style="display:inline-block;width:10px;height:10px;background:#d1fae5;border:1px solid #ccc;margin-right:4px;"></span>Higher value</span>' +
+    '<span><span style="display:inline-block;width:10px;height:10px;background:#fef9c3;border:1px solid #ccc;margin-right:4px;"></span>Mid range</span>' +
+    '<span><span style="display:inline-block;width:10px;height:10px;background:#fee2e2;border:1px solid #ccc;margin-right:4px;"></span>Lower value</span>' +
+    '<span><span style="display:inline-block;width:10px;height:10px;background:white;border:2px solid #2563eb;margin-right:4px;"></span>Base case</span>' +
+    '</div>';
   document.getElementById('sensitivityContainer').innerHTML = tHtml;
 
   // Detail table
@@ -928,7 +1014,7 @@ footer.fa-footer{background:#1d3557;color:#a8b8cc;padding:56px 24px 28px;margin-
     </div>
     <hr>
     <div class="fb">
-      <span>&copy; 2025 Financial Analyzer. All rights reserved.</span>
+      <span>&copy; 2026 Financial Analyzer. All rights reserved.</span>
       <span>Made with &#x2764;&#xFE0F; for Indian investors</span>
       <span>Always verify data before investing.</span>
     </div>
