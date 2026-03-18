@@ -285,27 +285,61 @@ def calculate_fcf_from_text(text_blocks):
 # =============================================================================
 
 def extraction_confidence(cfo, capex):
+    """
+    Score 0–100 reflecting how trustworthy the extracted data is for DCF.
+
+    Penalises:
+    · Fewer years of data
+    · Negative CFO years (unreliable FCF base)
+    · High FCF volatility (CoV > 0.5 — noisy growth rate estimate)
+    · Frequent sign changes (growth averaging is meaningless)
+    · CAPEX > 2× average CFO (CAPEX may be overstated)
+    """
+    import math
     score = 0
     n = min(len(cfo), len(capex))
 
-    if n >= 5:   score += 40
-    elif n >= 3: score += 25
-    elif n >= 2: score += 10
+    # ── Data coverage (max 35) ────────────────────────────────────────────
+    if n >= 7:   score += 35
+    elif n >= 5: score += 28
+    elif n >= 3: score += 18
+    elif n >= 2: score += 8
 
-    positive_cfo = sum(1 for v in cfo if v > 0)
-    if cfo and positive_cfo / len(cfo) >= 0.6:
-        score += 20
+    # ── CFO sign quality (max 20) ─────────────────────────────────────────
+    if cfo:
+        positive_ratio = sum(1 for v in cfo if v > 0) / len(cfo)
+        score += int(positive_ratio * 20)
 
+    # ── FCF volatility penalty (max 20) ──────────────────────────────────
+    fcf = [cfo[i] - abs(capex[i]) for i in range(n)]
+    if len(fcf) >= 2:
+        mean_fcf = sum(fcf) / len(fcf)
+        if mean_fcf != 0:
+            std_fcf = math.sqrt(sum((v - mean_fcf) ** 2 for v in fcf) / len(fcf))
+            cov     = abs(std_fcf / mean_fcf)           # coefficient of variation
+            # Low volatility → full 20pts; CoV > 1.5 → 0pts
+            vol_score = max(0, 20 - int(cov * 13))
+            score += vol_score
+
+    # ── Sign change penalty ───────────────────────────────────────────────
+    sign_changes = sum(
+        1 for i in range(1, len(fcf))
+        if fcf[i-1] != 0 and ((fcf[i-1] < 0) != (fcf[i] < 0))
+    )
+    score -= sign_changes * 5                           # −5 per sign change
+
+    # ── CAPEX reasonableness (max 15) ────────────────────────────────────
     if cfo and capex:
-        avg_cfo   = sum(cfo)   / len(cfo)
+        avg_cfo   = sum(abs(v) for v in cfo)   / len(cfo)
         avg_capex = sum(capex) / len(capex)
-        if avg_capex < abs(avg_cfo) * 2:
-            score += 20
+        if avg_cfo > 0 and avg_capex < avg_cfo * 2:
+            score += 15
 
-    if all(isinstance(x, (int, float)) for x in cfo + capex):
-        score += 20
+    # ── All values are valid numbers (max 10) ────────────────────────────
+    if all(isinstance(x, (int, float)) and not math.isnan(x) for x in cfo + capex):
+        score += 10
 
-    return min(score, 100)
+    return max(0, min(score, 100))
 
 
 # =============================================================================

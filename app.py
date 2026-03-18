@@ -22,6 +22,36 @@ from dcf_valuation import run_dcf_from_pdf_text, run_scenarios
 from pdf_text_extractor import extract_financials_from_pdf
 from financialanalyzer import analyze_excel
 
+def _validate_dcf_params(wacc, terminal_growth, net_debt, shares, cmp_price,
+                          enterprise_value=None):
+    """
+    Central DCF parameter validator. Returns error string or None.
+    Call after computing enterprise_value to catch EV edge cases.
+    """
+    if wacc is None:
+        return 'WACC is required.'
+    if wacc <= 0 or wacc > 0.5:
+        return f'WACC ({wacc*100:.1f}%) is outside the plausible range (0–50%).'
+    if terminal_growth is None:
+        return 'Terminal Growth Rate is required.'
+    if terminal_growth < 0:
+        return 'Terminal Growth Rate cannot be negative.'
+    if terminal_growth >= wacc:
+        return (f'Terminal growth ({terminal_growth*100:.1f}%) must be strictly less than '
+                f'WACC ({wacc*100:.1f}%).')
+    if shares is not None and float(shares) < 0:
+        return 'Shares outstanding cannot be negative.'
+    if cmp_price is not None and float(cmp_price) < 0:
+        return 'Current market price cannot be negative.'
+    if enterprise_value is not None and net_debt is not None:
+        eq = enterprise_value - float(net_debt)
+        if eq < 0 and shares and float(shares) > 0:
+            return (f'Net Debt (₹{net_debt:.0f} Cr) exceeds Enterprise Value '
+                    f'(₹{enterprise_value:.0f} Cr) — equity value is negative. '
+                    f'Check your Net Debt input.')
+    return None
+
+
 # =============================================================================
 # APP SETUP
 # =============================================================================
@@ -697,7 +727,7 @@ def dcf_debug_extract():
     return '\n'.join(out), 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
-from dcf_excel_extractor import extract_dcf_from_excel, extract_wacc_inputs
+from dcf_excel_extractor import extract_dcf_from_excel, extract_wacc_inputs, extract_ebitda
 
 
 @app.route('/dcf/excel', methods=['POST'])
@@ -762,6 +792,11 @@ def dcf_from_excel():
         result['Extracted CFO']   = excel_data['cfo']
         result['Extracted CAPEX'] = excel_data['capex']
         result['excel_fcf']       = excel_data['fcf']
+
+        # EV/EBITDA cross-check
+        ebitda_val, ebitda_yr = extract_ebitda(path)
+        result['EBITDA (₹ Cr)']       = ebitda_val
+        result['EBITDA Year']          = ebitda_yr
 
         return jsonify(result)
 
@@ -832,10 +867,9 @@ def dcf_scenarios():
         base_g2 = _f('base_g2') if use_2stage else None
         bull_g2 = _f('bull_g2') if use_2stage else None
 
-        if wacc is None or terminal_growth is None:
-            return jsonify({'error': 'WACC and Terminal Growth are required.'}), 400
-        if terminal_growth >= wacc:
-            return jsonify({'error': f'Terminal growth must be less than WACC.'}), 400
+        err_msg = _validate_dcf_params(wacc, terminal_growth, net_debt, shares, cmp_price)
+        if err_msg:
+            return jsonify({'error': err_msg}), 400
 
         # Build text blocks from Excel data
         lines = []
@@ -858,6 +892,15 @@ def dcf_scenarios():
         result['Extracted Years']  = excel_data['years']
         result['Extracted CFO']    = excel_data['cfo']
         result['Extracted CAPEX']  = excel_data['capex']
+
+        ebitda_val, ebitda_yr = extract_ebitda(path)
+        result['EBITDA (₹ Cr)'] = ebitda_val
+        result['EBITDA Year']   = ebitda_yr
+        # Also attach to Base scenario for renderDCF
+        if 'Base' in result:
+            result['Base']['EBITDA (₹ Cr)'] = ebitda_val
+            result['Base']['EBITDA Year']   = ebitda_yr
+
         return jsonify(result)
 
     except ValueError as e:

@@ -244,3 +244,48 @@ def extract_wacc_inputs(filepath):
         pass
 
     return result
+
+def extract_ebitda(filepath):
+    """
+    Read the latest EBITDA from the Balance Sheet & P&L sheet.
+    Returns (ebitda_value, year_label) or (None, None).
+    EBITDA = EBIT + Depreciation = Operating Profit + Depreciation.
+    Screener exports have 'Operating Profit' and 'Depreciation' as separate rows.
+    """
+    try:
+        bs_df = pd.read_excel(filepath, engine='openpyxl',
+                              sheet_name='Balance Sheet & P&L', header=None)
+        if bs_df.empty:
+            return None, None
+
+        YEAR_ROW  = _find_year_row(bs_df)
+        START_COL = 1
+
+        def latest_val(label):
+            r = find_row(bs_df, label)
+            if r is None:
+                return None
+            for col in range(bs_df.shape[1] - 1, START_COL - 1, -1):
+                v = fmt(bs_df.iloc[r, col])
+                if v != 0:
+                    return v
+            return None
+
+        def latest_year():
+            for col in range(bs_df.shape[1] - 1, START_COL - 1, -1):
+                val = bs_df.iloc[YEAR_ROW, col]
+                if pd.notna(val):
+                    try:
+                        return pd.to_datetime(val).strftime('Mar %Y')
+                    except Exception:
+                        return str(val)
+            return None
+
+        op_profit = latest_val('Operating Profit') or latest_val('EBIT') or 0
+        dep       = latest_val('Depreciation') or 0
+        ebitda    = op_profit + dep
+
+        return (round(ebitda, 2) if ebitda != 0 else None), latest_year()
+
+    except Exception:
+        return None, None
