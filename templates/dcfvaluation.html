@@ -38,7 +38,8 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <script src="https://cdn.tailwindcss.com"></script>
 
 <style>
 /* Mobile-responsive table wrapper */
@@ -1086,11 +1087,38 @@ function renderDCF(data) {
         <div class="text-xs text-gray-400">Historical (capped ±50%)</div>
       </div>
       <div class="bg-gray-50 rounded-lg p-3 text-center">
-        <div class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Confidence Score</div>
+        <div class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Data Confidence</div>
         <div class="text-lg font-bold ${confColor}">${conf}%</div>
-        <div class="text-xs text-gray-400">WACC ${asmp["WACC (%)"]}% · ${asmp["Forecast Years"]}yr forecast</div>
+        <div class="text-xs text-gray-400">${conf >= 80 ? "High" : conf >= 50 ? "Moderate" : "Low"} · ${asmp["Forecast Years"]}yr forecast</div>
       </div>
-    </div>`;
+    </div>
+
+    ${(() => {
+      const ebitda = data["EBITDA (₹ Cr)"];
+      const ebitdaYr = data["EBITDA Year"] || "";
+      if (!ebitda || ebitda <= 0 || !ev) return '';
+      const evEbitda = (ev / ebitda).toFixed(1);
+      const eqEbitda = eqv ? (eqv / ebitda).toFixed(1) : null;
+      const signal = evEbitda < 8 ? 'text-green-700' : evEbitda < 20 ? 'text-yellow-700' : 'text-red-700';
+      return \`<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+        <div class="text-xs text-amber-700 font-semibold uppercase tracking-wide mb-2">EV / EBITDA Cross-Check (${ebitdaYr})</div>
+        <div class="grid grid-cols-3 gap-4">
+          <div class="text-center">
+            <div class="text-xs text-gray-500 mb-1">EBITDA</div>
+            <div class="text-lg font-bold text-gray-700">₹\${ebitda.toLocaleString("en-IN")} Cr</div>
+          </div>
+          <div class="text-center">
+            <div class="text-xs text-gray-500 mb-1">EV / EBITDA</div>
+            <div class="text-lg font-bold \${signal}">\${evEbitda}×</div>
+            <div class="text-xs text-gray-400">Typical: 8–20×</div>
+          </div>
+          <div class="text-center">
+            <div class="text-xs text-gray-500 mb-1">Implied by DCF</div>
+            <div class="text-xs text-gray-600 mt-1">EV = ₹\${ev.toLocaleString("en-IN")} Cr<br>at WACC \${asmp["WACC (%)"]}%</div>
+          </div>
+        </div>
+      </div>\`;
+    })()}`;
 
   // Warnings
   const warnings = data["Growth Warnings"] || [];
