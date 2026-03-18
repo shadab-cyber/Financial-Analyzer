@@ -727,7 +727,7 @@ def dcf_debug_extract():
     return '\n'.join(out), 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
-from dcf_excel_extractor import extract_dcf_from_excel, extract_wacc_inputs, extract_ebitda
+from dcf_excel_extractor import extract_dcf_from_excel, extract_wacc_inputs, extract_ebitda, extract_latest_fcf
 
 
 @app.route('/dcf/excel', methods=['POST'])
@@ -797,6 +797,10 @@ def dcf_from_excel():
         ebitda_val, ebitda_yr = extract_ebitda(path)
         result['EBITDA (₹ Cr)']       = ebitda_val
         result['EBITDA Year']          = ebitda_yr
+
+        fcf_latest, fcf_yr = extract_latest_fcf(path)
+        result['Latest FCF (₹ Cr)']    = fcf_latest
+        result['Latest FCF Year']      = fcf_yr
 
         return jsonify(result)
 
@@ -896,10 +900,15 @@ def dcf_scenarios():
         ebitda_val, ebitda_yr = extract_ebitda(path)
         result['EBITDA (₹ Cr)'] = ebitda_val
         result['EBITDA Year']   = ebitda_yr
-        # Also attach to Base scenario for renderDCF
+
+        fcf_latest, fcf_yr = extract_latest_fcf(path)
+        result['Latest FCF (₹ Cr)']  = fcf_latest
+        result['Latest FCF Year']    = fcf_yr
         if 'Base' in result:
-            result['Base']['EBITDA (₹ Cr)'] = ebitda_val
-            result['Base']['EBITDA Year']   = ebitda_yr
+            result['Base']['EBITDA (₹ Cr)']    = ebitda_val
+            result['Base']['EBITDA Year']      = ebitda_yr
+            result['Base']['Latest FCF (₹ Cr)'] = fcf_latest
+            result['Base']['Latest FCF Year']   = fcf_yr
 
         return jsonify(result)
 

@@ -289,3 +289,18 @@ def extract_ebitda(filepath):
 
     except Exception:
         return None, None
+
+def extract_latest_fcf(filepath):
+    """
+    Return the latest year's FCF (CFO - CAPEX) from the Excel.
+    Used for P/FCF multiple calculation.
+    Returns (fcf_value, year_label) or (None, None).
+    """
+    try:
+        data = extract_dcf_from_excel(filepath)
+        if not data['fcf'] or not data['years']:
+            return None, None
+        # Latest = last in list (oldest→newest ordering)
+        return data['fcf'][-1], data['years'][-1]
+    except Exception:
+        return None, None
