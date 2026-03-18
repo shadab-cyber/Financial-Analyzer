@@ -40,6 +40,37 @@
 
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 
+<script type="module">
+  /* Single Firebase initialisation — consolidates the previous two modules */
+  import {initializeApp,getApps} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {getAuth,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  const _fbCfg={apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",authDomain:"financial-analyzer-afb07.firebaseapp.com",projectId:"financial-analyzer-afb07",storageBucket:"financial-analyzer-afb07.firebasestorage.app",messagingSenderId:"572544893192",appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"};
+  const app = getApps().length ? getApps()[0] : initializeApp(_fbCfg);
+  const auth = getAuth(app);
+
+  /* Show skeleton immediately; redirect only after Firebase confirms no user */
+  let _authChecked = false;
+  const _authTimeout = setTimeout(() => {
+    if (!_authChecked) window.location.href = "/login?next=" + encodeURIComponent(window.location.pathname + window.location.search);
+  }, 5000);
+
+  onAuthStateChanged(auth, user => {
+    _authChecked = true;
+    clearTimeout(_authTimeout);
+    if (user) {
+      const n=document.getElementById("_uname"); if(n) n.textContent=user.displayName||user.email;
+      const a=document.getElementById("_uavatar"); if(a&&user.photoURL){a.src=user.photoURL;a.style.display="inline-block";}
+      const mn=document.getElementById("_mName"); if(mn) mn.textContent=user.displayName||user.email;
+      const ma=document.getElementById("_mAvatar"); if(ma&&user.photoURL){ma.src=user.photoURL;ma.style.display="inline-block";}
+    } else {
+      window.location.href="/login?next="+encodeURIComponent(window.location.pathname+window.location.search);
+    }
+  });
+
+  window._signOut = () => signOut(auth).then(() => { fetch("/auth/logout",{method:"POST"}); window.location.href="/login"; });
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
 <style>
 /* Mobile-responsive table wrapper */
 .table-responsive {
@@ -73,40 +104,7 @@ button, .btn, a[class*="btn"] {
     body { padding: 0 !important; }
     .max-w-7xl { padding-left: 1rem; padding-right: 1rem; }
 }
-</style>
-
-<script type="module">
-  /* Single Firebase initialisation — consolidates the previous two modules */
-  import {initializeApp,getApps} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {getAuth,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  const _fbCfg={apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",authDomain:"financial-analyzer-afb07.firebaseapp.com",projectId:"financial-analyzer-afb07",storageBucket:"financial-analyzer-afb07.firebasestorage.app",messagingSenderId:"572544893192",appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"};
-  const app = getApps().length ? getApps()[0] : initializeApp(_fbCfg);
-  const auth = getAuth(app);
-
-  /* Show skeleton immediately; redirect only after Firebase confirms no user */
-  let _authChecked = false;
-  const _authTimeout = setTimeout(() => {
-    if (!_authChecked) window.location.href = "/login?next=" + encodeURIComponent(window.location.pathname + window.location.search);
-  }, 5000);
-
-  onAuthStateChanged(auth, user => {
-    _authChecked = true;
-    clearTimeout(_authTimeout);
-    if (user) {
-      const n=document.getElementById("_uname"); if(n) n.textContent=user.displayName||user.email;
-      const a=document.getElementById("_uavatar"); if(a&&user.photoURL){a.src=user.photoURL;a.style.display="inline-block";}
-      const mn=document.getElementById("_mName"); if(mn) mn.textContent=user.displayName||user.email;
-      const ma=document.getElementById("_mAvatar"); if(ma&&user.photoURL){ma.src=user.photoURL;ma.style.display="inline-block";}
-    } else {
-      window.location.href="/login?next="+encodeURIComponent(window.location.pathname+window.location.search);
-    }
-  });
-
-  window._signOut = () => signOut(auth).then(() => { fetch("/auth/logout",{method:"POST"}); window.location.href="/login"; });
-</script>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-  /* ── Consistent navbar across all pages ── */
+/* ── Consistent navbar across all pages ── */
   nav {
     font-family: 'Manrope', sans-serif !important;
     position: sticky !important;
@@ -123,9 +121,6 @@ button, .btn, a[class*="btn"] {
   nav .nav-link { font-size: 13px !important; font-weight: 600 !important; letter-spacing: 0.01em !important; }
   /* Page content starts right below sticky nav */
   body { padding-top: 0 !important; margin-top: 0 !important; }
-</style>
-
-<style>
 /* ── Global hover & transition improvements ── */
 body { font-family: 'Manrope', sans-serif !important; }
 .nav-link { transition: all 0.2s ease !important; }
@@ -144,9 +139,6 @@ button[type="submit"]:hover:not(:disabled), .submit-btn:hover {
   box-shadow: 0 8px 24px rgba(0,0,0,0.1) !important;
 }
 a { transition: color 0.18s ease, opacity 0.18s ease; }
-</style>
-
-<style>
 /* == Playfair Display for brand and headings == */
 body { font-family: 'Manrope', sans-serif !important; }
 h1 { font-family: 'Playfair Display', serif !important; font-weight: 800 !important; letter-spacing: -0.4px !important; }
@@ -154,6 +146,18 @@ h2 { font-family: 'Playfair Display', serif !important; font-weight: 700 !import
 .brand-name { font-family: 'Playfair Display', serif !important; font-weight: 700 !important; font-size: 20px !important; color: #fff !important; letter-spacing: -0.3px !important; line-height: 1; }
 .nav-logo-wrap { display: flex !important; align-items: center !important; gap: 9px !important; text-decoration: none !important; transition: opacity 0.2s ease; }
 .nav-logo-wrap:hover { opacity: 0.88 !important; }
+footer.fa-footer{background:#1d3557;color:#a8b8cc;padding:56px 24px 28px;margin-top:72px;font-family:'Manrope',sans-serif;}
+.fa-footer .fl{font-size:1.25rem;font-weight:800;color:#fff;margin-bottom:8px;}
+.fa-footer .ft{font-size:13px;color:#7a90a8;line-height:1.6;max-width:240px;margin-bottom:18px;}
+.fa-footer .fgrid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:36px;}
+.fa-footer h4{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#fff;margin-bottom:12px;}
+.fa-footer a{display:block;font-size:13px;color:#7a90a8;text-decoration:none;margin-bottom:8px;transition:color .18s ease;}
+.fa-footer a:hover{color:#a8dadc;}
+.fa-footer hr{border:none;border-top:1px solid rgba(255,255,255,.08);margin:32px 0 20px;}
+.fa-footer .fb{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:12px;color:#546a7f;}
+.fa-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(168,218,220,.15);border:1px solid rgba(168,218,220,.3);color:#a8dadc;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+@media(max-width:768px){.fa-footer .fgrid{grid-template-columns:1fr 1fr!important;}.fa-footer .fb{flex-direction:column;text-align:center;}}
+@media(max-width:480px){.fa-footer .fgrid{grid-template-columns:1fr!important;}}
 </style>
 </head>
 
@@ -1094,43 +1098,64 @@ function renderDCF(data) {
 
 `;
 
-  // EV/EBITDA cross-check — built as DOM string, not nested template literal
+  // Valuation multiples cross-check — EV/EBITDA and P/FCF
   (function() {
-    const ebitda   = data['EBITDA (\u20b9 Cr)'];
-    const ebitdaYr = data['EBITDA Year'] || '';
+    const ebitda    = data['EBITDA (\u20b9 Cr)'];
+    const ebitdaYr  = data['EBITDA Year'] || '';
+    const latestFcf = data['Latest FCF (\u20b9 Cr)'];
+    const fcfYr     = data['Latest FCF Year'] || '';
     const container = document.getElementById('summary');
     const existing  = document.getElementById('evEbitdaCard');
     if (existing) existing.remove();
-    if (!ebitda || ebitda <= 0 || !ev) return;
+    if ((!ebitda || ebitda <= 0) && (!latestFcf || latestFcf <= 0 || !ivps)) return;
+    if (!ev) return;
 
-    const evEbitda  = (ev / ebitda).toFixed(1);
-    const signalCls = evEbitda < 8 ? 'text-green-700' : evEbitda < 20 ? 'text-yellow-700' : 'text-red-700';
-    const signal    = evEbitda < 8 ? 'Undervalued signal'  :
-                      evEbitda < 20 ? 'Fair range'         : 'Elevated — verify assumptions';
+    // EV/EBITDA
+    const evEbitda   = ebitda && ebitda > 0 ? (ev / ebitda).toFixed(1) : null;
+    const eCls = evEbitda < 8 ? 'text-green-700' : evEbitda < 20 ? 'text-yellow-700' : 'text-red-700';
+
+    // P/FCF — price-to-free-cash-flow using intrinsic value per share as "price"
+    const pfcf     = (latestFcf && latestFcf > 0 && eqv) ? (eqv / latestFcf).toFixed(1) : null;
+    const pCls = pfcf < 15 ? 'text-green-700' : pfcf < 30 ? 'text-yellow-700' : 'text-red-700';
+
+    const yearLabel = ebitdaYr || fcfYr;
+    const cols = [evEbitda, pfcf].filter(Boolean).length;
+
+    let rows = '';
+    if (evEbitda) {
+      rows +=
+        '<div class="text-center">' +
+          '<div class="text-xs text-gray-500 mb-1">Latest EBITDA</div>' +
+          '<div class="text-base font-bold text-gray-700">\u20b9' + ebitda.toLocaleString('en-IN') + ' Cr</div>' +
+        '</div>' +
+        '<div class="text-center">' +
+          '<div class="text-xs text-gray-500 mb-1">EV / EBITDA</div>' +
+          '<div class="text-xl font-bold ' + eCls + '">' + evEbitda + '\u00d7</div>' +
+          '<div class="text-xs text-gray-400">Typical 8\u201320\u00d7</div>' +
+        '</div>';
+    }
+    if (pfcf) {
+      rows +=
+        '<div class="text-center">' +
+          '<div class="text-xs text-gray-500 mb-1">Latest FCF</div>' +
+          '<div class="text-base font-bold text-gray-700">\u20b9' + latestFcf.toLocaleString('en-IN') + ' Cr</div>' +
+        '</div>' +
+        '<div class="text-center">' +
+          '<div class="text-xs text-gray-500 mb-1">P / FCF</div>' +
+          '<div class="text-xl font-bold ' + pCls + '">' + pfcf + '\u00d7</div>' +
+          '<div class="text-xs text-gray-400">Typical 15\u201330\u00d7</div>' +
+        '</div>';
+    }
 
     const card = document.createElement('div');
     card.id = 'evEbitdaCard';
     card.className = 'bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4';
     card.innerHTML =
       '<div class="text-xs text-yellow-700 font-semibold uppercase tracking-wide mb-3">' +
-        'EV / EBITDA Cross-Check' + (ebitdaYr ? ' \u00b7 ' + ebitdaYr : '') +
+        'Valuation Cross-Check' + (yearLabel ? ' \u00b7 ' + yearLabel : '') +
       '</div>' +
-      '<div class="grid grid-cols-3 gap-4">' +
-        '<div class="text-center">' +
-          '<div class="text-xs text-gray-500 mb-1">Latest EBITDA</div>' +
-          '<div class="text-lg font-bold text-gray-700">\u20b9' + ebitda.toLocaleString('en-IN') + ' Cr</div>' +
-        '</div>' +
-        '<div class="text-center">' +
-          '<div class="text-xs text-gray-500 mb-1">Implied EV / EBITDA</div>' +
-          '<div class="text-xl font-bold ' + signalCls + '">' + evEbitda + '\u00d7</div>' +
-          '<div class="text-xs text-gray-400">Typical range: 8\u201320\u00d7</div>' +
-        '</div>' +
-        '<div class="text-center">' +
-          '<div class="text-xs text-gray-500 mb-1">Signal</div>' +
-          '<div class="text-sm font-semibold ' + signalCls + ' mt-1">' + signal + '</div>' +
-          '<div class="text-xs text-gray-400 mt-1">at WACC ' + asmp['WACC (%)'] + '%</div>' +
-        '</div>' +
-      '</div>';
+      '<div class="grid grid-cols-' + (cols * 2) + ' gap-3">' + rows + '</div>' +
+      '<div class="text-xs text-gray-400 mt-3">Multiples computed at DCF-implied equity value. Compare to peers to sanity-check assumptions.</div>';
     container.appendChild(card);
   })();
 
@@ -1309,20 +1334,6 @@ function renderDCF(data) {
 
 
 <!-- =============== SHARED FOOTER =============== -->
-<style>
-footer.fa-footer{background:#1d3557;color:#a8b8cc;padding:56px 24px 28px;margin-top:72px;font-family:'Manrope',sans-serif;}
-.fa-footer .fl{font-size:1.25rem;font-weight:800;color:#fff;margin-bottom:8px;}
-.fa-footer .ft{font-size:13px;color:#7a90a8;line-height:1.6;max-width:240px;margin-bottom:18px;}
-.fa-footer .fgrid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:36px;}
-.fa-footer h4{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#fff;margin-bottom:12px;}
-.fa-footer a{display:block;font-size:13px;color:#7a90a8;text-decoration:none;margin-bottom:8px;transition:color .18s ease;}
-.fa-footer a:hover{color:#a8dadc;}
-.fa-footer hr{border:none;border-top:1px solid rgba(255,255,255,.08);margin:32px 0 20px;}
-.fa-footer .fb{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:12px;color:#546a7f;}
-.fa-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(168,218,220,.15);border:1px solid rgba(168,218,220,.3);color:#a8dadc;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
-@media(max-width:768px){.fa-footer .fgrid{grid-template-columns:1fr 1fr!important;}.fa-footer .fb{flex-direction:column;text-align:center;}}
-@media(max-width:480px){.fa-footer .fgrid{grid-template-columns:1fr!important;}}
-</style>
 <footer class="fa-footer">
   <div style="max-width:1100px;margin:0 auto;">
     <div class="fgrid">
