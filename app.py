@@ -621,7 +621,7 @@ def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
             current_price=cmp_price,
             wacc=wacc,
             terminal_growth=terminal_growth,
-        )
+        )  # forecast_years uses default 5 for PDF path
         _set_job(job_id, {'status': 'done', 'result': result, 'percent': 100})
 
     except Exception as e:
@@ -732,6 +732,7 @@ def dcf_from_excel():
         net_debt        = _f('net_debt', 0)
         shares          = _f('shares_outstanding')
         cmp_price       = _f('current_price')
+        forecast_years  = int(request.form.get('forecast_years', 5))
 
         if wacc is None or terminal_growth is None:
             return jsonify({'error': 'WACC and Terminal Growth are required.'}), 400
@@ -800,6 +801,7 @@ def dcf_manual():
         net_debt        = _f('net_debt', 0)
         shares          = _f('shares')
         cmp_price       = _f('current_price')
+        forecast_years  = int(data.get('forecast_years', 5) or 5)
 
         # Build synthetic text blocks from the numbers so the existing
         # DCF engine (which was designed for PDF-extracted text) still works.
@@ -818,6 +820,7 @@ def dcf_manual():
             current_price=cmp_price,
             wacc=wacc,
             terminal_growth=terminal_growth,
+            forecast_years=forecast_years,
         )
         return jsonify(result)
 

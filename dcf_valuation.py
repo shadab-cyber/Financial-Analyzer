@@ -370,10 +370,11 @@ def calculate_avg_fcf_growth(fcf_list):
 # FORECAST / DISCOUNT / TERMINAL VALUE
 # =============================================================================
 
-def forecast_fcf(last_fcf, growth_rate):
+def forecast_fcf(last_fcf, growth_rate, forecast_years=None):
+    n = forecast_years if forecast_years and forecast_years > 0 else FORECAST_YEARS
     forecast = []
     current  = last_fcf
-    for _ in range(FORECAST_YEARS):
+    for _ in range(n):
         current *= (1 + growth_rate)
         forecast.append(round(current, 2))
     return forecast
@@ -412,14 +413,16 @@ def calculate_enterprise_value(pv_fcf, pv_terminal):
 # =============================================================================
 
 def run_dcf_from_pdf_text(text_blocks, net_debt=0, shares_outstanding=None,
-                           current_price=None, wacc=None, terminal_growth=None):
-    w = wacc            if wacc            is not None else WACC
-    g = terminal_growth if terminal_growth is not None else TERMINAL_GROWTH
+                           current_price=None, wacc=None, terminal_growth=None,
+                           forecast_years=None):
+    w  = wacc            if wacc            is not None else WACC
+    g  = terminal_growth if terminal_growth is not None else TERMINAL_GROWTH
+    fy = int(forecast_years) if forecast_years and int(forecast_years) > 0 else FORECAST_YEARS
 
     historical_fcf, cfo, capex = calculate_fcf_from_text(text_blocks)
 
     avg_growth, growth_warnings = calculate_avg_fcf_growth(historical_fcf)
-    forecast = forecast_fcf(historical_fcf[-1], avg_growth)
+    forecast = forecast_fcf(historical_fcf[-1], avg_growth, forecast_years=fy)
 
     if historical_fcf[-1] < 0:
         growth_warnings.append(
@@ -432,7 +435,7 @@ def run_dcf_from_pdf_text(text_blocks, net_debt=0, shares_outstanding=None,
     if tv_warning:
         growth_warnings.append(tv_warning)
 
-    discounted_terminal = discount_terminal_value(terminal_value, FORECAST_YEARS, w)
+    discounted_terminal = discount_terminal_value(terminal_value, fy, w)
     enterprise_value    = calculate_enterprise_value(discounted_fcf, discounted_terminal)
 
     net_debt_used = float(net_debt) if net_debt is not None else 0.0
@@ -471,7 +474,7 @@ def run_dcf_from_pdf_text(text_blocks, net_debt=0, shares_outstanding=None,
         "Assumptions": {
             "WACC (%)":             round(w * 100, 2),
             "Terminal Growth (%)":   round(g * 100, 2),
-            "Forecast Years":        FORECAST_YEARS,
+            "Forecast Years":        fy,
             "Net Debt (₹ Cr)":      net_debt_used,
             "Shares (Cr)":          float(shares_outstanding) if shares_outstanding else None,
         }
