@@ -370,13 +370,32 @@ def calculate_avg_fcf_growth(fcf_list):
 # FORECAST / DISCOUNT / TERMINAL VALUE
 # =============================================================================
 
-def forecast_fcf(last_fcf, growth_rate, forecast_years=None):
-    n = forecast_years if forecast_years and forecast_years > 0 else FORECAST_YEARS
+def forecast_fcf(last_fcf, growth_rate, forecast_years=None,
+                  growth_rate_2=None, stage1_years=None):
+    """
+    Single-stage (if growth_rate_2 is None) or 2-stage DCF forecast.
+
+    Stage 1: years 1 → stage1_years  at growth_rate
+    Stage 2: years stage1_years+1 → forecast_years  at growth_rate_2
+             (linearly fades from growth_rate to growth_rate_2 if they differ)
+    """
+    n  = int(forecast_years) if forecast_years and int(forecast_years) > 0 else FORECAST_YEARS
+    s1 = int(stage1_years)   if stage1_years   and int(stage1_years)  > 0 else n
+
     forecast = []
     current  = last_fcf
-    for _ in range(n):
-        current *= (1 + growth_rate)
+
+    for yr in range(1, n + 1):
+        if growth_rate_2 is None or yr <= s1:
+            g = growth_rate
+        else:
+            # Linear fade from growth_rate_1 to growth_rate_2 over stage 2
+            fade_len   = max(n - s1, 1)
+            fade_step  = (yr - s1 - 1) / fade_len
+            g = growth_rate + (growth_rate_2 - growth_rate) * fade_step
+        current *= (1 + g)
         forecast.append(round(current, 2))
+
     return forecast
 
 
@@ -414,7 +433,8 @@ def calculate_enterprise_value(pv_fcf, pv_terminal):
 
 def run_dcf_from_pdf_text(text_blocks, net_debt=0, shares_outstanding=None,
                            current_price=None, wacc=None, terminal_growth=None,
-                           forecast_years=None):
+                           forecast_years=None, growth_rate_override=None,
+                           growth_rate_2=None, stage1_years=None):
     w  = wacc            if wacc            is not None else WACC
     g  = terminal_growth if terminal_growth is not None else TERMINAL_GROWTH
     fy = int(forecast_years) if forecast_years and int(forecast_years) > 0 else FORECAST_YEARS
@@ -422,7 +442,17 @@ def run_dcf_from_pdf_text(text_blocks, net_debt=0, shares_outstanding=None,
     historical_fcf, cfo, capex = calculate_fcf_from_text(text_blocks)
 
     avg_growth, growth_warnings = calculate_avg_fcf_growth(historical_fcf)
-    forecast = forecast_fcf(historical_fcf[-1], avg_growth, forecast_years=fy)
+
+    # Allow caller to override auto-computed growth (used by scenario engine)
+    g1 = float(growth_rate_override) if growth_rate_override is not None else avg_growth
+    g2 = float(growth_rate_2)        if growth_rate_2        is not None else None
+    s1 = int(stage1_years)           if stage1_years         is not None else None
+
+    if growth_rate_override is not None:
+        growth_warnings = [w for w in growth_warnings if 'capped' not in w]
+
+    forecast = forecast_fcf(historical_fcf[-1], g1, forecast_years=fy,
+                             growth_rate_2=g2, stage1_years=s1)
 
     if historical_fcf[-1] < 0:
         growth_warnings.append(
@@ -459,6 +489,8 @@ def run_dcf_from_pdf_text(text_blocks, net_debt=0, shares_outstanding=None,
         "Historical CFO (₹ Cr)":             cfo,
         "Historical CAPEX (₹ Cr)":           capex,
         "Average FCF Growth Rate (%)":       round(avg_growth * 100, 2),
+        "Stage1 Growth Rate (%)":           round(g1 * 100, 2),
+        "Stage2 Growth Rate (%)":           round(g2 * 100, 2) if g2 is not None else None,
         "Forecast FCF (₹ Cr)":              forecast,
         "Discounted FCF (₹ Cr)":            discounted_fcf,
         "Terminal Value (₹ Cr)":            terminal_value,
@@ -480,6 +512,72 @@ def run_dcf_from_pdf_text(text_blocks, net_debt=0, shares_outstanding=None,
         }
     }
 
+
+
+
+# =============================================================================
+# SCENARIO ENGINE  —  Bull / Base / Bear
+# =============================================================================
+
+def run_scenarios(text_blocks, net_debt=0, shares_outstanding=None,
+                  current_price=None, wacc=None, terminal_growth=None,
+                  forecast_years=None, stage1_years=None,
+                  bear_g1=None, bear_g2=None,
+                  base_g1=None, base_g2=None,
+                  bull_g1=None, bull_g2=None):
+    """
+    Run three parallel DCF scenarios and return them in a single dict.
+    If growth rates are not provided, auto-derives them from historical FCF:
+      Bear  = avg_growth × 0.5   (half the trend)
+      Base  = avg_growth         (as-is)
+      Bull  = avg_growth × 1.5   (50% faster, capped at +50%)
+    """
+    from copy import deepcopy
+
+    # Run base first to get historical FCF and avg_growth
+    base = run_dcf_from_pdf_text(
+        text_blocks, net_debt=net_debt, shares_outstanding=shares_outstanding,
+        current_price=current_price, wacc=wacc, terminal_growth=terminal_growth,
+        forecast_years=forecast_years, stage1_years=stage1_years,
+        growth_rate_override=base_g1, growth_rate_2=base_g2,
+    )
+
+    avg = base["Average FCF Growth Rate (%)"] / 100
+
+    def _g(provided, auto):
+        return float(provided) if provided is not None else auto
+
+    bear_rate1 = _g(bear_g1, max(avg * 0.5, -0.30))
+    bull_rate1 = _g(bull_g1, min(avg * 1.5,  0.50))
+    base_rate1 = _g(base_g1, avg)
+
+    bear_rate2 = _g(bear_g2, bear_rate1 * 0.5) if (bear_g2 or stage1_years) else None
+    bull_rate2 = _g(bull_g2, bull_rate1 * 0.6) if (bull_g2 or stage1_years) else None
+    base_rate2 = _g(base_g2, base_rate1 * 0.6) if (base_g2 or stage1_years) else None
+
+    bear = run_dcf_from_pdf_text(
+        text_blocks, net_debt=net_debt, shares_outstanding=shares_outstanding,
+        current_price=current_price, wacc=wacc, terminal_growth=terminal_growth,
+        forecast_years=forecast_years, stage1_years=stage1_years,
+        growth_rate_override=bear_rate1, growth_rate_2=bear_rate2,
+    )
+    bull = run_dcf_from_pdf_text(
+        text_blocks, net_debt=net_debt, shares_outstanding=shares_outstanding,
+        current_price=current_price, wacc=wacc, terminal_growth=terminal_growth,
+        forecast_years=forecast_years, stage1_years=stage1_years,
+        growth_rate_override=bull_rate1, growth_rate_2=bull_rate2,
+    )
+
+    return {
+        "Bear": bear,
+        "Base": base,
+        "Bull": bull,
+        "growth_rates": {
+            "Bear": {"g1": round(bear_rate1*100,1), "g2": round(bear_rate2*100,1) if bear_rate2 else None},
+            "Base": {"g1": round(base_rate1*100,1), "g2": round(base_rate2*100,1) if base_rate2 else None},
+            "Bull": {"g1": round(bull_rate1*100,1), "g2": round(bull_rate2*100,1) if bull_rate2 else None},
+        }
+    }
 
 # =============================================================================
 # PDF → TEXT → DCF WRAPPER

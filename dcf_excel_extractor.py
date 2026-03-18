@@ -179,3 +179,68 @@ def extract_dcf_from_excel(filepath):
         "fcf":    fcf,
         "source": "excel",
     }
+
+def extract_wacc_inputs(filepath):
+    """
+    Extract inputs needed for the WACC builder from a Screener.in Excel.
+    Returns a dict with best-estimate values (all optional — None if not found).
+    {
+      'interest':   latest interest expense (₹ Cr)
+      'debt':       latest total borrowings (₹ Cr)
+      'tax_rate':   effective tax rate (%) — from Tax / PBT
+      'equity':     latest equity + reserves (₹ Cr)   — for D/E ratio
+    }
+    The frontend uses these to pre-fill the WACC builder.
+    Beta is NOT in the Excel — user must enter it or accept the default (1.0).
+    """
+    result = {
+        'interest':  None,
+        'debt':      None,
+        'tax_rate':  None,
+        'equity':    None,
+    }
+
+    try:
+        bs_df = pd.read_excel(filepath, engine='openpyxl',
+                              sheet_name='Balance Sheet & P&L', header=None)
+        if bs_df.empty:
+            return result
+
+        YEAR_ROW  = _find_year_row(bs_df)
+        START_COL = 1
+
+        def latest(label):
+            """Return the most recent (rightmost) non-zero value for a label."""
+            r = find_row(bs_df, label)
+            if r is None:
+                return None
+            for col in range(bs_df.shape[1] - 1, START_COL - 1, -1):
+                v = fmt(bs_df.iloc[r, col])
+                if v != 0:
+                    return v
+            return None
+
+        result['interest'] = latest('Interest')
+        result['debt']     = latest('Borrowings')
+
+        # Tax rate = Tax / PBT (use most recent year where both are non-zero)
+        r_tax = find_row(bs_df, 'Tax')
+        r_pbt = find_row(bs_df, 'Profit before tax')
+        if r_tax is not None and r_pbt is not None:
+            for col in range(bs_df.shape[1] - 1, START_COL - 1, -1):
+                tax = fmt(bs_df.iloc[r_tax, col])
+                pbt = fmt(bs_df.iloc[r_pbt, col])
+                if pbt and tax and pbt > 0:
+                    result['tax_rate'] = round(tax / pbt * 100, 1)
+                    break
+
+        # Equity = Equity Share Capital + Reserves
+        eq  = latest('Equity Share Capital') or 0
+        res = latest('Reserves')             or 0
+        if eq + res > 0:
+            result['equity'] = round(eq + res, 2)
+
+    except Exception:
+        pass
+
+    return result

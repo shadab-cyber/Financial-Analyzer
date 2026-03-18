@@ -18,7 +18,7 @@ from Technical_Analysis import run_technical_analysis
 from Portfolio_Management import run_portfolio_analysis, fetch_price_for_symbol
 from Performance_Analytics import run_complete_performance_analysis
 from Strategy_Optimization import run_complete_optimization, run_backtest
-from dcf_valuation import run_dcf_from_pdf_text
+from dcf_valuation import run_dcf_from_pdf_text, run_scenarios
 from pdf_text_extractor import extract_financials_from_pdf
 from financialanalyzer import analyze_excel
 
@@ -697,7 +697,7 @@ def dcf_debug_extract():
     return '\n'.join(out), 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
-from dcf_excel_extractor import extract_dcf_from_excel
+from dcf_excel_extractor import extract_dcf_from_excel, extract_wacc_inputs
 
 
 @app.route('/dcf/excel', methods=['POST'])
@@ -774,6 +774,102 @@ def dcf_from_excel():
         cleanup(path)
 
 
+@app.route('/dcf/wacc-inputs', methods=['POST'])
+def dcf_wacc_inputs():
+    """
+    Read interest, debt, tax rate, equity from an uploaded Excel.
+    Returns values for the WACC builder to pre-fill.
+    """
+    path = None
+    try:
+        file = request.files.get('file')
+        if not file or not allowed_excel(file.filename):
+            return jsonify({'error': 'No Excel file'}), 400
+        path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
+        data = extract_wacc_inputs(path)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cleanup(path)
+
+
+@app.route('/dcf/scenarios', methods=['POST'])
+def dcf_scenarios():
+    """
+    Run Bull / Base / Bear scenarios from an Excel upload.
+    Accepts same params as /dcf/excel plus optional per-scenario growth rates.
+    """
+    path = None
+    try:
+        file = request.files.get('file')
+        if not file or not allowed_excel(file.filename):
+            return jsonify({'error': 'No Excel file uploaded'}), 400
+        if not allowed_excel(file.filename):
+            return jsonify({'error': 'Please upload a .xlsx file'}), 400
+
+        path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
+        excel_data = extract_dcf_from_excel(path)
+
+        def _f(key, default=None):
+            v = request.form.get(key)
+            try:    return float(v) if v not in (None, '') else default
+            except: return default
+
+        wacc            = _f('wacc')
+        terminal_growth = _f('terminal_growth')
+        net_debt        = _f('net_debt', 0)
+        shares          = _f('shares_outstanding')
+        cmp_price       = _f('current_price')
+        forecast_years  = int(request.form.get('forecast_years', 5))
+        stage1_years    = int(request.form.get('stage1_years', 5)) if request.form.get('stage1_years') else None
+        use_2stage      = request.form.get('use_2stage', 'false').lower() == 'true'
+
+        bear_g1 = _f('bear_g1')
+        base_g1 = _f('base_g1')
+        bull_g1 = _f('bull_g1')
+        bear_g2 = _f('bear_g2') if use_2stage else None
+        base_g2 = _f('base_g2') if use_2stage else None
+        bull_g2 = _f('bull_g2') if use_2stage else None
+
+        if wacc is None or terminal_growth is None:
+            return jsonify({'error': 'WACC and Terminal Growth are required.'}), 400
+        if terminal_growth >= wacc:
+            return jsonify({'error': f'Terminal growth must be less than WACC.'}), 400
+
+        # Build text blocks from Excel data
+        lines = []
+        for i in range(len(excel_data['cfo'])):
+            lines.append(f"Net cash from operating activities {excel_data['cfo'][i]}")
+            lines.append(f"Purchase of property plant equipment {excel_data['capex'][i]}")
+        text_blocks = ['\n'.join(lines)]
+
+        result = run_scenarios(
+            text_blocks,
+            net_debt=net_debt, shares_outstanding=shares,
+            current_price=cmp_price, wacc=wacc, terminal_growth=terminal_growth,
+            forecast_years=forecast_years,
+            stage1_years=stage1_years if use_2stage else None,
+            bear_g1=bear_g1, bear_g2=bear_g2,
+            base_g1=base_g1, base_g2=base_g2,
+            bull_g1=bull_g1, bull_g2=bull_g2,
+        )
+
+        result['Extracted Years']  = excel_data['years']
+        result['Extracted CFO']    = excel_data['cfo']
+        result['Extracted CAPEX']  = excel_data['capex']
+        return jsonify(result)
+
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        app.logger.error(f'dcf_scenarios error: {e}')
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cleanup(path)
+
+
+@app.route('/dcf/manual', methods=['POST'])
 def dcf_manual():
     """
     Run DCF from manually entered CFO and CAPEX arrays — no PDF, instant response.
