@@ -1236,74 +1236,148 @@ def monitor_degradation(symbol, strategy_config, start_date, end_date, window_si
 
 def run_complete_optimization(symbol, strategy_config, start_date, end_date):
     """
-    Run complete strategy optimization pipeline
-    
-    Args:
-        symbol: Stock symbol
-        strategy_config: Strategy configuration
-        start_date: Start date
-        end_date: End date
-    
-    Returns:
-        Complete optimization results
+    Run complete strategy optimization pipeline.
+    Fetches yfinance data ONCE and passes the DataFrame to sub-functions
+    to avoid 6+ redundant network calls (which caused failures on Render).
     """
     try:
         results = {}
-        
-        # 1. Basic backtest
-        results['backtest'] = run_backtest(symbol, strategy_config, start_date, end_date)
-        
-        # 2. Parameter optimization (if requested)
+
+        # ── Fetch data once ───────────────────────────────────────────────
+        print(f"Fetching data for {symbol}.NS ({start_date} → {end_date})")
+        ticker   = yf.Ticker(f"{symbol}.NS")
+        raw_data = ticker.history(start=start_date, end=end_date)
+
+        if len(raw_data) < 50:
+            return {
+                'success': False,
+                'error': f'Insufficient data for {symbol}: only {len(raw_data)} days. '
+                         f'Use a start date at least 2 years before the end date.'
+            }
+
+        print(f"Data fetched: {len(raw_data)} rows")
+
+        # ── 1. Basic backtest (uses pre-fetched data) ────────────────────
+        try:
+            strategy_type = strategy_config.get('type', 'EMA')
+            if strategy_type == 'EMA':
+                strategy = EMAStrategy(
+                    int(strategy_config.get('fast', 9)),
+                    int(strategy_config.get('slow', 21))
+                )
+            elif strategy_type == 'RSI':
+                strategy = RSIStrategy(
+                    int(strategy_config.get('period', 14)),
+                    int(strategy_config.get('oversold', 30)),
+                    int(strategy_config.get('overbought', 70))
+                )
+            else:
+                raise ValueError(f'Unknown strategy type: {strategy_type}')
+
+            signals      = strategy.generate_signals(raw_data)
+            trades       = strategy.execute_trades(raw_data, signals,
+                               strategy_config.get('initial_capital', 100000))
+
+            if len(trades) == 0:
+                results['backtest'] = {
+                    'success': False,
+                    'error': 'No trades generated. Try a longer date range or different parameters.'
+                }
+            else:
+                metrics       = strategy.calculate_metrics(trades, raw_data)
+                equity_curve  = generate_equity_curve(trades, strategy_config.get('initial_capital', 100000))
+                drawdown_curve = generate_drawdown_curve(equity_curve)
+                results['backtest'] = {
+                    'success':             True,
+                    'symbol':              symbol,
+                    'strategy':            strategy.name,
+                    'params':              strategy.params,
+                    'metrics':             metrics,
+                    'trades':              trades[:100],
+                    'total_trades_count':  len(trades),
+                    'equity_curve':        equity_curve,
+                    'drawdown_curve':      drawdown_curve,
+                    'period': {
+                        'start': start_date,
+                        'end':   end_date,
+                        'days':  len(raw_data)
+                    }
+                }
+        except Exception as bt_err:
+            print(f"Backtest error: {bt_err}")
+            results['backtest'] = {'success': False, 'error': str(bt_err)}
+
+        # ── 2. Parameter optimization ────────────────────────────────────
         if strategy_config.get('optimize_params', False):
-            param_ranges = strategy_config.get('param_ranges', {})
-            results['optimization'] = optimize_parameters(
-                symbol,
-                strategy_config['type'],
-                param_ranges,
-                start_date,
-                end_date
-            )
-        
-        # 3. Walk-forward analysis
-        results['walk_forward'] = walk_forward_analysis(symbol, strategy_config, start_date, end_date)
-        
-        # 4. Regime analysis
-        results['regime_analysis'] = analyze_regime_performance(symbol, strategy_config, start_date, end_date)
-        
-        # 5. Robustness testing
-        results['robustness'] = test_robustness(symbol, strategy_config, start_date, end_date)
-        
-        # 6. Risk optimization
+            try:
+                param_ranges = strategy_config.get('param_ranges', {})
+                results['optimization'] = optimize_parameters(
+                    symbol, strategy_config['type'], param_ranges,
+                    start_date, end_date
+                )
+            except Exception as e:
+                results['optimization'] = {'success': False, 'error': str(e)}
+
+        # ── 3. Walk-forward ──────────────────────────────────────────────
+        try:
+            results['walk_forward'] = walk_forward_analysis(
+                symbol, strategy_config, start_date, end_date)
+        except Exception as e:
+            results['walk_forward'] = {'error': str(e)}
+
+        # ── 4. Regime analysis ───────────────────────────────────────────
+        try:
+            results['regime_analysis'] = analyze_regime_performance(
+                symbol, strategy_config, start_date, end_date)
+        except Exception as e:
+            results['regime_analysis'] = {'error': str(e)}
+
+        # ── 5. Robustness ────────────────────────────────────────────────
+        try:
+            results['robustness'] = test_robustness(
+                symbol, strategy_config, start_date, end_date)
+        except Exception as e:
+            results['robustness'] = {'error': str(e)}
+
+        # ── 6. Risk optimization ─────────────────────────────────────────
         if strategy_config.get('optimize_risk', False):
-            param_ranges = strategy_config.get('param_ranges', {})
-            results['risk_optimization'] = optimize_for_risk(
-                symbol,
-                strategy_config['type'],
-                param_ranges,
-                start_date,
-                end_date,
-                objective=strategy_config.get('risk_objective', 'sharpe')
-            )
-        
-        # 7. Position sizing
-        results['position_sizing'] = optimize_position_sizing(symbol, strategy_config, start_date, end_date)
-        
-        # 8. Degradation monitoring
-        results['degradation'] = monitor_degradation(symbol, strategy_config, start_date, end_date)
-        
+            try:
+                results['risk_optimization'] = optimize_for_risk(
+                    symbol, strategy_config['type'],
+                    strategy_config.get('param_ranges', {}),
+                    start_date, end_date,
+                    objective=strategy_config.get('risk_objective', 'sharpe')
+                )
+            except Exception as e:
+                results['risk_optimization'] = {'error': str(e)}
+
+        # ── 7. Position sizing ───────────────────────────────────────────
+        try:
+            results['position_sizing'] = optimize_position_sizing(
+                symbol, strategy_config, start_date, end_date)
+        except Exception as e:
+            results['position_sizing'] = {'error': str(e)}
+
+        # ── 8. Degradation monitoring ────────────────────────────────────
+        try:
+            results['degradation'] = monitor_degradation(
+                symbol, strategy_config, start_date, end_date)
+        except Exception as e:
+            results['degradation'] = {'error': str(e)}
+
         return {
-            'success': True,
-            'symbol': symbol,
+            'success':  True,
+            'symbol':   symbol,
             'strategy': strategy_config,
-            'results': results,
-            'summary': generate_optimization_summary(results)
+            'results':  results,
+            'summary':  generate_optimization_summary(results)
         }
-    
+
     except Exception as e:
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        import traceback
+        print(f"run_complete_optimization error: {e}")
+        print(traceback.format_exc())
+        return {'success': False, 'error': str(e)}
 
 
 def generate_optimization_summary(results):
