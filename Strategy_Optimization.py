@@ -43,43 +43,32 @@ class Strategy:
         return self.calculate_metrics(trades, data)
     
     def execute_trades(self, data, signals, initial_capital):
-        """Execute trades based on signals with realistic transaction costs.
-
-        Indian equity cost model:
-          · Brokerage: 0.03% each way (discount broker flat-rate equivalent)
-          · STT:       0.1% on sell side only
-          · Total round-trip: ~0.13% per trade
-        These are conservative estimates — actual costs vary by broker.
-        """
-        COST_BUY  = 0.0003   # 0.03% on buy  (brokerage only)
+        """Execute trades with realistic Indian equity transaction costs.
+        Brokerage ~0.03% each way + STT 0.1% on sell = ~0.13% round-trip."""
+        COST_BUY  = 0.0003   # 0.03% buy-side brokerage
         COST_SELL = 0.0013   # 0.03% brokerage + 0.10% STT on sell
-
         trades = []
         position = None
         capital = initial_capital
 
         for i in range(len(data)):
             price = data['Close'].iloc[i]
-
-            if signals[i] == 1 and position is None:  # Buy signal
+            if signals[i] == 1 and position is None:
                 effective_buy = price * (1 + COST_BUY)
-                shares = capital / effective_buy
                 position = {
-                    'entry_date':  data.index[i].strftime('%Y-%m-%d') if hasattr(data.index[i], 'strftime') else str(data.index[i]),
+                    'entry_date':  data.index[i],
                     'entry_price': round(float(effective_buy), 4),
-                    'shares':      shares,
+                    'shares':      capital / effective_buy,
                     'type':        'LONG'
                 }
-
-            elif signals[i] == -1 and position is not None:  # Sell signal
+            elif signals[i] == -1 and position is not None:
                 effective_sell = price * (1 - COST_SELL)
                 profit     = (effective_sell - position['entry_price']) * position['shares']
                 profit_pct = (effective_sell / position['entry_price'] - 1) * 100
                 capital   += profit
-
                 trades.append({
-                    'entry_date':  position['entry_date'],  # already a string
-                    'exit_date':   data.index[i].strftime('%Y-%m-%d') if hasattr(data.index[i], 'strftime') else str(data.index[i]),
+                    'entry_date':  position['entry_date'],
+                    'exit_date':   data.index[i],
                     'entry_price': position['entry_price'],
                     'exit_price':  round(float(effective_sell), 4),
                     'shares':      position['shares'],
@@ -88,7 +77,6 @@ class Strategy:
                     'capital':     round(float(capital), 2)
                 })
                 position = None
-
         return trades
     
     def calculate_metrics(self, trades, data):
@@ -123,42 +111,27 @@ class Strategy:
         final_capital = float(trades[-1]['capital']) if trades else initial_capital
         
         try:
-            days = (pd.Timestamp(trades[-1]['exit_date']) - pd.Timestamp(trades[0]['entry_date'])).days if len(trades) > 0 else 365
+            days = (trades[-1]['exit_date'] - trades[0]['entry_date']).days if len(trades) > 0 else 365
             years = max(days / 365.25, 0.1)  # Minimum 0.1 year to avoid division issues
             cagr = ((final_capital / initial_capital) ** (1 / years) - 1) * 100
         except:
             cagr = 0
-
-        # Sharpe Ratio — computed from daily portfolio returns, annualised.
-        # Previous formula used per-trade % returns with a raw 7 subtracted,
-        # which is dimensionally wrong and not comparable to any standard Sharpe.
-        # Correct approach: build daily equity series from trades, compute daily
-        # returns, then (mean_daily_ret - Rf_daily) / std_daily * sqrt(252).
+        
+        # Sharpe Ratio — annualised from daily portfolio returns
+        # Previous: per-trade % returns vs annual Rf=7 → wrong dimensions
         try:
-            rf_annual   = 0.071          # ~7.1% India 10Y G-Sec
-            rf_daily    = rf_annual / 252
-
-            # Build a daily equity series between first entry and last exit
-            eq_dates  = [trades[0]['entry_date']]
-            eq_values = [float(initial_capital)]
-            for t in trades:
-                eq_dates.append(t['exit_date'])
-                eq_values.append(float(t['capital']))
-
-            # Daily returns via linear interpolation between trade events
+            import pandas as _pd
+            rf_daily = 0.071 / 252
+            eq_vals  = [float(initial_capital)] + [float(t['capital']) for t in trades]
+            eq_dates = [trades[0]['entry_date']] + [t['exit_date'] for t in trades]
             daily_rets = []
-            for i in range(1, len(eq_values)):
-                # Parse string dates
-                d0 = pd.Timestamp(eq_dates[i-1])
-                d1 = pd.Timestamp(eq_dates[i])
-                seg_days = max((d1 - d0).days, 1)
-                daily_growth = (eq_values[i] / eq_values[i-1]) ** (1 / seg_days) - 1
-                daily_rets.extend([daily_growth] * seg_days)
-
+            for k in range(1, len(eq_vals)):
+                seg = max((_pd.Timestamp(str(eq_dates[k])) - _pd.Timestamp(str(eq_dates[k-1]))).days, 1)
+                daily_growth = (eq_vals[k] / eq_vals[k-1]) ** (1/seg) - 1
+                daily_rets.extend([daily_growth] * seg)
             if len(daily_rets) > 1:
-                dr = np.array(daily_rets)
-                excess_mean = dr.mean() - rf_daily
-                sharpe_ratio = round(float(excess_mean / dr.std() * np.sqrt(252)), 2) if dr.std() > 0 else 0.0
+                _dr = np.array(daily_rets)
+                sharpe_ratio = round(float((_dr.mean() - rf_daily) / _dr.std() * np.sqrt(252)), 2) if _dr.std() > 0 else 0.0
             else:
                 sharpe_ratio = 0.0
         except Exception:
@@ -498,15 +471,12 @@ def generate_equity_curve(trades, initial_capital):
         return {'dates': [], 'values': []}
     
     # Fixed: dates should be dates, values should be values
-    # Trade dates are already ISO strings (set in execute_trades)
-    dates = [trades[0]['entry_date'] if isinstance(trades[0]['entry_date'], str)
-             else trades[0]['entry_date'].strftime('%Y-%m-%d')]
+    dates = [trades[0]['entry_date'].strftime('%Y-%m-%d')]
     values = [initial_capital]
-
+    
     for trade in trades:
-        d = trade['exit_date']
-        dates.append(d if isinstance(d, str) else d.strftime('%Y-%m-%d'))
-        values.append(float(trade['capital']))
+        dates.append(trade['exit_date'].strftime('%Y-%m-%d'))
+        values.append(float(trade['capital']))  # Ensure numeric
     
     return {
         'dates': dates,
@@ -724,17 +694,12 @@ def analyze_regime_performance(symbol, strategy_config, start_date, end_date):
         regime_performance = {}
         
         for trade in trades:
-            # Find regime at entry — pandas 2.0 removed get_loc(method=)
-            # Use index.asof() which returns the closest label <= target.
+            # Find regime at entry
             entry_ts = trade['entry_date']
-            # Normalise to tz-naive date if needed
             if hasattr(entry_ts, 'tzinfo') and entry_ts.tzinfo is not None:
                 entry_ts = entry_ts.tz_localize(None)
-            closest_label = data.index.asof(entry_ts)
-            if pd.isna(closest_label):
-                # Before first bar — use first available
-                closest_label = data.index[0]
-            regime = data.loc[closest_label, 'regime']
+            closest = data.index.asof(entry_ts)
+            regime = data.loc[closest if not pd.isna(closest) else data.index[0], 'regime']
             
             if regime not in regime_performance:
                 regime_performance[regime] = {
@@ -1099,7 +1064,7 @@ def simulate_position_size(trades, size_fraction):
     
     # Calculate metrics
     total_return = (capital / 100000 - 1) * 100
-    days = (pd.Timestamp(trades[-1]['exit_date']) - pd.Timestamp(trades[0]['entry_date'])).days
+    days = (trades[-1]['exit_date'] - trades[0]['entry_date']).days
     years = days / 365.25
     cagr = ((capital / 100000) ** (1 / years) - 1) * 100 if years > 0 else 0
     
