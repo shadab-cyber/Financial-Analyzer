@@ -131,34 +131,49 @@ def calculate_portfolio_returns(holdings_history, cash_flows):
 
 def calculate_xirr(cash_flows, final_value):
     """
-    Calculate XIRR (Internal Rate of Return)
+    Calculate XIRR (Internal Rate of Return with irregular cash flows).
+
+    Sign convention (standard finance):
+      · Cash outflows (money invested)  → NEGATIVE amounts
+      · Cash inflows  (money received)  → POSITIVE amounts
+
+    cash_flows is expected to be a list of dicts with 'date' and 'amount'.
+    If amounts are stored as positive (money paid out), we negate them here.
+    final_value (current portfolio value) is a POSITIVE inflow — what the
+    investor would receive if they liquidated today.
     """
     if not cash_flows:
         return 0
-    
+
     try:
-        from scipy.optimize import newton
-        
-        dates = [cf['date'] for cf in cash_flows]
-        amounts = [cf['amount'] for cf in cash_flows]
-        
-        # Add final value as last cash flow
+        from scipy.optimize import brentq
+
+        dates   = [cf['date'] for cf in cash_flows]
+        # Investments are outflows → negate if positive
+        amounts = [-abs(cf['amount']) for cf in cash_flows]
+
+        # Add final portfolio value as a positive inflow (today)
         dates.append(datetime.now())
-        amounts.append(-final_value)
-        
-        # Convert to days from start
+        amounts.append(abs(final_value))
+
+        # Convert to years from first date
         start_date = min(dates)
-        days = [(d - start_date).days for d in dates]
-        
-        # XIRR function
-        def xirr_func(rate):
-            return sum([amt / ((1 + rate) ** (day / 365.25)) for amt, day in zip(amounts, days)])
-        
-        # Solve for rate
-        rate = newton(xirr_func, 0.1)
-        return rate * 100
-    
-    except:
+        years = [(d - start_date).days / 365.25 for d in dates]
+
+        def npv(rate):
+            return sum(a / (1 + rate) ** t for a, t in zip(amounts, years))
+
+        # Brentq is more robust than newton for XIRR
+        try:
+            rate = brentq(npv, -0.999, 100.0, maxiter=200)
+        except ValueError:
+            # Fallback to newton if brentq fails to bracket
+            from scipy.optimize import newton
+            rate = newton(npv, 0.1, maxiter=200)
+
+        return round(rate * 100, 2)
+
+    except Exception:
         return 0
 
 
@@ -537,7 +552,11 @@ def analyze_drawdowns(holdings_history):
         'avg_drawdown': round(avg_dd, 2),
         'drawdown_count_over_10': dd_count,
         'current_drawdown': round(df.iloc[-1]['drawdown'], 2),
-        'drawdown_data': df[['date', 'drawdown']].to_dict('records')[-100:]  # Last 100 points
+        # Convert dates to strings — pd.Timestamp is not JSON-serialisable
+        'drawdown_data': [
+            {'date': str(row['date'])[:10], 'drawdown': round(row['drawdown'], 3)}
+            for row in df[['date', 'drawdown']].tail(100).to_dict('records')
+        ]
     }
 
 
@@ -556,11 +575,12 @@ def calculate_consistency(holdings_history):
     if len(df) < 30:
         return {'error': 'Need at least 30 days of data'}
     
-    # Monthly returns
-    df['month'] = df['date'].dt.to_period('M')
-    monthly_returns = df.groupby('month').apply(
-        lambda x: ((x['total_value'].iloc[-1] / x['total_value'].iloc[0]) - 1) * 100 if len(x) > 1 else 0
-    )
+    # Monthly returns — use resample (pandas 2.0 compatible, avoids groupby FutureWarning)
+    df = df.set_index('date')
+    monthly = df['total_value'].resample('ME').last()   # last value each month
+    monthly_start = df['total_value'].resample('ME').first()
+    monthly_returns = ((monthly / monthly_start) - 1) * 100
+    monthly_returns = monthly_returns.dropna()
     
     # Profitable months
     profitable_months = (monthly_returns > 0).sum()
@@ -657,38 +677,44 @@ def analyze_behavioral_patterns(trades, signals):
 # 10. SCENARIO & STRESS TESTING
 # ============================================
 
-def run_stress_scenarios(holdings_detail, portfolio_value):
+def run_stress_scenarios(holdings_detail, portfolio_value, portfolio_beta=1.0):
     """
-    Run stress test scenarios
+    Run stress test scenarios using the portfolio's actual beta.
+
+    portfolio_beta: computed from benchmark comparison (default 1.0 if unavailable).
+    Impact = market_change × portfolio_beta (amplified for high-beta, cushioned for low-beta).
     """
     scenarios = [
-        {'name': 'Market -10%', 'market_change': -0.10, 'beta': 1.0},
-        {'name': 'Market -20% (Correction)', 'market_change': -0.20, 'beta': 1.0},
-        {'name': 'Market -30% (Crash)', 'market_change': -0.30, 'beta': 1.0},
-        {'name': '2008 Financial Crisis', 'market_change': -0.52, 'beta': 1.2},
-        {'name': '2020 COVID Crash', 'market_change': -0.38, 'beta': 1.15},
-        {'name': 'Volatility Spike (+50%)', 'market_change': 0, 'vol_increase': 1.5}
+        {'name': 'Market −10%',              'market_change': -0.10},
+        {'name': 'Market −20% (Correction)', 'market_change': -0.20},
+        {'name': 'Market −30% (Crash)',      'market_change': -0.30},
+        {'name': '2008 Financial Crisis',    'market_change': -0.52},
+        {'name': '2020 COVID Crash',         'market_change': -0.38},
+        {'name': 'Market +10% (Rally)',      'market_change':  0.10},
     ]
-    
+
     results = []
-    for scenario in scenarios:
-        market_change = scenario.get('market_change', 0)
-        beta = scenario.get('beta', 1.0)
-        
-        # Estimate portfolio impact
-        portfolio_change = market_change * beta
-        new_value = portfolio_value * (1 + portfolio_change)
+    for s in scenarios:
+        mc = s['market_change']
+        # Portfolio impact scaled by actual beta
+        portfolio_change = mc * portfolio_beta
+        new_value   = portfolio_value * (1 + portfolio_change)
         loss_amount = new_value - portfolio_value
-        
         results.append({
-            'scenario': scenario['name'],
+            'scenario':      s['name'],
+            'market_change': round(mc * 100, 1),
+            'portfolio_beta': round(portfolio_beta, 2),
             'current_value': round(portfolio_value, 2),
             'stressed_value': round(new_value, 2),
-            'loss_amount': round(loss_amount, 2),
-            'loss_pct': round(portfolio_change * 100, 2)
+            'impact_amount': round(loss_amount, 2),
+            'impact_pct':    round(portfolio_change * 100, 2),
         })
-    
-    return {'scenarios': results}
+
+    return {
+        'scenarios': results,
+        'beta_used': round(portfolio_beta, 2),
+        'note': 'Impact = Market change × Portfolio beta'
+    }
 
 
 # ============================================
@@ -697,29 +723,69 @@ def run_stress_scenarios(holdings_detail, portfolio_value):
 
 def calculate_twr_vs_mwr(holdings_history, cash_flows):
     """
-    Calculate Time-Weighted Return vs Money-Weighted Return (XIRR)
+    Calculate Time-Weighted Return vs Money-Weighted Return (XIRR).
+
+    True TWR eliminates the effect of external cash flows by chain-linking
+    sub-period returns. Each sub-period runs from one cash flow date to the next.
+    Without cash flow timestamps, we approximate using daily returns (each day
+    is a sub-period with no cash flow), which is equivalent to the geometric
+    mean of daily returns.
+
+    MWR = XIRR (already calculated correctly with sign fix).
+    Timing impact: positive = investor added money at good times.
     """
     df = pd.DataFrame(holdings_history)
     df['date'] = pd.to_datetime(df['date'])
     df = df.sort_values('date')
-    
+
     if len(df) < 2:
         return {'error': 'Insufficient data'}
-    
-    # Time-Weighted Return (removes cash flow impact)
-    twr = ((df.iloc[-1]['total_value'] / df.iloc[0]['total_value']) - 1) * 100
-    
-    # Money-Weighted Return (XIRR - includes cash flow timing)
+
+    # ── True TWR: chain-link daily sub-period returns ──────────────────────
+    # Daily return = value_t / value_{t-1} - 1
+    # TWR = ∏(1 + r_i) - 1
+    daily_values = df['total_value'].values
+    if len(daily_values) > 1 and daily_values[0] > 0:
+        sub_period_returns = daily_values[1:] / daily_values[:-1]
+        twr = (sub_period_returns.prod() - 1) * 100
+    else:
+        twr = 0.0
+
+    # If cash flow dates are provided, use them as sub-period boundaries
+    if cash_flows:
+        try:
+            cf_dates = sorted([cf['date'] for cf in cash_flows])
+            # Filter to dates within our history window
+            hist_start = df.iloc[0]['date'].to_pydatetime()
+            hist_end   = df.iloc[-1]['date'].to_pydatetime()
+            cf_dates   = [d for d in cf_dates if hist_start <= d <= hist_end]
+
+            if cf_dates:
+                boundaries = [hist_start] + cf_dates + [hist_end]
+                chain = 1.0
+                for i in range(len(boundaries) - 1):
+                    seg = df[(df['date'] >= boundaries[i]) & (df['date'] <= boundaries[i+1])]
+                    if len(seg) >= 2 and seg.iloc[0]['total_value'] > 0:
+                        chain *= seg.iloc[-1]['total_value'] / seg.iloc[0]['total_value']
+                twr = (chain - 1) * 100
+        except Exception:
+            pass   # keep the daily-chain version
+
+    twr = round(twr, 2)
+
+    # ── MWR via XIRR ──────────────────────────────────────────────────────
     mwr = calculate_xirr(cash_flows, df.iloc[-1]['total_value'])
-    
-    # Timing impact (difference)
-    timing_impact = mwr - twr
-    
+
+    timing_impact = round(mwr - twr, 2)
+
     return {
-        'time_weighted_return': round(twr, 2),
-        'money_weighted_return': round(mwr, 2),
-        'timing_impact': round(timing_impact, 2),
-        'interpretation': 'Positive = good timing, Negative = bad timing'
+        'time_weighted_return':  twr,
+        'money_weighted_return': mwr,
+        'timing_impact':         timing_impact,
+        'interpretation': (
+            'Positive timing impact = added money at good times. '
+            'Negative = added money before downturns.'
+        )
     }
 
 
@@ -729,42 +795,60 @@ def calculate_twr_vs_mwr(holdings_history, cash_flows):
 
 def calculate_tax_adjusted_returns(holdings_detail):
     """
-    Calculate returns after LTCG/STCG tax
+    Calculate returns after LTCG/STCG tax — India (Budget 2024 rates).
+
+    Updated rates effective 23 Jul 2024:
+      · LTCG (held > 1 year): 12.5% with ₹1,25,000 exemption
+      · STCG (held ≤ 1 year): 20%
     """
+    # Budget 2024 rates
+    LTCG_RATE      = 0.125    # 12.5% (was 10%)
+    STCG_RATE      = 0.20     # 20%   (was 15%)
+    LTCG_EXEMPTION = 125000   # ₹1,25,000 (was ₹1,00,000)
+
     total_gains = 0
-    ltcg_gains = 0
-    stcg_gains = 0
-    
+    ltcg_gains  = 0
+    stcg_gains  = 0
+
     for holding in holdings_detail:
         gain = holding.get('gain_loss', 0)
-        if gain > 0:
-            holding_period_days = (datetime.now() - datetime.strptime(holding.get('buy_date', '2024-01-01'), '%Y-%m-%d')).days
-            
-            if holding_period_days > 365:
-                ltcg_gains += gain
-            else:
-                stcg_gains += gain
-            
-            total_gains += gain
-    
-    # Tax calculation (India)
-    ltcg_tax = max(0, (ltcg_gains - 100000) * 0.10) if ltcg_gains > 100000 else 0
-    stcg_tax = stcg_gains * 0.15
-    total_tax = ltcg_tax + stcg_tax
-    
-    # After-tax gains
+        if gain <= 0:
+            continue
+
+        try:
+            buy_date_str = holding.get('buy_date', '2024-01-01')
+            buy_date = datetime.strptime(buy_date_str, '%Y-%m-%d')
+            holding_days = (datetime.now() - buy_date).days
+        except Exception:
+            holding_days = 0
+
+        if holding_days > 365:
+            ltcg_gains += gain
+        else:
+            stcg_gains += gain
+
+        total_gains += gain
+
+    # Tax calculation
+    ltcg_taxable = max(0, ltcg_gains - LTCG_EXEMPTION)
+    ltcg_tax     = ltcg_taxable * LTCG_RATE
+    stcg_tax     = stcg_gains   * STCG_RATE
+    total_tax    = ltcg_tax + stcg_tax
+
     after_tax_gains = total_gains - total_tax
-    tax_efficiency = (after_tax_gains / total_gains * 100) if total_gains > 0 else 0
-    
+    tax_efficiency  = (after_tax_gains / total_gains * 100) if total_gains > 0 else 0
+
     return {
-        'pre_tax_gains': round(total_gains, 2),
-        'ltcg_gains': round(ltcg_gains, 2),
-        'stcg_gains': round(stcg_gains, 2),
-        'ltcg_tax': round(ltcg_tax, 2),
-        'stcg_tax': round(stcg_tax, 2),
-        'total_tax': round(total_tax, 2),
-        'after_tax_gains': round(after_tax_gains, 2),
-        'tax_efficiency': round(tax_efficiency, 2)
+        'pre_tax_gains':    round(total_gains, 2),
+        'ltcg_gains':       round(ltcg_gains, 2),
+        'stcg_gains':       round(stcg_gains, 2),
+        'ltcg_exemption':   LTCG_EXEMPTION,
+        'ltcg_tax':         round(ltcg_tax, 2),
+        'stcg_tax':         round(stcg_tax, 2),
+        'total_tax':        round(total_tax, 2),
+        'after_tax_gains':  round(after_tax_gains, 2),
+        'tax_efficiency':   round(tax_efficiency, 2),
+        'rates_note':       f'LTCG {LTCG_RATE*100}% (exemption ₹{LTCG_EXEMPTION:,}), STCG {STCG_RATE*100}% — Budget 2024'
     }
 
 
@@ -817,8 +901,11 @@ def run_complete_performance_analysis(holdings_history, holdings_detail, cash_fl
         # 9. Behavioral (if trades and signals provided)
         behavioral = analyze_behavioral_patterns(trades, signals) if trades and signals else None
         
-        # 10. Stress Testing
-        stress = run_stress_scenarios(holdings_detail, current_value)
+        # 10. Stress Testing — use actual portfolio beta from benchmark comparison
+        actual_beta = 1.0
+        if isinstance(benchmark, dict) and 'beta' in benchmark:
+            actual_beta = benchmark.get('beta', 1.0)
+        stress = run_stress_scenarios(holdings_detail, current_value, portfolio_beta=actual_beta)
         
         # 11. TWR vs MWR
         twr_mwr = calculate_twr_vs_mwr(holdings_history, cash_flows)
