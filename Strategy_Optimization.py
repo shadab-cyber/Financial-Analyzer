@@ -78,7 +78,7 @@ class Strategy:
                 capital   += profit
 
                 trades.append({
-                    'entry_date':  position['entry_date'].strftime('%Y-%m-%d') if hasattr(position['entry_date'], 'strftime') else str(position['entry_date']),
+                    'entry_date':  position['entry_date'],  # already a string
                     'exit_date':   data.index[i].strftime('%Y-%m-%d') if hasattr(data.index[i], 'strftime') else str(data.index[i]),
                     'entry_price': position['entry_price'],
                     'exit_price':  round(float(effective_sell), 4),
