@@ -65,7 +65,7 @@ class Strategy:
                 effective_buy = price * (1 + COST_BUY)
                 shares = capital / effective_buy
                 position = {
-                    'entry_date':  data.index[i],
+                    'entry_date':  data.index[i].strftime('%Y-%m-%d') if hasattr(data.index[i], 'strftime') else str(data.index[i]),
                     'entry_price': round(float(effective_buy), 4),
                     'shares':      shares,
                     'type':        'LONG'
@@ -78,8 +78,8 @@ class Strategy:
                 capital   += profit
 
                 trades.append({
-                    'entry_date':  position['entry_date'],
-                    'exit_date':   data.index[i],
+                    'entry_date':  position['entry_date'].strftime('%Y-%m-%d') if hasattr(position['entry_date'], 'strftime') else str(position['entry_date']),
+                    'exit_date':   data.index[i].strftime('%Y-%m-%d') if hasattr(data.index[i], 'strftime') else str(data.index[i]),
                     'entry_price': position['entry_price'],
                     'exit_price':  round(float(effective_sell), 4),
                     'shares':      position['shares'],
@@ -123,7 +123,7 @@ class Strategy:
         final_capital = float(trades[-1]['capital']) if trades else initial_capital
         
         try:
-            days = (trades[-1]['exit_date'] - trades[0]['entry_date']).days if len(trades) > 0 else 365
+            days = (pd.Timestamp(trades[-1]['exit_date']) - pd.Timestamp(trades[0]['entry_date'])).days if len(trades) > 0 else 365
             years = max(days / 365.25, 0.1)  # Minimum 0.1 year to avoid division issues
             cagr = ((final_capital / initial_capital) ** (1 / years) - 1) * 100
         except:
@@ -148,7 +148,10 @@ class Strategy:
             # Daily returns via linear interpolation between trade events
             daily_rets = []
             for i in range(1, len(eq_values)):
-                seg_days = max((eq_dates[i] - eq_dates[i-1]).days, 1)
+                # Parse string dates
+                d0 = pd.Timestamp(eq_dates[i-1])
+                d1 = pd.Timestamp(eq_dates[i])
+                seg_days = max((d1 - d0).days, 1)
                 daily_growth = (eq_values[i] / eq_values[i-1]) ** (1 / seg_days) - 1
                 daily_rets.extend([daily_growth] * seg_days)
 
@@ -495,12 +498,15 @@ def generate_equity_curve(trades, initial_capital):
         return {'dates': [], 'values': []}
     
     # Fixed: dates should be dates, values should be values
-    dates = [trades[0]['entry_date'].strftime('%Y-%m-%d')]
+    # Trade dates are already ISO strings (set in execute_trades)
+    dates = [trades[0]['entry_date'] if isinstance(trades[0]['entry_date'], str)
+             else trades[0]['entry_date'].strftime('%Y-%m-%d')]
     values = [initial_capital]
-    
+
     for trade in trades:
-        dates.append(trade['exit_date'].strftime('%Y-%m-%d'))
-        values.append(float(trade['capital']))  # Ensure numeric
+        d = trade['exit_date']
+        dates.append(d if isinstance(d, str) else d.strftime('%Y-%m-%d'))
+        values.append(float(trade['capital']))
     
     return {
         'dates': dates,
@@ -1093,7 +1099,7 @@ def simulate_position_size(trades, size_fraction):
     
     # Calculate metrics
     total_return = (capital / 100000 - 1) * 100
-    days = (trades[-1]['exit_date'] - trades[0]['entry_date']).days
+    days = (pd.Timestamp(trades[-1]['exit_date']) - pd.Timestamp(trades[0]['entry_date'])).days
     years = days / 365.25
     cagr = ((capital / 100000) ** (1 / years) - 1) * 100 if years > 0 else 0
     
