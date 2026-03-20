@@ -878,10 +878,22 @@ function displayResults(data) {
         document.getElementById('overallScore').textContent = data.summary.overall_score || '--';
         document.getElementById('finalVerdict').textContent = data.summary.final_verdict || '--';
     }
-    
+
     // Backtest Results
-    if (data.results.backtest && data.results.backtest.success) {
-        displayBacktest(data.results.backtest);
+    if (data.results && data.results.backtest) {
+        if (data.results.backtest.success) {
+            try {
+                displayBacktest(data.results.backtest);
+            } catch(e) {
+                console.error('displayBacktest error:', e, data.results.backtest);
+                document.getElementById('cagr').textContent = 'Error';
+            }
+        } else {
+            const errMsg = data.results.backtest.error || 'Backtest returned no trades';
+            ['cagr','winRate','sharpe','maxDrawdown','totalTrades','profitFactor','expectancy','avgReturn']
+                .forEach(id => { const el = document.getElementById(id); if(el) el.textContent = 'N/A'; });
+            console.warn('Backtest failed:', errMsg);
+        }
     }
     
     // Optimization Results
@@ -929,7 +941,8 @@ function displayBacktestOnly(data) {
 
 function displayBacktest(data) {
     const metrics = data.metrics;
-    
+    if (!metrics) { console.error('displayBacktest: metrics is null/undefined', data); return; }
+
     // Summary metrics
     document.getElementById('summaryCAGR').textContent = metrics.cagr + '%';
     document.getElementById('summarySharpe').textContent = metrics.sharpe_ratio;
