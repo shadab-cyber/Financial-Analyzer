@@ -62,6 +62,7 @@ body { font-family: Arial, sans-serif; }
     padding: 16px;
     text-align: center;
     border-left: 4px solid #3b82f6;
+    color: #1f2937;
 }
 .chart-container {
     position: relative;
@@ -534,19 +535,19 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="metric-card">
           <div class="text-xs text-gray-600">Total Trades</div>
-          <div id="totalTrades" class="text-xl font-bold">--</div>
+          <div id="totalTrades" class="text-xl font-bold text-gray-800">--</div>
         </div>
         <div class="metric-card">
           <div class="text-xs text-gray-600">Profit Factor</div>
-          <div id="profitFactor" class="text-xl font-bold">--</div>
+          <div id="profitFactor" class="text-xl font-bold text-gray-800">--</div>
         </div>
         <div class="metric-card">
           <div class="text-xs text-gray-600">Expectancy</div>
-          <div id="expectancy" class="text-xl font-bold">--</div>
+          <div id="expectancy" class="text-xl font-bold text-gray-800">--</div>
         </div>
         <div class="metric-card">
           <div class="text-xs text-gray-600">Avg Return</div>
-          <div id="avgReturn" class="text-xl font-bold">--</div>
+          <div id="avgReturn" class="text-xl font-bold text-gray-800">--</div>
         </div>
       </div>
       
@@ -885,14 +886,13 @@ function displayResults(data) {
             try {
                 displayBacktest(data.results.backtest);
             } catch(e) {
-                console.error('displayBacktest error:', e, data.results.backtest);
-                document.getElementById('cagr').textContent = 'Error';
+                console.error('displayBacktest crash:', e, JSON.stringify(data.results.backtest).slice(0,300));
+                showBacktestError('JS render error: ' + e.message);
             }
         } else {
-            const errMsg = data.results.backtest.error || 'Backtest returned no trades';
-            ['cagr','winRate','sharpe','maxDrawdown','totalTrades','profitFactor','expectancy','avgReturn']
-                .forEach(id => { const el = document.getElementById(id); if(el) el.textContent = 'N/A'; });
+            const errMsg = data.results.backtest.error || 'No trades generated for this strategy/period';
             console.warn('Backtest failed:', errMsg);
+            showBacktestError(errMsg);
         }
     }
     
@@ -939,9 +939,31 @@ function displayBacktestOnly(data) {
     document.getElementById('verdictSubtitle').textContent = 'Run Complete Optimization for full analysis';
 }
 
+function showBacktestError(msg) {
+    ['cagr','winRate','sharpe','maxDrawdown','totalTrades','profitFactor','expectancy','avgReturn','summaryCAGR','summarySharpe','summaryWinRate']
+        .forEach(id => { const el = document.getElementById(id); if(el) { el.textContent = '--'; el.style.color = '#9ca3af'; }});
+    const bt = document.querySelector('.section-title');
+    const errDiv = document.getElementById('backtestErrorMsg');
+    if (!errDiv) {
+        const d = document.createElement('div');
+        d.id = 'backtestErrorMsg';
+        d.style.cssText = 'background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-top:12px;color:#92400e;font-size:13px;';
+        d.innerHTML = '⚠️ Backtest: ' + msg + '<br><span style="font-size:11px;color:#b45309;">Try a longer date range (2+ years) or check the stock symbol.</span>';
+        const section = document.getElementById('cagr')?.closest('.section-card');
+        if (section) section.insertBefore(d, section.firstChild.nextSibling);
+    }
+}
+
 function displayBacktest(data) {
     const metrics = data.metrics;
-    if (!metrics) { console.error('displayBacktest: metrics is null/undefined', data); return; }
+    if (!metrics) {
+        console.error('displayBacktest: metrics is null/undefined', data);
+        showBacktestError('Metrics missing in server response');
+        return;
+    }
+    // Clear any previous error
+    const prev = document.getElementById('backtestErrorMsg');
+    if (prev) prev.remove();
 
     // Summary metrics
     document.getElementById('summaryCAGR').textContent = metrics.cagr + '%';
