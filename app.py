@@ -18,39 +18,9 @@ from Technical_Analysis import run_technical_analysis
 from Portfolio_Management import run_portfolio_analysis, fetch_price_for_symbol
 from Performance_Analytics import run_complete_performance_analysis
 from Strategy_Optimization import run_complete_optimization, run_backtest
-from dcf_valuation import run_dcf_from_pdf_text, run_scenarios
+from dcf_valuation import run_dcf_from_pdf_text, build_sensitivity_table
 from pdf_text_extractor import extract_financials_from_pdf
 from financialanalyzer import analyze_excel
-
-def _validate_dcf_params(wacc, terminal_growth, net_debt, shares, cmp_price,
-                          enterprise_value=None):
-    """
-    Central DCF parameter validator. Returns error string or None.
-    Call after computing enterprise_value to catch EV edge cases.
-    """
-    if wacc is None:
-        return 'WACC is required.'
-    if wacc <= 0 or wacc > 0.5:
-        return f'WACC ({wacc*100:.1f}%) is outside the plausible range (0–50%).'
-    if terminal_growth is None:
-        return 'Terminal Growth Rate is required.'
-    if terminal_growth < 0:
-        return 'Terminal Growth Rate cannot be negative.'
-    if terminal_growth >= wacc:
-        return (f'Terminal growth ({terminal_growth*100:.1f}%) must be strictly less than '
-                f'WACC ({wacc*100:.1f}%).')
-    if shares is not None and float(shares) < 0:
-        return 'Shares outstanding cannot be negative.'
-    if cmp_price is not None and float(cmp_price) < 0:
-        return 'Current market price cannot be negative.'
-    if enterprise_value is not None and net_debt is not None:
-        eq = enterprise_value - float(net_debt)
-        if eq < 0 and shares and float(shares) > 0:
-            return (f'Net Debt (₹{net_debt:.0f} Cr) exceeds Enterprise Value '
-                    f'(₹{enterprise_value:.0f} Cr) — equity value is negative. '
-                    f'Check your Net Debt input.')
-    return None
-
 
 # =============================================================================
 # APP SETUP
@@ -181,6 +151,10 @@ def server_error(_):
 def home():
     is_android = request.args.get('app') == 'android'
     return render_template('financialanalyzerweb.html', is_android=is_android)
+
+@app.route('/pricing')
+def pricing_page():
+    return render_template('pricing.html')
 
 @app.route('/dcf')
 def dcf_page():
@@ -497,93 +471,89 @@ def debug_pdf_run():
 
 def _extract_dcf_text_lean(pdf_path: str) -> list:
     """
-    Extract ALL text from a PDF — no page filtering, no keyword cherry-picking.
+    Ultra-lean PDF text extraction for DCF on memory-constrained servers.
 
-    Previous versions tried to be smart (filter by CFS page headers, filter
-    by keyword lines). Every filtering step was a new way to silently drop
-    the exact lines dcf_valuation.py needed.  The right design is:
+    Design constraints (Render free tier = 512 MB):
+    · NO OCR at all — page.to_image() allocates ~4 MB per page; 5 PDFs × 200
+      pages = 4 GB peak, instant OOM crash.
+    · Process one page at a time, delete page object after each, call gc.
+    · Stop scanning after finding cash flow data (saves reading 150+ pages of
+      notes, director reports, etc. that come after the financials).
+    · Only keep lines containing CFO / CAPEX keywords.
 
-        extractor  = get me all the text, as fast as possible
-        dcf parser = find CFO and CAPEX inside that text
-
-    Hard cap at MAX_PAGES (150) keeps memory bounded.
-    Returns [] only if the PDF has zero selectable text (scanned image).
+    If the PDF is fully scanned (no selectable text anywhere), we return []
+    and the job reports a clear error rather than crashing the dyno.
     """
     import gc
 
-    MAX_PAGES = 150
-    all_pages = []
+    CFO_KW   = [
+        'operating activities', 'cash from operating',
+        'cash generated from operations', 'net cash from operating',
+    ]
+    CAPEX_KW = [
+        'purchase of property', 'purchase of plant',
+        'capital expenditure', 'capex', 'acquisition of fixed assets',
+        'fixed assets purchased',
+    ]
+    ALL_KW = CFO_KW + CAPEX_KW
 
-    # ── Primary: PyMuPDF (fast) ───────────────────────────────────────────
-    fitz_ok = False
+    relevant_lines = []
+    cash_flow_hits = 0          # how many keyword lines found so far
+    pages_since_last_hit = 0    # stop early if keywords disappear (past CF section)
+    MAX_PAGES_WITHOUT_HIT = 40  # stop after 40 consecutive non-keyword pages
+
     try:
-        import fitz
-        doc   = fitz.open(pdf_path)
-        total = min(len(doc), MAX_PAGES)
-        for page_num in range(total):
-            page = doc[page_num]
-            text = page.get_text("text")
-            page = None
-            if text and text.strip():
-                all_pages.append(text)
-            if page_num % 30 == 0:
-                gc.collect()
-        doc.close()
-        del doc
+        import pdfplumber
+        with pdfplumber.open(pdf_path) as pdf:
+            total_pages = len(pdf.pages)
+            for page_num in range(total_pages):
+                page = pdf.pages[page_num]
+                try:
+                    text = page.extract_text() or ''
+                finally:
+                    # Explicitly release page to free pdfplumber's internal cache
+                    page.flush_cache()
+                    del page
+
+                if not text.strip():
+                    pages_since_last_hit += 1
+                    if pages_since_last_hit > MAX_PAGES_WITHOUT_HIT and cash_flow_hits > 0:
+                        break   # already past the cash flow section
+                    continue
+
+                found_on_page = False
+                for line in text.splitlines():
+                    ll = line.lower()
+                    if any(k in ll for k in ALL_KW):
+                        relevant_lines.append(line)
+                        cash_flow_hits += 1
+                        found_on_page = True
+
+                if found_on_page:
+                    pages_since_last_hit = 0
+                else:
+                    pages_since_last_hit += 1
+                    if pages_since_last_hit > MAX_PAGES_WITHOUT_HIT and cash_flow_hits > 0:
+                        break
+
+                # Collect every 20 pages to prevent memory build-up
+                if page_num % 20 == 0:
+                    gc.collect()
+
         gc.collect()
-        fitz_ok = True
-    except ImportError:
-        pass
+
     except Exception as e:
-        app.logger.warning(f'PyMuPDF extraction failed for {pdf_path}: {e}')
-        all_pages.clear()
+        app.logger.warning(f'DCF lean extraction failed for {pdf_path}: {e}')
         gc.collect()
 
-    # ── Fallback: pdfplumber ──────────────────────────────────────────────
-    if not fitz_ok or not all_pages:
-        all_pages.clear()
-        try:
-            import pdfplumber
-            with pdfplumber.open(pdf_path) as pdf:
-                total = min(len(pdf.pages), MAX_PAGES)
-                for page_num in range(total):
-                    page = pdf.pages[page_num]
-                    try:
-                        text = page.extract_text() or ''
-                    finally:
-                        page.flush_cache()
-                        del page
-                    if text and text.strip():
-                        all_pages.append(text)
-                    if page_num % 20 == 0:
-                        gc.collect()
-            gc.collect()
-        except Exception as e:
-            app.logger.warning(f'pdfplumber fallback failed for {pdf_path}: {e}')
-            gc.collect()
-
-    if not all_pages:
-        app.logger.warning(
-            f'DCF extractor: {pdf_path} → 0 pages with text (scanned PDF?)'
-        )
-        return []
-
-    combined = '\n--- PAGE BREAK ---\n'.join(all_pages)
-    app.logger.info(
-        f'DCF extractor: {pdf_path} → {len(all_pages)} pages, '
-        f'{len(combined.splitlines())} lines'
-    )
-    return [combined]
+    joined = '\n'.join(relevant_lines)
+    return [joined] if relevant_lines else []
 
 
 def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
                  net_debt, shares, cmp_price):
     """Background worker: extract text from PDFs one at a time, run DCF."""
     import gc
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
-
-    PDF_TIMEOUT_SECS = 90  # max time allowed per PDF
-
     try:
         _set_job(job_id, {'status': 'processing',
                           'progress': 'Starting PDF extraction…', 'percent': 5})
@@ -594,39 +564,21 @@ def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
             pct = 10 + int(55 * idx / n)
             _set_job(job_id, {
                 'status':   'processing',
-                'progress': f'Extracting PDF {idx+1} of {n}…',
+                'progress': f'Reading PDF {idx+1}/{n} (text-only, no OCR)…',
                 'percent':  pct,
             })
             try:
-                # Run extraction in a thread so we can enforce a hard timeout
-                with ThreadPoolExecutor(max_workers=1) as ex:
-                    future = ex.submit(_extract_dcf_text_lean, path)
-                    try:
-                        blocks = future.result(timeout=PDF_TIMEOUT_SECS)
-                        all_text_blocks.extend(blocks)
-                        hits = len(blocks[0].splitlines()) if blocks else 0
-                        app.logger.info(
-                            f'DCF job {job_id}: PDF {idx+1}/{n} → {hits} keyword lines'
-                        )
-                        if hits == 0:
-                            app.logger.warning(
-                                f'DCF job {job_id}: PDF {idx+1} yielded 0 keyword lines — '
-                                f'may be a scanned PDF'
-                            )
-                    except FutureTimeout:
-                        app.logger.warning(
-                            f'DCF job {job_id}: PDF {idx+1} timed out after {PDF_TIMEOUT_SECS}s — skipping'
-                        )
-                        _set_job(job_id, {
-                            'status':   'processing',
-                            'progress': f'PDF {idx+1} of {n} took too long — skipped. Continuing…',
-                            'percent':  pct,
-                        })
+                blocks = _extract_dcf_text_lean(path)
+                all_text_blocks.extend(blocks)
+                app.logger.info(
+                    f'DCF job {job_id}: PDF {idx+1}/{n} → '
+                    f'{len(blocks[0].splitlines()) if blocks else 0} keyword lines'
+                )
             except Exception as e:
                 app.logger.warning(f'DCF PDF {idx+1} failed: {e}')
             finally:
                 cleanup(path)
-                gc.collect()
+                gc.collect()   # release memory between files
 
         if not all_text_blocks or not any(b.strip() for b in all_text_blocks):
             _set_job(job_id, {
@@ -651,274 +603,15 @@ def _run_dcf_job(job_id: str, paths: list, wacc, terminal_growth,
             current_price=cmp_price,
             wacc=wacc,
             terminal_growth=terminal_growth,
-        )  # forecast_years uses default 5 for PDF path
+        )
         _set_job(job_id, {'status': 'done', 'result': result, 'percent': 100})
 
     except Exception as e:
         app.logger.error(f'DCF job {job_id} failed: {e}')
-        _set_job(job_id, {'status': 'error', 'error': str(e)})\
-        
+        _set_job(job_id, {'status': 'error', 'error': str(e)})
         for p in paths:
             cleanup(p)
         import gc; gc.collect()
-
-
-@app.route('/dcf/debug-extract', methods=['POST'])
-def dcf_debug_extract():
-    """
-    Debug endpoint: upload one PDF, see exactly what text gets extracted
-    and whether CFO/CAPEX keywords match.
-    Visit /dcf in browser, open DevTools → Network, or hit with curl:
-      curl -F "file=@annual_report.pdf" https://your-app.onrender.com/dcf/debug-extract
-    Returns plain text — safe to paste into any text editor.
-    """
-    if 'file' not in request.files:
-        return 'No file uploaded', 400
-    file = request.files['file']
-    if not allowed_pdf(file.filename):
-        return 'Must be a PDF', 400
-
-    path = save_temp_file(file, UPLOAD_FOLDER_DCF)
-    out  = []
-    try:
-        blocks = _extract_dcf_text_lean(path)
-        if not blocks or not blocks[0].strip():
-            out.append('ERROR: extractor returned empty — likely a scanned PDF.')
-            return '\n'.join(out), 200, {'Content-Type': 'text/plain; charset=utf-8'}
-
-        lines = blocks[0].splitlines()
-        out.append(f'=== EXTRACTED {len(lines)} lines from {file.filename} ===\n')
-
-        # Show all lines
-        for i, ln in enumerate(lines):
-            out.append(f'[{i:04d}] {ln}')
-
-        # Show which lines matched CFO patterns
-        from dcf_valuation import _CFO_RE, _CAPEX_RE, _EXCL_RE, _matches_any
-        out.append('\n\n=== CFO KEYWORD MATCHES ===')
-        for i, ln in enumerate(lines):
-            if _matches_any(ln.lower(), _CFO_RE):
-                excl = ' [EXCLUDED]' if _matches_any(ln.lower(), _EXCL_RE) else ''
-                out.append(f'[{i:04d}]{excl} {ln}')
-
-        out.append('\n=== CAPEX KEYWORD MATCHES ===')
-        for i, ln in enumerate(lines):
-            if _matches_any(ln.lower(), _CAPEX_RE):
-                out.append(f'[{i:04d}] {ln}')
-
-        # Run the actual extractor and show results
-        out.append('\n=== DCF EXTRACTION RESULT ===')
-        try:
-            from dcf_valuation import extract_cfo, extract_capex
-            cfo   = extract_cfo(blocks)
-            capex = extract_capex(blocks)
-            out.append(f'CFO values found:   {cfo}')
-            out.append(f'CAPEX values found: {capex}')
-            if not cfo:
-                out.append('PROBLEM: No CFO value extracted — check CFO KEYWORD MATCHES above')
-            if not capex:
-                out.append('PROBLEM: No CAPEX value extracted — check CAPEX KEYWORD MATCHES above')
-        except Exception as e:
-            out.append(f'Extraction error: {e}')
-
-    finally:
-        cleanup(path)
-
-    return '\n'.join(out), 200, {'Content-Type': 'text/plain; charset=utf-8'}
-
-
-from dcf_excel_extractor import extract_dcf_from_excel, extract_wacc_inputs, extract_ebitda, extract_latest_fcf
-
-
-@app.route('/dcf/excel', methods=['POST'])
-def dcf_from_excel():
-    """
-    Accept a Screener.in Excel file + DCF parameters.
-    Extracts CFO and CAPEX directly from the Cash Flow sheet — no PDF, no OCR.
-    Returns the full DCF result synchronously (fast enough to not need a job queue).
-    """
-    path = None
-    try:
-        file = request.files.get('file')
-        if not file or not file.filename:
-            return jsonify({'error': 'No file uploaded.'}), 400
-        if not allowed_excel(file.filename):
-            return jsonify({'error': 'Please upload a Screener.in Excel file (.xlsx)'}), 400
-
-        path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
-
-        # Extract CFO + CAPEX from Excel
-        excel_data = extract_dcf_from_excel(path)
-
-        def _f(key, default=None):
-            v = request.form.get(key)
-            try:
-                return float(v) if v not in (None, '') else default
-            except (ValueError, TypeError):
-                return default
-
-        wacc            = _f('wacc')
-        terminal_growth = _f('terminal_growth')
-        net_debt        = _f('net_debt', 0)
-        shares          = _f('shares_outstanding')
-        cmp_price       = _f('current_price')
-        forecast_years  = int(request.form.get('forecast_years', 5))
-
-        if wacc is None or terminal_growth is None:
-            return jsonify({'error': 'WACC and Terminal Growth are required.'}), 400
-
-        if terminal_growth >= wacc:
-            return jsonify({'error': f'Terminal growth ({terminal_growth*100:.1f}%) must be less than WACC ({wacc*100:.1f}%).'}), 400
-
-        # Build synthetic text blocks from the clean numbers — reuses the
-        # existing DCF engine without touching it
-        lines = []
-        for i in range(len(excel_data['cfo'])):
-            lines.append(f"Net cash from operating activities {excel_data['cfo'][i]}")
-            lines.append(f"Purchase of property plant equipment {excel_data['capex'][i]}")
-        text_blocks = ['\n'.join(lines)]
-
-        result = run_dcf_from_pdf_text(
-            text_blocks,
-            net_debt=net_debt,
-            shares_outstanding=shares,
-            current_price=cmp_price,
-            wacc=wacc,
-            terminal_growth=terminal_growth,
-        )
-
-        # Attach Excel metadata so frontend can show real fiscal years + data preview
-        result['Extracted Years'] = excel_data['years']
-        result['Extracted CFO']   = excel_data['cfo']
-        result['Extracted CAPEX'] = excel_data['capex']
-        result['excel_fcf']       = excel_data['fcf']
-
-        # EV/EBITDA cross-check
-        ebitda_val, ebitda_yr = extract_ebitda(path)
-        result['EBITDA (₹ Cr)']       = ebitda_val
-        result['EBITDA Year']          = ebitda_yr
-
-        fcf_latest, fcf_yr = extract_latest_fcf(path)
-        result['Latest FCF (₹ Cr)']    = fcf_latest
-        result['Latest FCF Year']      = fcf_yr
-
-        return jsonify(result)
-
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
-    except Exception as e:
-        app.logger.error(f'dcf_from_excel error: {e}')
-        return jsonify({'error': f'DCF calculation failed: {str(e)}'}), 500
-    finally:
-        cleanup(path)
-
-
-@app.route('/dcf/wacc-inputs', methods=['POST'])
-def dcf_wacc_inputs():
-    """
-    Read interest, debt, tax rate, equity from an uploaded Excel.
-    Returns values for the WACC builder to pre-fill.
-    """
-    path = None
-    try:
-        file = request.files.get('file')
-        if not file or not allowed_excel(file.filename):
-            return jsonify({'error': 'No Excel file'}), 400
-        path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
-        data = extract_wacc_inputs(path)
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        cleanup(path)
-
-
-@app.route('/dcf/scenarios', methods=['POST'])
-def dcf_scenarios():
-    """
-    Run Bull / Base / Bear scenarios from an Excel upload.
-    Accepts same params as /dcf/excel plus optional per-scenario growth rates.
-    """
-    path = None
-    try:
-        file = request.files.get('file')
-        if not file or not allowed_excel(file.filename):
-            return jsonify({'error': 'No Excel file uploaded'}), 400
-        if not allowed_excel(file.filename):
-            return jsonify({'error': 'Please upload a .xlsx file'}), 400
-
-        path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
-        excel_data = extract_dcf_from_excel(path)
-
-        def _f(key, default=None):
-            v = request.form.get(key)
-            try:    return float(v) if v not in (None, '') else default
-            except: return default
-
-        wacc            = _f('wacc')
-        terminal_growth = _f('terminal_growth')
-        net_debt        = _f('net_debt', 0)
-        shares          = _f('shares_outstanding')
-        cmp_price       = _f('current_price')
-        forecast_years  = int(request.form.get('forecast_years', 5))
-        stage1_years    = int(request.form.get('stage1_years', 5)) if request.form.get('stage1_years') else None
-        use_2stage      = request.form.get('use_2stage', 'false').lower() == 'true'
-
-        bear_g1 = _f('bear_g1')
-        base_g1 = _f('base_g1')
-        bull_g1 = _f('bull_g1')
-        bear_g2 = _f('bear_g2') if use_2stage else None
-        base_g2 = _f('base_g2') if use_2stage else None
-        bull_g2 = _f('bull_g2') if use_2stage else None
-
-        err_msg = _validate_dcf_params(wacc, terminal_growth, net_debt, shares, cmp_price)
-        if err_msg:
-            return jsonify({'error': err_msg}), 400
-
-        # Build text blocks from Excel data
-        lines = []
-        for i in range(len(excel_data['cfo'])):
-            lines.append(f"Net cash from operating activities {excel_data['cfo'][i]}")
-            lines.append(f"Purchase of property plant equipment {excel_data['capex'][i]}")
-        text_blocks = ['\n'.join(lines)]
-
-        result = run_scenarios(
-            text_blocks,
-            net_debt=net_debt, shares_outstanding=shares,
-            current_price=cmp_price, wacc=wacc, terminal_growth=terminal_growth,
-            forecast_years=forecast_years,
-            stage1_years=stage1_years if use_2stage else None,
-            bear_g1=bear_g1, bear_g2=bear_g2,
-            base_g1=base_g1, base_g2=base_g2,
-            bull_g1=bull_g1, bull_g2=bull_g2,
-        )
-
-        result['Extracted Years']  = excel_data['years']
-        result['Extracted CFO']    = excel_data['cfo']
-        result['Extracted CAPEX']  = excel_data['capex']
-
-        ebitda_val, ebitda_yr = extract_ebitda(path)
-        result['EBITDA (₹ Cr)'] = ebitda_val
-        result['EBITDA Year']   = ebitda_yr
-
-        fcf_latest, fcf_yr = extract_latest_fcf(path)
-        result['Latest FCF (₹ Cr)']  = fcf_latest
-        result['Latest FCF Year']    = fcf_yr
-        if 'Base' in result:
-            result['Base']['EBITDA (₹ Cr)']    = ebitda_val
-            result['Base']['EBITDA Year']      = ebitda_yr
-            result['Base']['Latest FCF (₹ Cr)'] = fcf_latest
-            result['Base']['Latest FCF Year']   = fcf_yr
-
-        return jsonify(result)
-
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
-    except Exception as e:
-        app.logger.error(f'dcf_scenarios error: {e}')
-        return jsonify({'error': str(e)}), 500
-    finally:
-        cleanup(path)
 
 
 @app.route('/dcf/manual', methods=['POST'])
@@ -949,7 +642,6 @@ def dcf_manual():
         net_debt        = _f('net_debt', 0)
         shares          = _f('shares')
         cmp_price       = _f('current_price')
-        forecast_years  = int(data.get('forecast_years', 5) or 5)
 
         # Build synthetic text blocks from the numbers so the existing
         # DCF engine (which was designed for PDF-extracted text) still works.
@@ -968,8 +660,22 @@ def dcf_manual():
             current_price=cmp_price,
             wacc=wacc,
             terminal_growth=terminal_growth,
-            forecast_years=forecast_years,
         )
+
+        # ── Sensitivity table ──────────────────────────────────────────────
+        try:
+            sensitivity = build_sensitivity_table(
+                base_result=result,
+                text_blocks=text_blocks,
+                net_debt=net_debt,
+                shares_outstanding=shares,
+                current_price=cmp_price,
+            )
+            result['sensitivity_table'] = sensitivity
+        except Exception as se:
+            app.logger.warning(f'Sensitivity table failed: {se}')
+            result['sensitivity_table'] = None
+
         return jsonify(result)
 
     except Exception as e:
@@ -978,7 +684,6 @@ def dcf_manual():
 
 
 
-@app.route('/dcf/upload', methods=['POST'])
 def dcf_from_pdf():
     """
     Accept PDFs + DCF parameters, start a background job, return job_id immediately.
