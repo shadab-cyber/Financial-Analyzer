@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing — Financial Analyzer</title>
+<meta name="description" content="Professional financial analysis tools for Indian investors, traders and boutique finance firms. Transparent pricing, no hidden fees.">
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+body { font-family: 'Manrope', sans-serif; background: #f1f5f9; margin: 0; padding: 0; }
+h1,h2,h3 { font-family: 'Playfair Display', serif; }
+nav { font-family: 'Manrope', sans-serif; position: sticky; top: 0; z-index: 1000; }
+nav .nav-link { font-size: 13px; font-weight: 600; }
+nav .nav-link:hover { background: rgba(255,255,255,0.2); border-radius: 8px; }
+.brand-name { font-family: 'Playfair Display', serif; font-weight: 700; font-size: 20px; color: #fff; }
+.nav-logo-wrap { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+
+/* Pricing cards */
+.plan-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 32px 28px;
+  border: 2px solid #e2e8f0;
+  position: relative;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.plan-card:hover { transform: translateY(-4px); box-shadow: 0 20px 48px rgba(0,0,0,0.10); }
+.plan-card.featured {
+  border-color: #457b9d;
+  box-shadow: 0 12px 40px rgba(69,123,157,0.18);
+  transform: scale(1.03);
+}
+.plan-card.featured:hover { transform: scale(1.03) translateY(-4px); }
+.badge-popular {
+  position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+  background: #457b9d; color: #fff;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  padding: 4px 18px; border-radius: 20px; white-space: nowrap;
+}
+.price-amount { font-family: 'Playfair Display', serif; font-size: 2.8rem; font-weight: 800; line-height: 1; }
+.price-period { font-size: 13px; color: #64748b; }
+.feature-check { color: #16a34a; font-size: 15px; margin-right: 8px; }
+.feature-cross { color: #cbd5e1; font-size: 15px; margin-right: 8px; }
+.btn-primary {
+  display: block; width: 100%; text-align: center;
+  background: #457b9d; color: #fff;
+  padding: 13px 0; border-radius: 10px;
+  font-weight: 700; font-size: 15px;
+  text-decoration: none; border: none; cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+.btn-primary:hover { background: #345f7e; transform: translateY(-1px); }
+.btn-outline {
+  display: block; width: 100%; text-align: center;
+  background: transparent; color: #457b9d;
+  padding: 12px 0; border-radius: 10px;
+  font-weight: 700; font-size: 15px;
+  text-decoration: none; border: 2px solid #457b9d; cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-outline:hover { background: #457b9d; color: #fff; }
+.btn-enterprise {
+  display: block; width: 100%; text-align: center;
+  background: #1e293b; color: #fff;
+  padding: 13px 0; border-radius: 10px;
+  font-weight: 700; font-size: 15px;
+  text-decoration: none; border: none; cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+.btn-enterprise:hover { background: #0f172a; transform: translateY(-1px); }
+
+/* Comparison table */
+.comp-table { width: 100%; border-collapse: collapse; }
+.comp-table th { background: #457b9d; color: #fff; padding: 14px 16px; font-size: 13px; font-weight: 700; }
+.comp-table th:first-child { text-align: left; border-radius: 10px 0 0 0; }
+.comp-table th:last-child { border-radius: 0 10px 0 0; }
+.comp-table td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+.comp-table tr:nth-child(even) td { background: #f8fafc; }
+.comp-table tr:last-child td:first-child { border-radius: 0 0 0 10px; }
+.comp-table tr:last-child td:last-child { border-radius: 0 0 10px 0; }
+.comp-table td:first-child { font-weight: 600; color: #334155; }
+.comp-table td:not(:first-child) { text-align: center; }
+.section-bg { background: #fff; border-radius: 20px; padding: 40px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
+
+/* FAQ */
+.faq-item { border-bottom: 1px solid #e2e8f0; padding: 18px 0; cursor: pointer; }
+.faq-item:last-child { border-bottom: none; }
+.faq-q { font-weight: 700; color: #1e293b; display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
+.faq-a { color: #475569; font-size: 14px; line-height: 1.7; margin-top: 10px; display: none; }
+.faq-item.open .faq-a { display: block; }
+.faq-item.open .faq-icon { transform: rotate(45deg); }
+.faq-icon { transition: transform 0.2s; font-size: 20px; color: #457b9d; flex-shrink: 0; }
+
+/* Hero gradient */
+.hero-gradient {
+  background: linear-gradient(135deg, #1d3557 0%, #457b9d 60%, #a8dadc 100%);
+}
+
+/* Footer */
+.fa-footer{background:#1d3557;color:#a8b8cc;padding:56px 24px 28px;margin-top:72px;font-family:'Manrope',sans-serif;}
+.fa-footer .fl{font-size:1.25rem;font-weight:800;color:#fff;margin-bottom:8px;}
+.fa-footer .ft{font-size:13px;color:#7a90a8;line-height:1.6;max-width:240px;margin-bottom:18px;}
+.fa-footer .fgrid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:36px;}
+.fa-footer h4{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#fff;margin-bottom:12px;}
+.fa-footer a{display:block;font-size:13px;color:#7a90a8;text-decoration:none;margin-bottom:8px;transition:color .18s ease;}
+.fa-footer a:hover{color:#a8dadc;}
+.fa-footer hr{border:none;border-top:1px solid rgba(255,255,255,.08);margin:32px 0 20px;}
+.fa-footer .fb{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:12px;color:#546a7f;}
+.fa-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(168,218,220,.15);border:1px solid rgba(168,218,220,.3);color:#a8dadc;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+@media(max-width:768px){.fa-footer .fgrid{grid-template-columns:1fr 1fr!important;}.plan-card.featured{transform:scale(1);}}
+@media(max-width:480px){.fa-footer .fgrid{grid-template-columns:1fr!important;}}
+</style>
+
+<!-- Firebase auth -->
+<script type="module">
+  import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {getAuth,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  const auth=getAuth(initializeApp({apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",authDomain:"financial-analyzer-afb07.firebaseapp.com",projectId:"financial-analyzer-afb07",storageBucket:"financial-analyzer-afb07.firebasestorage.app",messagingSenderId:"572544893192",appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"}));
+  // Pricing page is public — show regardless of auth state
+  document.documentElement.style.visibility = "visible";
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      const n=document.getElementById("_uname"); if(n) n.textContent=user.displayName||user.email;
+      const a=document.getElementById("_uavatar"); if(a&&user.photoURL){a.src=user.photoURL;a.style.display="inline-block";}
+      // Show "Go to app" instead of "Sign in"
+      document.querySelectorAll('.cta-signin').forEach(el => el.style.display='none');
+      document.querySelectorAll('.cta-app').forEach(el => el.style.display='inline-block');
+    }
+  });
+</script>
+<script type="module">
+  import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {getAuth,signOut} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  const _a=getAuth(initializeApp({apiKey:"AIzaSyCdS9-LUfnFozRi0EGxJa1GOU_txrGxpoA",authDomain:"financial-analyzer-afb07.firebaseapp.com",projectId:"financial-analyzer-afb07",storageBucket:"financial-analyzer-afb07.firebasestorage.app",messagingSenderId:"572544893192",appId:"1:572544893192:web:2b97edd5fc87d5e57aecbd"}));
+  window._signOut=()=>signOut(_a).then(()=>{fetch("/auth/logout",{method:"POST"});window.location.href="/login";});
+</script>
+</head>
+
+<body>
+
+<!-- ── NAVBAR ─────────────────────────────────────────────────────────────── -->
+<nav class="text-white shadow-md" style="background-color:#457b9d;">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center h-16">
+      <div class="flex-shrink-0 mr-4">
+        <a href="/" class="nav-logo-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="36" height="36" style="flex-shrink:0;"><rect width="100" height="100" rx="22" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.28)" stroke-width="2"/><line x1="18" y1="20" x2="18" y2="80" stroke="white" stroke-width="10" stroke-linecap="round"/><line x1="18" y1="20" x2="50" y2="20" stroke="white" stroke-width="10" stroke-linecap="round"/><line x1="18" y1="50" x2="44" y2="50" stroke="white" stroke-width="9" stroke-linecap="round"/><line x1="58" y1="80" x2="80" y2="20" stroke="white" stroke-width="9.5" stroke-linecap="round"/><line x1="102" y1="80" x2="80" y2="20" stroke="white" stroke-width="9.5" stroke-linecap="round"/><polyline points="64,59 80,42 96,59" fill="none" stroke="#a8dadc" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="brand-name">Financial Analyzer</span>
+        </a>
+      </div>
+      <div class="hidden lg:flex space-x-1">
+        <a href="/" class="nav-link px-3 py-2 rounded-lg text-sm transition">Home</a>
+        <a href="/dcf" class="nav-link px-3 py-2 rounded-lg text-sm transition">DCF</a>
+        <a href="/financial-modelling" class="nav-link px-3 py-2 rounded-lg text-sm transition">Modelling</a>
+        <a href="/technical-analysis" class="nav-link px-3 py-2 rounded-lg text-sm transition">Technical</a>
+        <a href="/portfolio-management" class="nav-link px-3 py-2 rounded-lg text-sm transition">Portfolio</a>
+        <a href="/performance-analytics" class="nav-link px-3 py-2 rounded-lg text-sm transition">Performance</a>
+        <a href="/strategy-optimization" class="nav-link px-3 py-2 rounded-lg text-sm transition">Strategy</a>
+        <a href="/pricing" class="nav-link px-3 py-2 rounded-lg text-sm transition bg-white bg-opacity-20 font-semibold">Pricing</a>
+      </div>
+      <div class="hidden lg:flex items-center gap-2 ml-auto">
+        <img id="_uavatar" style="display:none;width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.4);" src="" alt=""/>
+        <span id="_uname" style="font-size:11px;font-weight:600;color:#fff;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:16px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+        <button onclick="_signOut()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:16px;padding:4px 12px;font-size:11px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;min-height:0;">Sign out</button>
+      </div>
+      <div class="lg:hidden ml-auto">
+        <button id="mobile-menu-btn" type="button" class="inline-flex items-center justify-center p-2 rounded-md hover:bg-white hover:bg-opacity-20 focus:outline-none">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            <path id="close-icon" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div id="mobile-menu" class="hidden lg:hidden">
+    <div class="px-2 pt-2 pb-3 space-y-1">
+      <a href="/" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">🏠 Home</a>
+      <a href="/dcf" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">📊 DCF Valuation</a>
+      <a href="/financial-modelling" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">📈 Financial Modelling</a>
+      <a href="/technical-analysis" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">📉 Technical Analysis</a>
+      <a href="/portfolio-management" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">💼 Portfolio Management</a>
+      <a href="/performance-analytics" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">📊 Performance Analytics</a>
+      <a href="/strategy-optimization" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">🎯 Strategy Optimization</a>
+      <a href="/pricing" class="block px-3 py-2 rounded-md text-base bg-white bg-opacity-20 font-semibold">💳 Pricing</a>
+    </div>
+  </div>
+</nav>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const btn = document.getElementById('mobile-menu-btn');
+  const menu = document.getElementById('mobile-menu');
+  const mi = document.getElementById('menu-icon');
+  const ci = document.getElementById('close-icon');
+  if (btn) btn.addEventListener('click', function() {
+    menu.classList.toggle('hidden'); mi.classList.toggle('hidden'); ci.classList.toggle('hidden');
+  });
+});
+</script>
+
+<!-- ── HERO ────────────────────────────────────────────────────────────────── -->
+<div class="hero-gradient text-white py-20 px-6 text-center">
+  <div class="max-w-3xl mx-auto">
+    <div style="display:inline-block;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:5px 18px;font-size:12px;font-weight:700;letter-spacing:0.08em;margin-bottom:20px;">
+      TRANSPARENT PRICING
+    </div>
+    <h1 style="font-size:clamp(2rem,5vw,3.2rem);font-weight:800;margin-bottom:16px;letter-spacing:-0.5px;color:#fff;">
+      Institutional-grade analysis.<br>Not institutional pricing.
+    </h1>
+    <p style="font-size:17px;color:rgba(255,255,255,0.82);max-width:540px;margin:0 auto 28px;line-height:1.7;">
+      Built for Indian retail investors, active traders, and boutique finance firms. 
+      Start free. Upgrade when you need more.
+    </p>
+    <a href="/login" class="cta-signin" style="display:inline-block;background:#fff;color:#457b9d;font-weight:700;font-size:15px;padding:13px 32px;border-radius:10px;text-decoration:none;box-shadow:0 4px 16px rgba(0,0,0,0.15);">
+      Start Free — No Credit Card
+    </a>
+    <a href="/" class="cta-app" style="display:none;background:#fff;color:#457b9d;font-weight:700;font-size:15px;padding:13px 32px;border-radius:10px;text-decoration:none;box-shadow:0 4px 16px rgba(0,0,0,0.15);">
+      Go to App →
+    </a>
+  </div>
+</div>
+
+<!-- ── PRICING CARDS ───────────────────────────────────────────────────────── -->
+<div class="max-w-6xl mx-auto px-4 py-16">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px;align-items:start;">
+
+    <!-- FREE -->
+    <div class="plan-card">
+      <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;color:#64748b;margin-bottom:12px;">FREE</div>
+      <div style="font-size:1.5rem;font-weight:800;font-family:'Playfair Display',serif;margin-bottom:4px;">₹0</div>
+      <div class="price-period">forever · no credit card</div>
+      <hr style="margin:20px 0;border-color:#f1f5f9;">
+      <ul style="list-style:none;padding:0;margin:0 0 28px;space-y:8px;">
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> Stock Analyzer (Screener.in)</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> DCF Manual Input (basic)</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> Google Sign-In</li>
+        <li style="padding:6px 0;font-size:14px;color:#94a3b8;"><span class="feature-cross">✗</span> Financial Modelling</li>
+        <li style="padding:6px 0;font-size:14px;color:#94a3b8;"><span class="feature-cross">✗</span> Technical Analysis</li>
+        <li style="padding:6px 0;font-size:14px;color:#94a3b8;"><span class="feature-cross">✗</span> Portfolio Management</li>
+        <li style="padding:6px 0;font-size:14px;color:#94a3b8;"><span class="feature-cross">✗</span> Strategy Optimization</li>
+        <li style="padding:6px 0;font-size:14px;color:#94a3b8;"><span class="feature-cross">✗</span> Performance Analytics</li>
+      </ul>
+      <a href="/login" class="btn-outline">Get Started Free</a>
+    </div>
+
+    <!-- PRO — FEATURED -->
+    <div class="plan-card featured">
+      <div class="badge-popular">✦ MOST POPULAR</div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;color:#457b9d;margin-bottom:12px;">PRO</div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px;">
+        <span class="price-amount" style="color:#1e293b;">₹999</span>
+        <span class="price-period">/month</span>
+      </div>
+      <div style="font-size:12px;color:#16a34a;font-weight:600;margin-bottom:4px;">₹9,999/year — save 2 months</div>
+      <hr style="margin:20px 0;border-color:#e0eaf3;">
+      <ul style="list-style:none;padding:0;margin:0 0 28px;">
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> Everything in Free</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> <strong>Financial Modelling</strong> (WACC, FCFF, Monte Carlo)</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> <strong>Technical Analysis</strong> (16 patterns, OOS backtest)</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> <strong>Portfolio Management</strong> (VaR, XIRR, correlation)</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> <strong>DCF</strong> + sensitivity table (WACC × growth grid)</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> <strong>Strategy Optimization</strong> + walk-forward</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> <strong>Performance Analytics</strong> (TWR, attribution, tax)</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> Email support</li>
+      </ul>
+      <a href="mailto:contact@financial-analyzer.in?subject=Pro Plan Inquiry" class="btn-primary">Get Pro Access</a>
+      <div style="font-size:11px;text-align:center;margin-top:10px;color:#64748b;">14-day free trial · cancel anytime</div>
+    </div>
+
+    <!-- ENTERPRISE -->
+    <div class="plan-card" style="border-color:#1e293b;">
+      <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;color:#1e293b;margin-bottom:12px;">ENTERPRISE</div>
+      <div style="font-size:1.5rem;font-weight:800;font-family:'Playfair Display',serif;margin-bottom:4px;color:#1e293b;">Custom</div>
+      <div class="price-period">per seat · billed annually</div>
+      <div style="font-size:12px;color:#457b9d;font-weight:600;margin-top:4px;">Starting ₹5,000/seat/month</div>
+      <hr style="margin:20px 0;border-color:#e2e8f0;">
+      <ul style="list-style:none;padding:0;margin:0 0 28px;">
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> Everything in Pro</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> Multi-seat team access</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> Priority support + onboarding</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> Custom branding (white-label)</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> Bulk Excel/PDF processing</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> Dedicated account manager</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> SLA & uptime guarantee</li>
+        <li style="padding:6px 0;font-size:14px;"><span class="feature-check">✓</span> Ideal for: Boutique IB, PE, Family Offices</li>
+      </ul>
+      <a href="#enterprise-contact" class="btn-enterprise">Contact for Quote</a>
+      <div style="font-size:11px;text-align:center;margin-top:10px;color:#64748b;">Response within 24 hours</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── COMPARISON TABLE ────────────────────────────────────────────────────── -->
+<div class="max-w-5xl mx-auto px-4 pb-16">
+  <div class="section-bg">
+    <h2 style="font-size:1.6rem;font-weight:700;margin-bottom:6px;color:#1e293b;">Full feature comparison</h2>
+    <p style="color:#64748b;font-size:14px;margin-bottom:28px;">Every tool, every feature — no surprises.</p>
+    <div class="overflow-x-auto">
+      <table class="comp-table">
+        <thead>
+          <tr>
+            <th style="width:45%;text-align:left;">Feature</th>
+            <th>Free</th>
+            <th style="background:#345f7e;">Pro</th>
+            <th>Enterprise</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="4" style="background:#f8fafc;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#94a3b8;padding:10px 16px;">ANALYSIS TOOLS</td></tr>
+          <tr><td>Stock Analyzer (Screener.in Excel)</td><td>✅</td><td>✅</td><td>✅</td></tr>
+          <tr><td>DCF Valuation — Manual Input</td><td>Basic</td><td>✅ + Sensitivity Table</td><td>✅</td></tr>
+          <tr><td>DCF Valuation — PDF Upload</td><td>—</td><td>✅</td><td>✅</td></tr>
+          <tr><td>Financial Modelling (WACC, FCFF, Monte Carlo)</td><td>—</td><td>✅</td><td>✅</td></tr>
+          <tr><td>Technical Analysis (16 patterns, ADX, divergence)</td><td>—</td><td>✅</td><td>✅</td></tr>
+          <tr><td>Portfolio Management (VaR, XIRR, correlation)</td><td>—</td><td>✅</td><td>✅</td></tr>
+          <tr><td>Strategy Optimization (backtesting, walk-forward)</td><td>—</td><td>✅</td><td>✅</td></tr>
+          <tr><td>Performance Analytics (TWR, attribution, tax)</td><td>—</td><td>✅</td><td>✅</td></tr>
+          <tr><td colspan="4" style="background:#f8fafc;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#94a3b8;padding:10px 16px;">TEAM & SUPPORT</td></tr>
+          <tr><td>Users</td><td>1</td><td>1</td><td>Unlimited seats</td></tr>
+          <tr><td>Email support</td><td>—</td><td>✅</td><td>✅ Priority</td></tr>
+          <tr><td>Onboarding call</td><td>—</td><td>—</td><td>✅</td></tr>
+          <tr><td>Dedicated account manager</td><td>—</td><td>—</td><td>✅</td></tr>
+          <tr><td>Custom branding / white-label</td><td>—</td><td>—</td><td>✅</td></tr>
+          <tr><td>SLA + uptime guarantee</td><td>—</td><td>—</td><td>✅</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── SOCIAL PROOF ────────────────────────────────────────────────────────── -->
+<div class="max-w-5xl mx-auto px-4 pb-16">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;text-align:center;">
+    <div style="background:#fff;border-radius:16px;padding:28px 20px;box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+      <div style="font-size:2.2rem;font-weight:800;font-family:'Playfair Display',serif;color:#457b9d;">7</div>
+      <div style="font-size:13px;color:#64748b;margin-top:4px;font-weight:600;">Professional Tools</div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:28px 20px;box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+      <div style="font-size:2.2rem;font-weight:800;font-family:'Playfair Display',serif;color:#457b9d;">8.5+</div>
+      <div style="font-size:13px;color:#64748b;margin-top:4px;font-weight:600;">Average Tool Score</div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:28px 20px;box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+      <div style="font-size:2.2rem;font-weight:800;font-family:'Playfair Display',serif;color:#457b9d;">NSE</div>
+      <div style="font-size:13px;color:#64748b;margin-top:4px;font-weight:600;">Indian Markets Focus</div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:28px 20px;box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+      <div style="font-size:2.2rem;font-weight:800;font-family:'Playfair Display',serif;color:#457b9d;">₹0</div>
+      <div style="font-size:13px;color:#64748b;margin-top:4px;font-weight:600;">To Start Today</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── FAQ ─────────────────────────────────────────────────────────────────── -->
+<div class="max-w-3xl mx-auto px-4 pb-16">
+  <div class="section-bg">
+    <h2 style="font-size:1.6rem;font-weight:700;margin-bottom:6px;color:#1e293b;">Frequently asked questions</h2>
+    <p style="color:#64748b;font-size:14px;margin-bottom:28px;">Everything you need to know before subscribing.</p>
+
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">What's included in the 14-day free trial? <span class="faq-icon">+</span></div>
+      <div class="faq-a">The Pro trial gives you full, unrestricted access to all 7 tools for 14 days — no credit card required to start. You only need to pay if you choose to continue after the trial.</div>
+    </div>
+
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">Can I use the tools on my phone? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Yes. Financial Analyzer is fully responsive and works on mobile browsers. An Android app wrapper is also available for a more native experience.</div>
+    </div>
+
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">What data sources do the tools use? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Stock prices and historical data come from NSE via Yahoo Finance (yfinance). Fundamental analysis uses Screener.in Excel exports which you upload directly. We don't store your financial data — it's processed in real time.</div>
+    </div>
+
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">I'm a boutique IB / PE fund. What does Enterprise include? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Enterprise is designed for small teams (2–20 analysts). It includes: multi-seat access with individual logins, a dedicated onboarding session, priority support with guaranteed response times, and the option for custom branding if you want to white-label the platform for client presentations. Pricing starts at ₹5,000/seat/month with volume discounts for 5+ seats. Contact us to discuss your specific needs.</div>
+    </div>
+
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">Is the financial analysis investment advice? <span class="faq-icon">+</span></div>
+      <div class="faq-a">No. Financial Analyzer provides analytical tools to help you research and model investments. Nothing on the platform constitutes investment advice, a buy/sell recommendation, or a guarantee of returns. Always verify data independently and consult a registered financial advisor before investing.</div>
+    </div>
+
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">How accurate is the DCF and financial modelling? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Our tools implement standard valuation methodologies used by professional analysts — WACC-based DCF, FCFF, Monte Carlo simulation, Altman Z-Score, Piotroski F-Score, and more. The accuracy of any output depends on the quality of the input data and the assumptions used. We show sensitivity tables and confidence scores so you always know the range of outcomes, not just a single number.</div>
+    </div>
+
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">Can I cancel anytime? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Yes. Monthly subscriptions can be cancelled at any time with no penalty. You keep access until the end of the billing period. Annual plans can be cancelled but are non-refundable after the 14-day trial window.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ENTERPRISE CONTACT ───────────────────────────────────────────────────── -->
+<div class="max-w-3xl mx-auto px-4 pb-20" id="enterprise-contact">
+  <div class="section-bg" style="border-top: 4px solid #1e293b;">
+    <h2 style="font-size:1.6rem;font-weight:700;margin-bottom:6px;color:#1e293b;">Enterprise inquiry</h2>
+    <p style="color:#64748b;font-size:14px;margin-bottom:28px;">
+      For boutique investment banks, PE firms, family offices, and multi-analyst teams.
+      Tell us about your use case and we'll get back to you within 24 hours.
+    </p>
+    <form id="enterpriseForm" onsubmit="submitEnterpriseForm(event)" style="display:grid;gap:16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">Your Name *</label>
+          <input type="text" id="eName" required placeholder="Rahul Sharma"
+            style="width:100%;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#457b9d'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">Firm Name *</label>
+          <input type="text" id="eFirm" required placeholder="Acme Capital Advisors"
+            style="width:100%;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#457b9d'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">Email *</label>
+          <input type="email" id="eEmail" required placeholder="rahul@acmecapital.in"
+            style="width:100%;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#457b9d'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">Team Size</label>
+          <select id="eTeamSize"
+            style="width:100%;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:14px;font-family:inherit;outline:none;background:#fff;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#457b9d'" onblur="this.style.borderColor='#e2e8f0'">
+            <option>1–2 analysts</option>
+            <option>3–5 analysts</option>
+            <option>6–10 analysts</option>
+            <option>10+ analysts</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">How will you use Financial Analyzer?</label>
+        <textarea id="eUseCase" rows="3" placeholder="e.g. DCF models for M&A deals, portfolio monitoring for 20+ client accounts, backtesting equity strategies..."
+          style="width:100%;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:14px;font-family:inherit;outline:none;resize:vertical;box-sizing:border-box;"
+          onfocus="this.style.borderColor='#457b9d'" onblur="this.style.borderColor='#e2e8f0'"></textarea>
+      </div>
+      <div id="formSuccess" style="display:none;background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:14px 16px;color:#065f46;font-size:14px;font-weight:600;">
+        ✅ Thanks! We'll be in touch within 24 hours.
+      </div>
+      <div id="formError" style="display:none;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:14px 16px;color:#991b1b;font-size:14px;"></div>
+      <button type="submit" class="btn-enterprise" style="margin-top:4px;">Send Enterprise Inquiry →</button>
+      <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0;">No commitment. We'll respond within 24 hours with a custom quote.</p>
+    </form>
+  </div>
+</div>
+
+<!-- ── FOOTER ──────────────────────────────────────────────────────────────── -->
+<style>
+.fa-footer{background:#1d3557;color:#a8b8cc;padding:56px 24px 28px;margin-top:0;font-family:'Manrope',sans-serif;}
+.fa-footer .fl{font-size:1.25rem;font-weight:800;color:#fff;margin-bottom:8px;}
+.fa-footer .ft{font-size:13px;color:#7a90a8;line-height:1.6;max-width:240px;margin-bottom:18px;}
+.fa-footer .fgrid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:36px;}
+.fa-footer h4{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#fff;margin-bottom:12px;}
+.fa-footer a{display:block;font-size:13px;color:#7a90a8;text-decoration:none;margin-bottom:8px;}
+.fa-footer a:hover{color:#a8dadc;}
+.fa-footer hr{border:none;border-top:1px solid rgba(255,255,255,.08);margin:32px 0 20px;}
+.fa-footer .fb{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:12px;color:#546a7f;}
+</style>
+<footer class="fa-footer">
+  <div style="max-width:1100px;margin:0 auto;">
+    <div class="fgrid">
+      <div>
+        <div class="fl" style="font-family:'Playfair Display',serif;font-weight:700;display:flex;align-items:center;gap:8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="28" height="28" style="flex-shrink:0;"><rect width="100" height="100" rx="22" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.2)" stroke-width="2"/><line x1="18" y1="20" x2="18" y2="80" stroke="white" stroke-width="10" stroke-linecap="round"/><line x1="18" y1="20" x2="50" y2="20" stroke="white" stroke-width="10" stroke-linecap="round"/><line x1="18" y1="50" x2="44" y2="50" stroke="white" stroke-width="9" stroke-linecap="round"/><line x1="58" y1="80" x2="80" y2="20" stroke="white" stroke-width="9.5" stroke-linecap="round"/><line x1="102" y1="80" x2="80" y2="20" stroke="white" stroke-width="9.5" stroke-linecap="round"/><polyline points="64,59 80,42 96,59" fill="none" stroke="#a8dadc" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Financial Analyzer
+        </div>
+        <p class="ft">Professional financial analysis tools for Indian investors and finance professionals.</p>
+        <span style="display:inline-flex;align-items:center;gap:4px;background:rgba(168,218,220,.15);border:1px solid rgba(168,218,220,.3);color:#a8dadc;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">&#x2705; Free tier available</span>
+      </div>
+      <div>
+        <h4>Tools</h4>
+        <a href="/">Stock Analyzer</a>
+        <a href="/dcf">DCF Valuation</a>
+        <a href="/financial-modelling">Financial Modelling</a>
+        <a href="/technical-analysis">Technical Analysis</a>
+        <a href="/portfolio-management">Portfolio Management</a>
+        <a href="/performance-analytics">Performance Analytics</a>
+        <a href="/strategy-optimization">Strategy Optimization</a>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <a href="/pricing">Pricing</a>
+        <a href="#enterprise-contact">Enterprise</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <div>
+        <h4>Account</h4>
+        <a href="/login">Sign In</a>
+        <a href="/login">Create Account</a>
+        <a href="/pricing">View Plans</a>
+      </div>
+    </div>
+    <hr>
+    <div class="fb">
+      <span>&copy; 2025 Financial Analyzer. All rights reserved.</span>
+      <span>For Indian markets · NSE / BSE</span>
+      <span>Not investment advice.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+function submitEnterpriseForm(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.textContent = 'Sending…';
+  btn.disabled = true;
+
+  const name     = document.getElementById('eName').value;
+  const firm     = document.getElementById('eFirm').value;
+  const email    = document.getElementById('eEmail').value;
+  const teamSize = document.getElementById('eTeamSize').value;
+  const useCase  = document.getElementById('eUseCase').value;
+
+  // Send via mailto as a reliable fallback (no backend needed yet)
+  const subject = encodeURIComponent(`Enterprise Inquiry — ${firm}`);
+  const body    = encodeURIComponent(
+    `Name: ${name}\nFirm: ${firm}\nEmail: ${email}\nTeam Size: ${teamSize}\n\nUse Case:\n${useCase}`
+  );
+  window.location.href = `mailto:contact@financial-analyzer.in?subject=${subject}&body=${body}`;
+
+  document.getElementById('formSuccess').style.display = 'block';
+  document.getElementById('formError').style.display   = 'none';
+  btn.textContent = 'Sent ✓';
+}
+</script>
+
+</body>
+</html>
