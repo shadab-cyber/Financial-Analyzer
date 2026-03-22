@@ -144,17 +144,33 @@ def _get(section: dict, *keys) -> List:
 
 
 def cagr(vals: List) -> Optional[float]:
+    """
+    Compound Annual Growth Rate.
+
+    Screener.in exports data newest-year-first (leftmost column = most recent).
+    After parsing, vals[0] = most recent year, vals[-1] = oldest year.
+    CAGR = (newest / oldest) ^ (1/n) − 1  →  vals[0] / vals[-1]
+    """
     vals = [v for v in vals if v is not None]
-    if len(vals) < 2 or vals[-1] <= 0 or vals[0] <= 0:
+    if len(vals) < 2 or vals[0] <= 0 or vals[-1] <= 0:
         return None
     n = len(vals) - 1
-    return round(((vals[-1] / vals[0]) ** (1 / n) - 1) * 100, 2)
+    # vals[0] = newest, vals[-1] = oldest → correct growth direction
+    return round(((vals[0] / vals[-1]) ** (1 / n) - 1) * 100, 2)
 
 
 def avg_growth(vals: List) -> Optional[float]:
+    """
+    Average year-on-year growth rate.
+
+    Screener data is newest-first. Reverse so we iterate oldest → newest,
+    computing (curr − prev) / prev correctly as positive growth for growing companies.
+    """
     vals = [v for v in vals if v is not None]
     if len(vals) < 2:
         return None
+    # Reverse: oldest first so each step goes forward in time
+    vals = list(reversed(vals))
     growths = []
     for i in range(1, len(vals)):
         if vals[i - 1] not in (None, 0):
@@ -302,7 +318,7 @@ def analyze_balance(bs: dict, inc: dict, years: List[str]) -> dict:
         'Inventory (All Years)':                     inventory,
         'Approx Current Assets (All Years)':         cur_assets,
         'Debt-to-Equity (All Years)':                de_ratio,
-        'Approx Current Ratio (All Years)':          current_ratio,
+        'Approx Current Ratio (All Years)':          current_ratio,  # denominator = Other Liabilities (Screener proxy)
         'Return on Assets ROA % (All Years)':        roa,
         'Return on Equity ROE % (All Years)':        roe,
         'Interest Coverage Ratio (All Years)':       ic,
