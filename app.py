@@ -7,8 +7,28 @@ import logging
 import threading
 import uuid
 import json
+import hmac
+import hashlib
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
+
+# ── Razorpay ──────────────────────────────────────────────────────────────────
+try:
+    import razorpay
+    RAZORPAY_KEY_ID     = os.environ.get('RAZORPAY_KEY_ID', '')
+    RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', '')
+    rzp_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)) if RAZORPAY_KEY_ID else None
+except ImportError:
+    rzp_client = None
+    RAZORPAY_KEY_ID = ''
+    RAZORPAY_KEY_SECRET = ''
+
+# Plan config (amounts in paise — multiply ₹ by 100)
+PLANS = {
+    'premium': {'name': 'Premium', 'monthly': 49900,  'annual': 478800},   # ₹499 / ₹3990 (save 33%)
+    'pro':     {'name': 'Pro',     'monthly': 99900,  'annual': 958800},   # ₹999 / ₹7990
+}
+# ─────────────────────────────────────────────────────────────────────────────
 
 from Financial_Modelling import (
     run_historical_fs, run_ratio_analysis, run_common_size_statement,
@@ -215,7 +235,109 @@ def strategy_optimization_page():
 
 @app.route('/pricing')
 def pricing_page():
-    return render_template('pricing.html')
+    return render_template('pricing.html', razorpay_key=RAZORPAY_KEY_ID)
+
+
+# =============================================================================
+# Razorpay Payment Routes
+# =============================================================================
+
+@app.route('/payment/create-order', methods=['POST'])
+def create_payment_order():
+    """Create a Razorpay order for the selected plan + billing cycle."""
+    user = session.get('user')
+    if not user:
+        return jsonify({'error': 'Login required'}), 401
+    if not rzp_client:
+        return jsonify({'error': 'Payment gateway not configured'}), 503
+
+    data     = request.get_json() or {}
+    plan_id  = data.get('plan')       # 'premium' or 'pro'
+    billing  = data.get('billing', 'monthly')  # 'monthly' or 'annual'
+
+    plan = PLANS.get(plan_id)
+    if not plan:
+        return jsonify({'error': 'Invalid plan'}), 400
+
+    amount = plan['annual'] if billing == 'annual' else plan['monthly']
+
+    try:
+        order = rzp_client.order.create({
+            'amount':   amount,
+            'currency': 'INR',
+            'receipt':  f"{user['uid'][:8]}-{plan_id}-{int(time.time())}",
+            'notes': {
+                'user_uid':   user['uid'],
+                'user_email': user['email'],
+                'plan':       plan_id,
+                'billing':    billing,
+            }
+        })
+        return jsonify({
+            'order_id':   order['id'],
+            'amount':     order['amount'],
+            'currency':   order['currency'],
+            'plan_name':  plan['name'],
+            'billing':    billing,
+            'key':        RAZORPAY_KEY_ID,
+        })
+    except Exception as e:
+        app.logger.error(f'create_payment_order error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/payment/verify', methods=['POST'])
+def verify_payment():
+    """Verify Razorpay signature and activate the user's plan."""
+    user = session.get('user')
+    if not user:
+        return jsonify({'error': 'Login required'}), 401
+
+    data = request.get_json() or {}
+    razorpay_order_id   = data.get('razorpay_order_id', '')
+    razorpay_payment_id = data.get('razorpay_payment_id', '')
+    razorpay_signature  = data.get('razorpay_signature', '')
+    plan_id             = data.get('plan', '')
+    billing             = data.get('billing', 'monthly')
+
+    # Verify HMAC signature
+    try:
+        msg = f"{razorpay_order_id}|{razorpay_payment_id}".encode()
+        expected = hmac.new(RAZORPAY_KEY_SECRET.encode(), msg, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, razorpay_signature):
+            return jsonify({'error': 'Invalid payment signature'}), 400
+    except Exception as e:
+        app.logger.error(f'verify_payment signature error: {e}')
+        return jsonify({'error': 'Signature verification failed'}), 400
+
+    # Activate plan in session
+    plan = PLANS.get(plan_id, {})
+    session['user']['plan']       = plan_id
+    session['user']['billing']    = billing
+    session['user']['plan_name']  = plan.get('name', plan_id.title())
+    session['user']['plan_since'] = datetime.utcnow().isoformat()
+    session.modified = True
+
+    app.logger.info(
+        f"Payment verified: user={user['email']} plan={plan_id} "
+        f"billing={billing} payment_id={razorpay_payment_id}"
+    )
+    return jsonify({'status': 'ok', 'plan': plan_id, 'plan_name': plan.get('name')})
+
+
+@app.route('/payment/status')
+def payment_status():
+    """Return current user's plan."""
+    user = session.get('user')
+    if not user:
+        return jsonify({'plan': 'free'})
+    return jsonify({
+        'plan':       user.get('plan', 'free'),
+        'plan_name':  user.get('plan_name', 'Free'),
+        'billing':    user.get('billing', ''),
+        'plan_since': user.get('plan_since', ''),
+    })
+
 
 
 # =============================================================================
