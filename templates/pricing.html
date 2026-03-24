@@ -255,7 +255,7 @@ button,.btn,a[class*="btn"]{min-height:44px;}
       <a href="/financial-modelling" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F4C8; Financial Modelling</a>
       <a href="/technical-analysis" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F4C9; Technical Analysis</a>
       <a href="/portfolio-management" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F4BC; Portfolio Management</a>
-      <a href="/performance-analytics" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F4F�; Performance Analytics</a>
+      <a href="/performance-analytics" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">📊 Performance Analytics</a>
       <a href="/strategy-optimization" class="block px-3 py-2 rounded-md text-base hover:bg-white hover:bg-opacity-20 transition">&#x1F9E0; Strategy Optimization</a>
       <a href="/pricing" class="block px-3 py-2 rounded-md text-base bg-white bg-opacity-20 font-semibold">&#x1F4B0; Pricing</a>
       <div id="_mLoginBtn" style="display:none;padding:8px 12px;">
@@ -340,7 +340,7 @@ button,.btn,a[class*="btn"]{min-height:44px;}
       <li><span class="feat-check no">✗</span>Performance Analytics</li>
       <li><span class="feat-check no">✗</span>Strategy Optimization</li>
     </ul>
-    <a href="/login" class="plan-cta cta-outline">Start Premium</a>
+    <button onclick="startCheckout('premium')" class="plan-cta cta-outline" data-plan="premium">Start Premium</button>
   </div>
 
   <!-- PRO — POPULAR -->
@@ -366,7 +366,7 @@ button,.btn,a[class*="btn"]{min-height:44px;}
       <li><span class="feat-check yes">✓</span>Email support (48h SLA)</li>
       <li><span class="feat-check no">✗</span>API access / White-label</li>
     </ul>
-    <a href="/login" class="plan-cta cta-primary">Start Pro Trial</a>
+    <button onclick="startCheckout('pro')" class="plan-cta cta-primary" data-plan="pro">Start Pro Trial</button>
   </div>
 
   <!-- ENTERPRISE -->
@@ -550,18 +550,16 @@ const lblAnnual = document.getElementById('lbl-annual');
 
 const prices = {
   monthly: { premium: 499, pro: 999 },
-  annual:  { premium: 399, pro:  799 }
+  annual:  { premium: 399, pro: 799 }
 };
 
 toggle.addEventListener('change', function() {
   const isAnnual = this.checked;
   lblMonthly.classList.toggle('active', !isAnnual);
   lblAnnual.classList.toggle('active', isAnnual);
-
   const p = isAnnual ? prices.annual : prices.monthly;
   document.getElementById('price-premium').textContent = p.premium;
   document.getElementById('price-pro').textContent = p.pro;
-
   if (isAnnual) {
     document.getElementById('note-premium').textContent = '₹' + (p.premium * 12).toLocaleString('en-IN') + ' billed annually';
     document.getElementById('note-pro').textContent = '₹' + (p.pro * 12).toLocaleString('en-IN') + ' billed annually';
@@ -570,7 +568,125 @@ toggle.addEventListener('change', function() {
     document.getElementById('note-pro').textContent = 'Billed monthly';
   }
 });
+
+// ── Razorpay Checkout ────────────────────────────────────────────────────────
+const RAZORPAY_KEY = "{{ razorpay_key }}";
+
+async function startCheckout(plan) {
+  // Must be logged in
+  const authRes = await fetch('/auth/status');
+  const authData = await authRes.json();
+  if (!authData.signed_in) {
+    // Save intended plan and redirect to login
+    sessionStorage.setItem('pending_plan', plan);
+    window.location.href = '/login?next=/pricing';
+    return;
+  }
+
+  const billing = document.getElementById('billing-toggle').checked ? 'annual' : 'monthly';
+  const btn = document.querySelector(`[data-plan="${plan}"]`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
+
+  try {
+    // 1. Create order on server
+    const orderRes = await fetch('/payment/create-order', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ plan, billing })
+    });
+    const order = await orderRes.json();
+    if (!orderRes.ok) throw new Error(order.error || 'Could not create order');
+
+    // 2. Open Razorpay modal
+    const options = {
+      key:         RAZORPAY_KEY,
+      amount:      order.amount,
+      currency:    order.currency,
+      name:        'Financial Analyzer',
+      description: `${order.plan_name} Plan — ${billing === 'annual' ? 'Annual' : 'Monthly'}`,
+      image:       '/static/og-image.png',
+      order_id:    order.order_id,
+      prefill: {
+        name:  authData.user.name  || '',
+        email: authData.user.email || '',
+      },
+      theme: { color: '#457b9d' },
+      handler: async function(response) {
+        // 3. Verify payment on server
+        const verifyRes = await fetch('/payment/verify', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            razorpay_order_id:   response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature:  response.razorpay_signature,
+            plan,
+            billing,
+          })
+        });
+        const result = await verifyRes.json();
+        if (verifyRes.ok) {
+          showSuccessModal(result.plan_name, billing);
+        } else {
+          alert('Payment verification failed: ' + (result.error || 'Please contact support.'));
+        }
+      },
+      modal: {
+        ondismiss: function() {
+          if (btn) { btn.disabled = false; btn.textContent = plan === 'pro' ? 'Start Pro Trial' : 'Start Premium'; }
+        }
+      }
+    };
+
+    if (!window.Razorpay) {
+      alert('Payment gateway failed to load. Please disable ad-blockers and try again.');
+      if (btn) { btn.disabled = false; btn.textContent = plan === 'pro' ? 'Start Pro Trial' : 'Start Premium'; }
+      return;
+    }
+    const rzp = new window.Razorpay(options);
+    rzp.on('payment.failed', function(resp) {
+      alert('Payment failed: ' + resp.error.description);
+      if (btn) { btn.disabled = false; btn.textContent = plan === 'pro' ? 'Start Pro Trial' : 'Start Premium'; }
+    });
+    rzp.open();
+
+  } catch (err) {
+    alert('Error: ' + err.message);
+    if (btn) { btn.disabled = false; btn.textContent = plan === 'pro' ? 'Start Pro Trial' : 'Start Premium'; }
+  }
+}
+
+function showSuccessModal(planName, billing) {
+  document.getElementById('success-plan-name').textContent = planName;
+  document.getElementById('success-billing').textContent = billing === 'annual' ? 'annual' : 'monthly';
+  document.getElementById('success-modal').style.display = 'flex';
+}
+
+// Resume pending plan after login redirect
+window.addEventListener('load', function() {
+  const pending = sessionStorage.getItem('pending_plan');
+  if (pending) {
+    sessionStorage.removeItem('pending_plan');
+    setTimeout(() => startCheckout(pending), 800);
+  }
+});
 </script>
+
+<!-- Razorpay JS SDK -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<!-- Success Modal -->
+<div id="success-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:20px;padding:40px 36px;max-width:420px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+    <div style="width:64px;height:64px;background:#eaf4fb;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 20px;">🎉</div>
+    <h3 style="font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:800;color:#1d3557;margin-bottom:10px;">You're all set!</h3>
+    <p style="color:#6b7280;font-size:14px;line-height:1.6;margin-bottom:6px;">
+      Your <strong id="success-plan-name"></strong> plan is now active (<span id="success-billing"></span> billing).
+    </p>
+    <p style="color:#6b7280;font-size:13px;margin-bottom:28px;">A confirmation email has been sent to your registered address.</p>
+    <a href="/" style="display:inline-block;background:linear-gradient(135deg,#457b9d,#2c5f7a);color:#fff;font-weight:700;font-size:14px;padding:13px 32px;border-radius:12px;text-decoration:none;box-shadow:0 4px 14px rgba(69,123,157,.35);">Start Analyzing →</a>
+  </div>
+</div>
 
 </body>
 </html>
