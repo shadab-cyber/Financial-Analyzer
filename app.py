@@ -32,7 +32,8 @@ PLANS = {
 
 from Financial_Modelling import (
     run_historical_fs, run_ratio_analysis, run_common_size_statement,
-    run_forecasting, run_fcff, run_wacc, run_terminal_value_dcf, run_scenario_analysis
+    run_forecasting, run_fcff, run_wacc, run_terminal_value_dcf, run_scenario_analysis,
+    run_altman_zscore, run_roic, run_piotroski, run_dupont
 )
 from Technical_Analysis import run_technical_analysis
 from Portfolio_Management import run_portfolio_analysis, fetch_price_for_symbol
@@ -1231,6 +1232,22 @@ def scenario_analysis():
     years = int(request.form.get('forecast_years', 5))
     return _excel_upload_route(run_scenario_analysis, {'forecast_years': years})
 
+@app.route('/financial-modelling/altman-zscore/upload', methods=['POST'])
+def altman_zscore():
+    return _excel_upload_route(run_altman_zscore)
+
+@app.route('/financial-modelling/roic/upload', methods=['POST'])
+def roic():
+    return _excel_upload_route(run_roic)
+
+@app.route('/financial-modelling/piotroski/upload', methods=['POST'])
+def piotroski():
+    return _excel_upload_route(run_piotroski)
+
+@app.route('/financial-modelling/dupont/upload', methods=['POST'])
+def dupont():
+    return _excel_upload_route(run_dupont)
+
 
 # =============================================================================
 # TECHNICAL ANALYSIS API
@@ -1388,6 +1405,181 @@ def serve_static(filename):
         return send_from_directory('static', filename)
     except FileNotFoundError:
         return jsonify({"error": "File not found"}), 404
+
+# =============================================================================
+# BLOG
+# =============================================================================
+
+BLOG_POSTS = [
+    {
+        "slug": "dcf-valuation-indian-stocks",
+        "title": "How to Do DCF Valuation of Indian Stocks (Free Tool Included)",
+        "emoji": "📊",
+        "category": "DCF Valuation",
+        "excerpt": "Learn how to calculate the intrinsic value of any Indian stock using Discounted Cash Flow analysis. Step-by-step guide with a free online tool.",
+        "date": "March 2026",
+        "date_iso": "2026-03-01",
+        "read_time": 8,
+        "keywords": "dcf valuation indian stocks, dcf calculator india, intrinsic value indian stocks, wacc india, free dcf tool",
+        "meta_description": "Step-by-step guide to DCF valuation of Indian stocks. Learn how to calculate WACC, terminal value and intrinsic value — with a free online tool.",
+        "toc": [
+            {"label": "What is DCF Valuation?", "anchor": "what-is-dcf"},
+            {"label": "Why DCF Works for Indian Stocks", "anchor": "why-dcf-india"},
+            {"label": "Step 1 — Forecast Free Cash Flow", "anchor": "step1-fcf"},
+            {"label": "Step 2 — Calculate WACC", "anchor": "step2-wacc"},
+            {"label": "Step 3 — Calculate Terminal Value", "anchor": "step3-terminal"},
+            {"label": "Step 4 — Arrive at Intrinsic Value", "anchor": "step4-intrinsic"},
+            {"label": "Common DCF Mistakes to Avoid", "anchor": "mistakes"},
+            {"label": "Use Our Free DCF Tool", "anchor": "free-tool"},
+        ],
+        "content": """
+<p>Discounted Cash Flow (DCF) valuation is the gold standard for determining the intrinsic value of a stock. It is used by Warren Buffett, every major investment bank, and now — thanks to free tools — individual investors in India too.</p>
+<p>In this guide, you will learn exactly how to do a DCF valuation for any Indian stock, step by step, using data from Screener.in.</p>
+<h2 id="what-is-dcf">What is DCF Valuation?</h2>
+<p>DCF valuation calculates what a business is worth today based on all the cash it will generate in the future, discounted back to present value. The core idea is simple: a rupee received 10 years from now is worth less than a rupee today.</p>
+<p>The formula is: <strong>Intrinsic Value = Sum of (Future Free Cash Flows / (1 + WACC)^n) + Terminal Value</strong></p>
+<div class="callout callout-tip"><strong>💡 Key insight:</strong> If the intrinsic value from DCF is higher than the current market price, the stock may be undervalued.</div>
+<h2 id="why-dcf-india">Why DCF Works Well for Indian Stocks</h2>
+<p>Indian markets have several characteristics that make DCF analysis particularly useful. Many Indian businesses are growing at 15–25% annually — DCF captures this growth premium better than PE ratios. Screener.in also provides 10 years of audited financial data for free, which is exactly what DCF needs.</p>
+<h2 id="step1-fcf">Step 1 — Forecast Free Cash Flow</h2>
+<p>Free Cash Flow = Operating Cash Flow − Capital Expenditure. Look at 5–10 years of historical FCF and identify a sustainable growth rate. For large-cap Indian stocks use 8–12%, for mid-caps 12–18%, and for high-growth small-caps up to 22%.</p>
+<div class="callout callout-warn"><strong>⚠️ Warning:</strong> Never use management guidance as your base case. Use historical average as base and management targets as optimistic scenario.</div>
+<h2 id="step2-wacc">Step 2 — Calculate WACC</h2>
+<p>For Indian stocks, WACC typically ranges from 10% to 16%. Use the 10-year Indian Government bond yield (~7.1% in 2026) as your risk-free rate. India's equity risk premium is approximately 7–8%. Cost of Equity = Risk-free Rate + Beta × ERP.</p>
+<h2 id="step3-terminal">Step 3 — Calculate Terminal Value</h2>
+<p>Terminal Value = FCF in Year 10 × (1 + g) / (WACC − g). Use a terminal growth rate of 4–6% for Indian companies. Never use a growth rate higher than WACC.</p>
+<div class="callout callout-tip"><strong>💡 Important:</strong> Terminal value typically accounts for 60–80% of total DCF value for Indian growth stocks. Always run sensitivity analysis.</div>
+<h2 id="step4-intrinsic">Step 4 — Arrive at Intrinsic Value Per Share</h2>
+<p>Equity Value = Enterprise Value − Net Debt. Intrinsic Value Per Share = Equity Value / Shares Outstanding. A margin of safety of at least 20–30% is recommended before buying.</p>
+<h2 id="mistakes">Common DCF Mistakes to Avoid</h2>
+<ul>
+  <li>Using too high a growth rate — even great companies rarely sustain 25%+ for 10 years</li>
+  <li>Ignoring working capital changes</li>
+  <li>Single scenario analysis — always run bear, base, and bull</li>
+  <li>Forgetting to add cash back to equity value</li>
+</ul>
+<div class="callout callout-cta">
+  <h3 style="font-family:'Playfair Display',serif;font-size:1.2rem;color:#fff;margin-bottom:10px;">Do the entire DCF in 30 seconds</h3>
+  <p>Upload any Screener.in Excel export and get instant DCF valuation — WACC, terminal value, intrinsic value, and three-scenario analysis. Completely free.</p>
+  <a href="/dcf">Try the Free DCF Tool →</a>
+</div>
+<h2 id="free-tool">Use Our Free DCF Tool</h2>
+<p>Go to <a href="https://screener.in">Screener.in</a>, export the company Excel, upload it to our <a href="/dcf">DCF Valuation tool</a>, enter your WACC and terminal growth assumptions, and get instant results.</p>
+"""
+    },
+    {
+        "slug": "altman-z-score-indian-stocks",
+        "title": "Altman Z-Score: Which Indian Stocks Are at Risk of Bankruptcy?",
+        "emoji": "⚠️",
+        "category": "Stock Analysis",
+        "excerpt": "The Altman Z-Score predicts financial distress with 72–80% accuracy. Learn how to calculate it for Indian stocks and which ones to avoid.",
+        "date": "March 2026",
+        "date_iso": "2026-03-10",
+        "read_time": 6,
+        "keywords": "altman z score india, bankruptcy prediction indian stocks, financial distress india, z score calculator",
+        "meta_description": "Learn how the Altman Z-Score predicts bankruptcy risk for Indian stocks. Free calculator included.",
+        "toc": [
+            {"label": "What is the Altman Z-Score?", "anchor": "what-is-z"},
+            {"label": "How to Interpret Z-Score", "anchor": "interpret"},
+            {"label": "Z-Score for Indian Companies", "anchor": "india"},
+            {"label": "Use the Free Calculator", "anchor": "calculator"},
+        ],
+        "content": """
+<p>The Altman Z-Score is one of the most reliable tools for predicting whether a company is heading towards financial distress. Developed by Professor Edward Altman in 1968, it correctly predicted 72–80% of bankruptcies up to two years before they occurred.</p>
+<h2 id="what-is-z">What is the Altman Z-Score?</h2>
+<p>Z = 1.2×X1 + 1.4×X2 + 3.3×X3 + 0.6×X4 + 1.0×X5, where X1=Working Capital/Total Assets, X2=Retained Earnings/Total Assets, X3=EBIT/Total Assets, X4=Market Cap/Total Liabilities, X5=Revenue/Total Assets.</p>
+<h2 id="interpret">How to Interpret the Z-Score</h2>
+<table><thead><tr><th>Z-Score</th><th>Zone</th><th>Interpretation</th></tr></thead><tbody>
+<tr><td>Above 2.99</td><td>✅ Safe Zone</td><td>Low bankruptcy risk</td></tr>
+<tr><td>1.81 – 2.99</td><td>⚠️ Grey Zone</td><td>Some risk, monitor closely</td></tr>
+<tr><td>Below 1.81</td><td>🚨 Distress Zone</td><td>High bankruptcy risk</td></tr>
+</tbody></table>
+<h2 id="india">Z-Score for Indian Companies</h2>
+<p>The original Z-Score was developed using US manufacturing companies. For Indian markets, the thresholds are broadly applicable but Indian companies often carry more debt and operate in higher-inflation environments.</p>
+<div class="callout callout-warn"><strong>⚠️ Note:</strong> A low Z-Score does not guarantee bankruptcy — it signals elevated risk. Always combine with qualitative analysis.</div>
+<div class="callout callout-cta">
+  <h3 style="font-family:'Playfair Display',serif;font-size:1.2rem;color:#fff;margin-bottom:10px;">Calculate Z-Score for Any Indian Stock</h3>
+  <p>Upload a Screener.in Excel export and get instant Altman Z-Score with historical trend analysis.</p>
+  <a href="/">Try the Free Tool →</a>
+</div>
+<h2 id="calculator">Use the Free Calculator</h2>
+<p>Our Stock Financial Analyzer automatically calculates the Altman Z-Score from any Screener.in Excel export. Upload your data on the <a href="/">home page</a> — no sign-up required.</p>
+"""
+    },
+    {
+        "slug": "screener-in-excel-analysis-guide",
+        "title": "How to Analyse Any Indian Stock Using Screener.in Data in 5 Minutes",
+        "emoji": "📁",
+        "category": "Screener.in",
+        "excerpt": "A complete step-by-step guide to downloading Screener.in Excel data and running a full 10-year financial analysis in under 5 minutes.",
+        "date": "March 2026",
+        "date_iso": "2026-03-15",
+        "read_time": 5,
+        "keywords": "screener.in excel analysis, screener.in tutorial, analyse indian stock, screener.in export",
+        "meta_description": "Step-by-step guide to downloading Screener.in Excel data and running a full 10-year financial analysis in under 5 minutes.",
+        "toc": [
+            {"label": "Step 1 — Export from Screener.in", "anchor": "export"},
+            {"label": "Step 2 — Upload to Financial Analyzer", "anchor": "upload"},
+            {"label": "Step 3 — Read the Results", "anchor": "results"},
+            {"label": "What to Look For", "anchor": "look-for"},
+        ],
+        "content": """
+<p>Screener.in is the best free source of Indian stock financial data. Combined with Financial Analyzer, you can go from zero to a complete 10-year analysis in under 5 minutes.</p>
+<h2 id="export">Step 1 — Export from Screener.in</h2>
+<ol>
+  <li>Go to <a href="https://screener.in" target="_blank">screener.in</a> and search for your company</li>
+  <li>Scroll to the top right and click <strong>Export to Excel</strong></li>
+  <li>Save the downloaded .xlsx file</li>
+</ol>
+<div class="callout callout-tip"><strong>💡 Tip:</strong> You need a free Screener.in account to export. The export button only appears when logged in.</div>
+<h2 id="upload">Step 2 — Upload to Financial Analyzer</h2>
+<ol>
+  <li>Go to <a href="/">financial-analyzer-m63v.onrender.com</a></li>
+  <li>Click the upload area and select the Screener.in Excel file</li>
+  <li>Click <strong>Analyse Stock</strong> — results appear in 10–15 seconds</li>
+</ol>
+<h2 id="results">Step 3 — Read the Results</h2>
+<p>You get: 10-year P&amp;L, Balance Sheet, Cash Flow analysis, 20+ financial ratios, and Altman Z-Score — all in one page.</p>
+<h2 id="look-for">What to Look For</h2>
+<table><thead><tr><th>Metric</th><th>Green Flag</th><th>Red Flag</th></tr></thead><tbody>
+<tr><td>Revenue Growth (10yr CAGR)</td><td>Above 12%</td><td>Below 8%</td></tr>
+<tr><td>Free Cash Flow</td><td>Consistently positive</td><td>Negative or erratic</td></tr>
+<tr><td>Debt/Equity</td><td>Below 1.0</td><td>Above 2.0</td></tr>
+<tr><td>Altman Z-Score</td><td>Above 2.99</td><td>Below 1.81</td></tr>
+</tbody></table>
+<div class="callout callout-cta">
+  <h3 style="font-family:'Playfair Display',serif;font-size:1.2rem;color:#fff;margin-bottom:10px;">Analyse Your First Stock Now</h3>
+  <p>Upload any Screener.in Excel and get a complete 10-year analysis in 15 seconds. Free — no credit card required.</p>
+  <a href="/">Start Analysing →</a>
+</div>
+"""
+    },
+]
+
+def _get_post(slug):
+    return next((p for p in BLOG_POSTS if p['slug'] == slug), None)
+
+def _related_posts(current_slug, category, n=3):
+    same_cat = [p for p in BLOG_POSTS if p['slug'] != current_slug and p['category'] == category]
+    others   = [p for p in BLOG_POSTS if p['slug'] != current_slug and p['category'] != category]
+    return (same_cat + others)[:n]
+
+@app.route('/blog')
+def blog_index():
+    cat = request.args.get('cat', '').lower()
+    posts = BLOG_POSTS
+    if cat:
+        posts = [p for p in posts if cat in p['category'].lower() or cat in p['slug']]
+    return render_template('blog.html', posts=posts)
+
+@app.route('/blog/<slug>')
+def blog_post(slug):
+    post = _get_post(slug)
+    if not post:
+        return render_template('404.html'), 404
+    related = _related_posts(slug, post['category'])
+    return render_template('blog_post.html', post=post, related_posts=related)
+
 
 # =============================================================================
 # ✅ FIX 7: Production server start — debug=False, use gunicorn in real deploy
