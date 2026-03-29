@@ -3,6 +3,7 @@
 Extract CFO and CAPEX from a Screener.in Excel export for DCF valuation.
 Uses the same sheet-reading logic as Financial_Modelling.py.
 """
+import re as _re
 import pandas as pd
 import numpy as np
 
@@ -25,23 +26,65 @@ def _read_cf_sheet(file):
     return pd.DataFrame()
 
 
+def _is_year_value(val):
+    """Return True if val looks like a fiscal year label from Screener.in."""
+    if pd.isna(val):
+        return False
+    # datetime / Timestamp object
+    if hasattr(val, 'year'):
+        return True
+    # numeric year e.g. 2023.0
+    if isinstance(val, (int, float)) and 2000 <= float(val) <= 2100:
+        return True
+    if isinstance(val, str):
+        s = val.strip()
+        # "Mar 2024", "March 2024", "Mar-2024"
+        if _re.match(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-]20\d{2}$', s, _re.I):
+            return True
+        # "2024-03-31" ISO style
+        if _re.match(r'^20\d{2}[\-\/]\d{2}[\-\/]\d{2}$', s):
+            return True
+        # bare year "2024"
+        if _re.match(r'^20\d{2}$', s):
+            return True
+        # pandas parser as last resort
+        try:
+            parsed = pd.to_datetime(s, dayfirst=False)
+            if 2000 <= parsed.year <= 2100:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _year_label(val):
+    """Convert any year value to a readable 'Mar YYYY' string."""
+    if pd.isna(val):
+        return None
+    if hasattr(val, 'year'):
+        return val.strftime("Mar %Y")
+    if isinstance(val, (int, float)) and 2000 <= float(val) <= 2100:
+        return f"Mar {int(val)}"
+    if isinstance(val, str):
+        s = val.strip()
+        # Already "Mar 2024" style
+        if _re.match(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-]20\d{2}$', s, _re.I):
+            return s.replace('-', ' ')
+        try:
+            return pd.to_datetime(s).strftime("Mar %Y")
+        except Exception:
+            return s
+    return str(val)
+
+
 def _find_year_row(df, start_col=1, min_dates=3):
     for row_idx in range(min(df.shape[0], 40)):
-        date_count = 0
-        for col in range(start_col, df.shape[1]):
-            val = df.iloc[row_idx, col]
-            if pd.isna(val):
-                continue
-            if hasattr(val, 'year'):
-                date_count += 1
-            elif isinstance(val, str):
-                try:
-                    pd.to_datetime(val)
-                    date_count += 1
-                except Exception:
-                    pass
-            if date_count >= min_dates:
-                return row_idx
+        date_count = sum(
+            1 for col in range(start_col, df.shape[1])
+            if _is_year_value(df.iloc[row_idx, col])
+        )
+        if date_count >= min_dates:
+            return row_idx
     return 0
 
 
@@ -106,7 +149,6 @@ def extract_dcf_from_excel(filepath):
     cf_df = _read_cf_sheet(filepath)
 
     if cf_df.empty:
-        # Try reading Balance Sheet sheet which also has CFO in some exports
         try:
             cf_df = pd.read_excel(filepath, engine="openpyxl",
                                   sheet_name="Balance Sheet & P&L", header=None)
@@ -129,10 +171,11 @@ def extract_dcf_from_excel(filepath):
         val = cf_df.iloc[YEAR_ROW, col]
         if pd.isna(val):
             break
-        try:
-            years.append(pd.to_datetime(val).strftime("Mar %Y"))
-        except Exception:
-            years.append(str(val))
+        label = _year_label(val)
+        if label:
+            years.append(label)
+        else:
+            break
 
     n = len(years)
     if n == 0:
@@ -180,26 +223,14 @@ def extract_dcf_from_excel(filepath):
         "source": "excel",
     }
 
+
 def extract_wacc_inputs(filepath):
-    """
-    Extract inputs needed for the WACC builder from a Screener.in Excel.
-    Returns a dict with best-estimate values (all optional — None if not found).
-    {
-      'interest':   latest interest expense (₹ Cr)
-      'debt':       latest total borrowings (₹ Cr)
-      'tax_rate':   effective tax rate (%) — from Tax / PBT
-      'equity':     latest equity + reserves (₹ Cr)   — for D/E ratio
-    }
-    The frontend uses these to pre-fill the WACC builder.
-    Beta is NOT in the Excel — user must enter it or accept the default (1.0).
-    """
     result = {
         'interest':  None,
         'debt':      None,
         'tax_rate':  None,
         'equity':    None,
     }
-
     try:
         bs_df = pd.read_excel(filepath, engine='openpyxl',
                               sheet_name='Balance Sheet & P&L', header=None)
@@ -210,7 +241,6 @@ def extract_wacc_inputs(filepath):
         START_COL = 1
 
         def latest(label):
-            """Return the most recent (rightmost) non-zero value for a label."""
             r = find_row(bs_df, label)
             if r is None:
                 return None
@@ -223,7 +253,6 @@ def extract_wacc_inputs(filepath):
         result['interest'] = latest('Interest')
         result['debt']     = latest('Borrowings')
 
-        # Tax rate = Tax / PBT (use most recent year where both are non-zero)
         r_tax = find_row(bs_df, 'Tax')
         r_pbt = find_row(bs_df, 'Profit before tax')
         if r_tax is not None and r_pbt is not None:
@@ -234,7 +263,6 @@ def extract_wacc_inputs(filepath):
                     result['tax_rate'] = round(tax / pbt * 100, 1)
                     break
 
-        # Equity = Equity Share Capital + Reserves
         eq  = latest('Equity Share Capital') or 0
         res = latest('Reserves')             or 0
         if eq + res > 0:
@@ -245,13 +273,8 @@ def extract_wacc_inputs(filepath):
 
     return result
 
+
 def extract_ebitda(filepath):
-    """
-    Read the latest EBITDA from the Balance Sheet & P&L sheet.
-    Returns (ebitda_value, year_label) or (None, None).
-    EBITDA = EBIT + Depreciation = Operating Profit + Depreciation.
-    Screener exports have 'Operating Profit' and 'Depreciation' as separate rows.
-    """
     try:
         bs_df = pd.read_excel(filepath, engine='openpyxl',
                               sheet_name='Balance Sheet & P&L', header=None)
@@ -275,10 +298,7 @@ def extract_ebitda(filepath):
             for col in range(bs_df.shape[1] - 1, START_COL - 1, -1):
                 val = bs_df.iloc[YEAR_ROW, col]
                 if pd.notna(val):
-                    try:
-                        return pd.to_datetime(val).strftime('Mar %Y')
-                    except Exception:
-                        return str(val)
+                    return _year_label(val) or str(val)
             return None
 
         op_profit = latest_val('Operating Profit') or latest_val('EBIT') or 0
@@ -290,17 +310,12 @@ def extract_ebitda(filepath):
     except Exception:
         return None, None
 
+
 def extract_latest_fcf(filepath):
-    """
-    Return the latest year's FCF (CFO - CAPEX) from the Excel.
-    Used for P/FCF multiple calculation.
-    Returns (fcf_value, year_label) or (None, None).
-    """
     try:
         data = extract_dcf_from_excel(filepath)
         if not data['fcf'] or not data['years']:
             return None, None
-        # Latest = last in list (oldest→newest ordering)
         return data['fcf'][-1], data['years'][-1]
     except Exception:
         return None, None
