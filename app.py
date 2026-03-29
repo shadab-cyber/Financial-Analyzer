@@ -968,10 +968,10 @@ def dcf_scenarios():
     path = None
     try:
         file = request.files.get('file')
-        if not file or not allowed_excel(file.filename):
-            return jsonify({'error': 'No Excel file uploaded'}), 400
+        if not file or not file.filename:
+            return jsonify({'error': 'No Excel file uploaded.'}), 400
         if not allowed_excel(file.filename):
-            return jsonify({'error': 'Please upload a .xlsx file'}), 400
+            return jsonify({'error': 'Please upload a Screener.in Excel file (.xlsx)'}), 400
 
         path = save_temp_file(file, UPLOAD_FOLDER_ANALYZER)
         excel_data = extract_dcf_from_excel(path)
@@ -997,9 +997,60 @@ def dcf_scenarios():
         base_g2 = _f('base_g2') if use_2stage else None
         bull_g2 = _f('bull_g2') if use_2stage else None
 
-        err_msg = _validate_dcf_params(wacc, terminal_growth, net_debt, shares, cmp_price)
-        if err_msg:
-            return jsonify({'error': err_msg}), 400
+        # Validate required params
+        if wacc is None or terminal_growth is None:
+            return jsonify({'error': 'WACC and Terminal Growth Rate are required.'}), 400
+        if wacc <= 0 or wacc > 0.5:
+            return jsonify({'error': f'WACC ({wacc*100:.1f}%) is outside the valid range (0–50%).'}), 400
+        if terminal_growth < 0:
+            return jsonify({'error': 'Terminal Growth Rate cannot be negative.'}), 400
+        if terminal_growth >= wacc:
+            return jsonify({'error': f'Terminal growth ({terminal_growth*100:.1f}%) must be less than WACC ({wacc*100:.1f}%).'}), 400
+
+        # Build text blocks from Excel data
+        lines = []
+        for i in range(len(excel_data['cfo'])):
+            lines.append(f"Net cash from operating activities {excel_data['cfo'][i]}")
+            lines.append(f"Purchase of property plant equipment {excel_data['capex'][i]}")
+        text_blocks = ['\n'.join(lines)]
+
+        result = run_scenarios(
+            text_blocks,
+            net_debt=net_debt, shares_outstanding=shares,
+            current_price=cmp_price, wacc=wacc, terminal_growth=terminal_growth,
+            forecast_years=forecast_years,
+            stage1_years=stage1_years if use_2stage else None,
+            bear_g1=bear_g1, bear_g2=bear_g2,
+            base_g1=base_g1, base_g2=base_g2,
+            bull_g1=bull_g1, bull_g2=bull_g2,
+        )
+
+        result['Extracted Years']  = excel_data['years']
+        result['Extracted CFO']    = excel_data['cfo']
+        result['Extracted CAPEX']  = excel_data['capex']
+
+        ebitda_val, ebitda_yr = extract_ebitda(path)
+        result['EBITDA (₹ Cr)'] = ebitda_val
+        result['EBITDA Year']   = ebitda_yr
+
+        fcf_latest, fcf_yr = extract_latest_fcf(path)
+        result['Latest FCF (₹ Cr)']  = fcf_latest
+        result['Latest FCF Year']    = fcf_yr
+        if 'Base' in result:
+            result['Base']['EBITDA (₹ Cr)']    = ebitda_val
+            result['Base']['EBITDA Year']      = ebitda_yr
+            result['Base']['Latest FCF (₹ Cr)'] = fcf_latest
+            result['Base']['Latest FCF Year']   = fcf_yr
+
+        return jsonify(result)
+
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        app.logger.error(f'dcf_scenarios error: {e}')
+        return jsonify({'error': f'DCF scenario calculation failed: {str(e)}'}), 500
+    finally:
+        cleanup(path)
 
         # Build text blocks from Excel data
         lines = []
