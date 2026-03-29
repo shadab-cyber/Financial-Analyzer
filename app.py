@@ -1052,51 +1052,6 @@ def dcf_scenarios():
     finally:
         cleanup(path)
 
-        # Build text blocks from Excel data
-        lines = []
-        for i in range(len(excel_data['cfo'])):
-            lines.append(f"Net cash from operating activities {excel_data['cfo'][i]}")
-            lines.append(f"Purchase of property plant equipment {excel_data['capex'][i]}")
-        text_blocks = ['\n'.join(lines)]
-
-        result = run_scenarios(
-            text_blocks,
-            net_debt=net_debt, shares_outstanding=shares,
-            current_price=cmp_price, wacc=wacc, terminal_growth=terminal_growth,
-            forecast_years=forecast_years,
-            stage1_years=stage1_years if use_2stage else None,
-            bear_g1=bear_g1, bear_g2=bear_g2,
-            base_g1=base_g1, base_g2=base_g2,
-            bull_g1=bull_g1, bull_g2=bull_g2,
-        )
-
-        result['Extracted Years']  = excel_data['years']
-        result['Extracted CFO']    = excel_data['cfo']
-        result['Extracted CAPEX']  = excel_data['capex']
-
-        ebitda_val, ebitda_yr = extract_ebitda(path)
-        result['EBITDA (₹ Cr)'] = ebitda_val
-        result['EBITDA Year']   = ebitda_yr
-
-        fcf_latest, fcf_yr = extract_latest_fcf(path)
-        result['Latest FCF (₹ Cr)']  = fcf_latest
-        result['Latest FCF Year']    = fcf_yr
-        if 'Base' in result:
-            result['Base']['EBITDA (₹ Cr)']    = ebitda_val
-            result['Base']['EBITDA Year']      = ebitda_yr
-            result['Base']['Latest FCF (₹ Cr)'] = fcf_latest
-            result['Base']['Latest FCF Year']   = fcf_yr
-
-        return jsonify(result)
-
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
-    except Exception as e:
-        app.logger.error(f'dcf_scenarios error: {e}')
-        return jsonify({'error': str(e)}), 500
-    finally:
-        cleanup(path)
-
 
 @app.route('/dcf/manual', methods=['POST'])
 def dcf_manual():
