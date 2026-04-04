@@ -163,20 +163,19 @@ def extract_dcf_from_excel(filepath):
         )
 
     YEAR_ROW  = _find_year_row(cf_df)
-    START_COL = 1
 
-    # Extract year labels
-    years = []
-    for col in range(START_COL, cf_df.shape[1]):
+    # Scan the ENTIRE header row for year values — don't break on NaN or
+    # non-year cells (e.g. a "TTM" column or blank spacer at col 1 used
+    # to crash the old break-on-first-miss loop).
+    year_cols = []   # list of (col_index, label) for every year found
+    for col in range(cf_df.shape[1]):
         val = cf_df.iloc[YEAR_ROW, col]
-        if pd.isna(val):
-            break
-        label = _year_label(val)
-        if label:
-            years.append(label)
-        else:
-            break
+        if _is_year_value(val):
+            label = _year_label(val)
+            if label:
+                year_cols.append((col, label))
 
+    years = [label for _, label in year_cols]
     n = len(years)
     if n == 0:
         raise ValueError(
@@ -185,7 +184,7 @@ def extract_dcf_from_excel(filepath):
         )
 
     def row_values(row_idx):
-        return [fmt(cf_df.iloc[row_idx, START_COL + i]) for i in range(n)]
+        return [fmt(cf_df.iloc[row_idx, col]) for col, _ in year_cols]
 
     # ── Find CFO ──────────────────────────────────────────────────────────
     cfo_row = _find_any_row(cf_df, CFO_LABELS)
