@@ -16,3 +16,4 @@ opencv-python-headless>=4.8.0
 requests>=2.31.0
 firebase-admin>=6.0.0
 razorpay>=1.3.0
+pdf2image==1.17.0
