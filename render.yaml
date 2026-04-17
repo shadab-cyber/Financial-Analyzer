@@ -19,3 +19,5 @@ services:
         value: "false"
       - key: PORT
         value: "10000"
+      - key: GOOGLE_VISION_API_KEY
+        sync: false
