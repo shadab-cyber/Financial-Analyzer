@@ -42,6 +42,7 @@ from Strategy_Optimization import run_complete_optimization, run_backtest
 from dcf_valuation import run_dcf_from_pdf_text, run_scenarios
 from pdf_text_extractor import extract_financials_from_pdf
 from financialanalyzer import analyze_excel
+from msme_routes import msme_bp
 
 def _validate_dcf_params(wacc, terminal_growth, net_debt, shares, cmp_price,
                           enterprise_value=None):
@@ -77,6 +78,7 @@ def _validate_dcf_params(wacc, terminal_growth, net_debt, shares, cmp_price,
 # APP SETUP
 # =============================================================================
 app = Flask(__name__)
+app.register_blueprint(msme_bp)
 
 # ✅ FIX 1: Secret key from environment variable — never hardcoded
 app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32)
