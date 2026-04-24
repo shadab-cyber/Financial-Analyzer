@@ -2,15 +2,14 @@
 msme_routes.py
 ──────────────
 Flask Blueprint for the MSME Analyzer feature.
-All business logic lives in msme_analyzer.py — this file only handles
-HTTP concerns (file saving, request parsing, response formatting).
+All business logic lives in msme_analyzer.py.
 
 HOW TO REGISTER IN app.py
 ──────────────────────────
-Add after line 44 (after existing imports):
+After existing imports:
     from msme_routes import msme_bp
 
-Add after line 79 (after  app = Flask(__name__) ):
+After app = Flask(__name__):
     app.register_blueprint(msme_bp)
 """
 
@@ -31,8 +30,6 @@ msme_bp     = Blueprint("msme", __name__)
 UPLOAD_MSME = "uploads_msme"
 os.makedirs(UPLOAD_MSME, exist_ok=True)
 
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _save(file) -> str:
     path = os.path.join(UPLOAD_MSME, secure_filename(file.filename))
@@ -61,7 +58,7 @@ def msme_analyzer_page():
 @msme_bp.route("/msme/upload-gst", methods=["POST"])
 def msme_upload_gst():
     """
-    Accept one or more GSTR-3B JSON files.
+    Accept one or more GSTR-3B PDF files downloaded from gst.gov.in.
     Returns full GST summary dict.
     """
     files = request.files.getlist("files")
@@ -70,11 +67,13 @@ def msme_upload_gst():
 
     saved = []
     for f in files:
-        if f and f.filename.lower().endswith(".json"):
+        if f and f.filename.lower().endswith(".pdf"):
             saved.append(_save(f))
 
     if not saved:
-        return jsonify({"error": "Please upload GSTR-3B JSON files (.json format)."}), 400
+        return jsonify({
+            "error": "Please upload GSTR-3B PDF files (.pdf format) downloaded from gst.gov.in."
+        }), 400
 
     try:
         result = run_gst_analysis(saved)
@@ -126,8 +125,8 @@ def msme_upload_bank():
 @msme_bp.route("/msme/combined", methods=["POST"])
 def msme_combined():
     """
-    Accept previously computed gst + bank dicts (sent from frontend state).
-    Returns combined cross-analysis: DSCR, collection efficiency, score, insights.
+    Accept previously computed gst + bank dicts from frontend state.
+    Returns combined cross-analysis metrics and insights.
     """
     body = request.get_json() or {}
     gst  = body.get("gst")
@@ -142,3 +141,4 @@ def msme_combined():
     except Exception as e:
         logger.exception("msme_combined error")
         return jsonify({"error": str(e)}), 500
+        
