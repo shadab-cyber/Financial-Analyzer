@@ -553,82 +553,12 @@ def run_dcf_from_pdf_text(text_blocks, net_debt=0, shares_outstanding=None,
 # SCENARIO ENGINE  —  Bull / Base / Bear
 # =============================================================================
 
+# Absolute fallback spread used when avg FCF growth is effectively zero
+# (i.e. historical data is too volatile or sparse to compute a meaningful rate).
+# Bear: -10%  |  Base: 0% (keeps historical truth)  |  Bull: +15%
+_FALLBACK_BEAR_G1 = -0.10
+_FALLBACK_BULL_G1 =  0.15
+
+
 def run_scenarios(text_blocks, net_debt=0, shares_outstanding=None,
-                  current_price=None, wacc=None, terminal_growth=None,
-                  forecast_years=None, stage1_years=None,
-                  bear_g1=None, bear_g2=None,
-                  base_g1=None, base_g2=None,
-                  bull_g1=None, bull_g2=None):
-    """
-    Run three parallel DCF scenarios and return them in a single dict.
-    If growth rates are not provided, auto-derives them from historical FCF:
-      Bear  = avg_growth × 0.5   (half the trend)
-      Base  = avg_growth         (as-is)
-      Bull  = avg_growth × 1.5   (50% faster, capped at +50%)
-    """
-    from copy import deepcopy
-
-    # Run base first to get historical FCF and avg_growth
-    base = run_dcf_from_pdf_text(
-        text_blocks, net_debt=net_debt, shares_outstanding=shares_outstanding,
-        current_price=current_price, wacc=wacc, terminal_growth=terminal_growth,
-        forecast_years=forecast_years, stage1_years=stage1_years,
-        growth_rate_override=base_g1, growth_rate_2=base_g2,
-    )
-
-    avg = base["Average FCF Growth Rate (%)"] / 100
-
-    def _g(provided, auto):
-        return float(provided) if provided is not None else auto
-
-    bear_rate1 = _g(bear_g1, max(avg * 0.5, -0.30))
-    bull_rate1 = _g(bull_g1, min(avg * 1.5,  0.50))
-    base_rate1 = _g(base_g1, avg)
-
-    bear_rate2 = _g(bear_g2, bear_rate1 * 0.5) if (bear_g2 or stage1_years) else None
-    bull_rate2 = _g(bull_g2, bull_rate1 * 0.6) if (bull_g2 or stage1_years) else None
-    base_rate2 = _g(base_g2, base_rate1 * 0.6) if (base_g2 or stage1_years) else None
-
-    bear = run_dcf_from_pdf_text(
-        text_blocks, net_debt=net_debt, shares_outstanding=shares_outstanding,
-        current_price=current_price, wacc=wacc, terminal_growth=terminal_growth,
-        forecast_years=forecast_years, stage1_years=stage1_years,
-        growth_rate_override=bear_rate1, growth_rate_2=bear_rate2,
-    )
-    bull = run_dcf_from_pdf_text(
-        text_blocks, net_debt=net_debt, shares_outstanding=shares_outstanding,
-        current_price=current_price, wacc=wacc, terminal_growth=terminal_growth,
-        forecast_years=forecast_years, stage1_years=stage1_years,
-        growth_rate_override=bull_rate1, growth_rate_2=bull_rate2,
-    )
-
-    return {
-        "Bear": bear,
-        "Base": base,
-        "Bull": bull,
-        "growth_rates": {
-            "Bear": {"g1": round(bear_rate1*100,1), "g2": round(bear_rate2*100,1) if bear_rate2 else None},
-            "Base": {"g1": round(base_rate1*100,1), "g2": round(base_rate2*100,1) if base_rate2 else None},
-            "Bull": {"g1": round(bull_rate1*100,1), "g2": round(bull_rate2*100,1) if bull_rate2 else None},
-        }
-    }
-
-# =============================================================================
-# PDF → TEXT → DCF WRAPPER
-# =============================================================================
-
-def run_dcf_from_pdfs(pdf_paths, net_debt=0, shares_outstanding=None,
-                       current_price=None, wacc=None, terminal_growth=None):
-    all_text_blocks = []
-    for pdf in pdf_paths:
-        extracted = extract_financials_from_pdf(pdf)
-        all_text_blocks.extend(extracted["structured_financials"]["raw_text"])
-
-    return run_dcf_from_pdf_text(
-        all_text_blocks,
-        net_debt=net_debt,
-        shares_outstanding=shares_outstanding,
-        current_price=current_price,
-        wacc=wacc,
-        terminal_growth=terminal_growth,
-    )
+                  current_price=None, wacc=None, te
