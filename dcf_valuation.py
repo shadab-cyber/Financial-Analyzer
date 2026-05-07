@@ -561,4 +561,100 @@ _FALLBACK_BULL_G1 =  0.15
 
 
 def run_scenarios(text_blocks, net_debt=0, shares_outstanding=None,
-                  current_price=None, wacc=None, te
+                  current_price=None, wacc=None, terminal_growth=None,
+                  forecast_years=None, stage1_years=None,
+                  bear_g1=None, bear_g2=None,
+                  base_g1=None, base_g2=None,
+                  bull_g1=None, bull_g2=None):
+    """
+    Run three parallel DCF scenarios and return them in a single dict.
+    If growth rates are not provided, auto-derives them from historical FCF:
+      Bear  = avg_growth × 0.5   (half the trend), floor -30%
+      Base  = avg_growth         (as-is)
+      Bull  = avg_growth × 1.5   (50% faster), cap +50%
+
+    Edge case — when avg_growth == 0 (data too volatile or sparse):
+      Multiplier approach collapses all three scenarios to 0%.
+      Fix: use absolute offsets instead:
+        Bear = _FALLBACK_BEAR_G1 (-10%)
+        Base = 0%  (preserves historical truth)
+        Bull = _FALLBACK_BULL_G1 (+15%)
+    """
+    from copy import deepcopy
+
+    # Run base first to get historical FCF and avg_growth
+    base = run_dcf_from_pdf_text(
+        text_blocks, net_debt=net_debt, shares_outstanding=shares_outstanding,
+        current_price=current_price, wacc=wacc, terminal_growth=terminal_growth,
+        forecast_years=forecast_years, stage1_years=stage1_years,
+        growth_rate_override=base_g1, growth_rate_2=base_g2,
+    )
+
+    avg = base["Average FCF Growth Rate (%)"] / 100
+
+    def _g(provided, auto):
+        return float(provided) if provided is not None else auto
+
+    # --- FIX: multiplier-based spread breaks when avg == 0 ---
+    avg_is_zero = abs(avg) < 1e-9
+
+    if avg_is_zero:
+        # Absolute offset fallback: gives a meaningful spread even when
+        # historical FCF growth cannot be determined from the data.
+        bear_default = _FALLBACK_BEAR_G1
+        bull_default = _FALLBACK_BULL_G1
+    else:
+        bear_default = max(avg * 0.5, -0.30)
+        bull_default = min(avg * 1.5,  0.50)
+
+    bear_rate1 = _g(bear_g1, bear_default)
+    bull_rate1 = _g(bull_g1, bull_default)
+    base_rate1 = _g(base_g1, avg)
+
+    bear_rate2 = _g(bear_g2, bear_rate1 * 0.5) if (bear_g2 or stage1_years) else None
+    bull_rate2 = _g(bull_g2, bull_rate1 * 0.6) if (bull_g2 or stage1_years) else None
+    base_rate2 = _g(base_g2, base_rate1 * 0.6) if (base_g2 or stage1_years) else None
+
+    bear = run_dcf_from_pdf_text(
+        text_blocks, net_debt=net_debt, shares_outstanding=shares_outstanding,
+        current_price=current_price, wacc=wacc, terminal_growth=terminal_growth,
+        forecast_years=forecast_years, stage1_years=stage1_years,
+        growth_rate_override=bear_rate1, growth_rate_2=bear_rate2,
+    )
+    bull = run_dcf_from_pdf_text(
+        text_blocks, net_debt=net_debt, shares_outstanding=shares_outstanding,
+        current_price=current_price, wacc=wacc, terminal_growth=terminal_growth,
+        forecast_years=forecast_years, stage1_years=stage1_years,
+        growth_rate_override=bull_rate1, growth_rate_2=bull_rate2,
+    )
+
+    return {
+        "Bear": bear,
+        "Base": base,
+        "Bull": bull,
+        "growth_rates": {
+            "Bear": {"g1": round(bear_rate1*100,1), "g2": round(bear_rate2*100,1) if bear_rate2 else None},
+            "Base": {"g1": round(base_rate1*100,1), "g2": round(base_rate2*100,1) if base_rate2 else None},
+            "Bull": {"g1": round(bull_rate1*100,1), "g2": round(bull_rate2*100,1) if bull_rate2 else None},
+        }
+    }
+
+# =============================================================================
+# PDF → TEXT → DCF WRAPPER
+# =============================================================================
+
+def run_dcf_from_pdfs(pdf_paths, net_debt=0, shares_outstanding=None,
+                       current_price=None, wacc=None, terminal_growth=None):
+    all_text_blocks = []
+    for pdf in pdf_paths:
+        extracted = extract_financials_from_pdf(pdf)
+        all_text_blocks.extend(extracted["structured_financials"]["raw_text"])
+
+    return run_dcf_from_pdf_text(
+        all_text_blocks,
+        net_debt=net_debt,
+        shares_outstanding=shares_outstanding,
+        current_price=current_price,
+        wacc=wacc,
+        terminal_growth=terminal_growth,
+    )
