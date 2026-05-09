@@ -32,6 +32,19 @@ def find_row(df, label):
     return None
 
 
+def find_row_multi(df, *labels):
+    """
+    Try multiple label aliases in order, return the first match found.
+    Used to handle Screener.in label variations across export versions.
+    e.g. find_row_multi(df, "Net Block", "Fixed Assets", "Net Fixed Assets")
+    """
+    for lbl in labels:
+        r = find_row(df, lbl)
+        if r is not None:
+            return r
+    return None
+
+
 def _read_cf_sheet(file):
     """Try multiple possible Cash Flow sheet names from Screener exports."""
     for name in ("Cash Flow Data", "Cash Flow Statement", "Cash Flows",
@@ -647,6 +660,11 @@ def run_common_size_statement(file):
     def bs_val(label):
         r = find_row(bs_df, label)
         return [fmt(bs_df.iloc[r, START_COL + i]) if r is not None else 0 for i in range(n)]
+
+    def bs_val_multi(*labels):
+        """Try multiple label aliases — handles Screener.in export label variations."""
+        r = find_row_multi(bs_df, *labels)
+        return [fmt(bs_df.iloc[r, START_COL + i]) if r is not None else 0 for i in range(n)]
     
     # ======================================================
     # COMMON SIZE INCOME STATEMENT
@@ -698,8 +716,24 @@ def run_common_size_statement(file):
     dividend = bs_val("Dividend Amount")
     dividend_pct = [round((dividend[i]/sales[i])*100, 2) if sales[i] else 0 for i in range(n)]
     
-    ebitda = bs_val("EBITDA")
-    ebitda_pct = [round((ebitda[i]/sales[i])*100, 2) if sales[i] else 0 for i in range(n)]
+    # EBITDA: Screener.in does NOT export EBITDA as a direct row.
+    # Try reading it first; if all zeros, compute from P&L components.
+    # Formula: Sales - all operating costs + Other Income (before Dep, Interest, Tax)
+    ebitda_raw = bs_val("EBITDA")
+    if all(v == 0 for v in ebitda_raw):
+        ebitda_raw = [
+            sales[i]
+            - raw_material[i]
+            - change_inv[i]
+            - power_fuel[i]
+            - other_mfr[i]
+            - employee[i]
+            - selling_admin[i]
+            - other_exp[i]
+            + other_income[i]
+            for i in range(n)
+        ]
+    ebitda_pct = [round((ebitda_raw[i]/sales[i])*100, 2) if sales[i] else 0 for i in range(n)]
     
     # Sales is always 100%
     sales_pct = [100.0] * n
@@ -749,25 +783,30 @@ def run_common_size_statement(file):
     # Assets (relative to Total Assets)
     total_assets_pct = [100.0] * n  # Total Assets is always 100%
     
-    net_block = bs_val("Net Block")
+    # Use multi-alias lookups — Screener.in uses different labels across export versions:
+    # "Net Block" vs "Fixed Assets" vs "Net Fixed Assets"
+    # "Capital Work in Progress" vs "CWIP" vs "Capital WIP"
+    # "Cash & Bank" vs "Cash Equivalents" vs "Cash and Bank Balances"
+    net_block = bs_val_multi("Net Block", "Fixed Assets", "Net Fixed Assets", "Tangible Assets")
     net_block_pct = [round((net_block[i]/total_assets[i])*100, 2) if total_assets[i] else 0 for i in range(n)]
-    
-    cwip = bs_val("Capital Work in Progress")
+
+    cwip = bs_val_multi("Capital Work in Progress", "CWIP", "Capital WIP", "Capital work-in-progress")
     cwip_pct = [round((cwip[i]/total_assets[i])*100, 2) if total_assets[i] else 0 for i in range(n)]
-    
-    investments = bs_val("Investments")
+
+    investments = bs_val_multi("Investments", "Long Term Investments", "Non-current Investments")
     investments_pct = [round((investments[i]/total_assets[i])*100, 2) if total_assets[i] else 0 for i in range(n)]
-    
-    other_assets = bs_val("Other Assets")
+
+    other_assets = bs_val_multi("Other Assets", "Other Non-Current Assets", "Other Current Assets", "Loans & Advances")
     other_assets_pct = [round((other_assets[i]/total_assets[i])*100, 2) if total_assets[i] else 0 for i in range(n)]
-    
-    receivables = bs_val("Receivables")
+
+    receivables = bs_val_multi("Receivables", "Trade Receivables", "Debtors", "Sundry Debtors")
     receivables_pct = [round((receivables[i]/total_assets[i])*100, 2) if total_assets[i] else 0 for i in range(n)]
-    
-    inventory = bs_val("Inventory")
+
+    inventory = bs_val_multi("Inventory", "Inventories", "Stock")
     inventory_pct = [round((inventory[i]/total_assets[i])*100, 2) if total_assets[i] else 0 for i in range(n)]
-    
-    cash_bank = bs_val("Cash & Bank")
+
+    cash_bank = bs_val_multi("Cash & Bank", "Cash Equivalents", "Cash and Bank Balances",
+                              "Cash and Cash Equivalents", "Cash & Cash Equivalents")
     cash_bank_pct = [round((cash_bank[i]/total_assets[i])*100, 2) if total_assets[i] else 0 for i in range(n)]
     
     common_size_balance = [
