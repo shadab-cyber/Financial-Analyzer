@@ -33,7 +33,7 @@ PLANS = {
 from Financial_Modelling import (
     run_historical_fs, run_ratio_analysis, run_common_size_statement,
     run_forecasting, run_fcff, run_wacc, run_terminal_value_dcf, run_scenario_analysis,
-    run_altman_zscore, run_roic, run_piotroski, run_dupont
+    run_altman_zscore, run_roic, run_piotroski, run_dupont, run_moat_score
 )
 from Technical_Analysis import run_technical_analysis
 from Portfolio_Management import run_portfolio_analysis, fetch_price_for_symbol
@@ -1255,6 +1255,20 @@ def piotroski():
 @app.route('/financial-modelling/dupont/upload', methods=['POST'])
 def dupont():
     return _excel_upload_route(run_dupont)
+
+@app.route('/financial-modelling/moat-score/upload', methods=['POST'])
+def financial_modelling_moat_score():
+    user_scores = {
+        'brand':      request.form.get('brand',      0),
+        'cost':       request.form.get('cost',       0),
+        'switching':  request.form.get('switching',  0),
+        'network':    request.form.get('network',    0),
+        'regulatory': request.form.get('regulatory', 0),
+        'scale':      request.form.get('scale',      0),
+    }
+    # convert to int
+    user_scores = {k: int(v) for k, v in user_scores.items()}
+    return _excel_upload_route(run_moat_score, {'user_scores': user_scores})
 
 
 # =============================================================================
