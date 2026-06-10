@@ -2383,6 +2383,120 @@ function downloadSampleExcel() {
 
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- MOAT SCORE SECTION                                                   -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="section-card" id="moatSection">
+      <div class="section-title">🏰 Moat Score Analysis</div>
+      <p class="text-gray-600 mb-4 text-sm">
+        Evaluates competitive moat across 6 types: Brand, Cost, Switching Cost, Network Effect, Regulatory, and Efficient Scale.
+        Auto-signals are derived from the company's financial history. Optionally rate each moat yourself for a combined score.
+      </p>
+
+      <!-- User qualitative ratings -->
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:10px;">
+          📝 Optional: Rate Each Moat (0 = None &nbsp;|&nbsp; 1 = Weak &nbsp;|&nbsp; 2 = Strong)
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+          <label style="font-size:12px;color:#4b5563;display:flex;flex-direction:column;gap:4px;">
+            🏷️ Brand Moat
+            <select id="moat_brand" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;">
+              <option value="0">0 — None</option><option value="1">1 — Weak</option><option value="2">2 — Strong</option>
+            </select>
+          </label>
+          <label style="font-size:12px;color:#4b5563;display:flex;flex-direction:column;gap:4px;">
+            ⚙️ Cost Moat
+            <select id="moat_cost" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;">
+              <option value="0">0 — None</option><option value="1">1 — Weak</option><option value="2">2 — Strong</option>
+            </select>
+          </label>
+          <label style="font-size:12px;color:#4b5563;display:flex;flex-direction:column;gap:4px;">
+            🔒 Switching Cost
+            <select id="moat_switching" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;">
+              <option value="0">0 — None</option><option value="1">1 — Weak</option><option value="2">2 — Strong</option>
+            </select>
+          </label>
+          <label style="font-size:12px;color:#4b5563;display:flex;flex-direction:column;gap:4px;">
+            🌐 Network Effect
+            <select id="moat_network" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;">
+              <option value="0">0 — None</option><option value="1">1 — Weak</option><option value="2">2 — Strong</option>
+            </select>
+          </label>
+          <label style="font-size:12px;color:#4b5563;display:flex;flex-direction:column;gap:4px;">
+            📜 Regulatory Moat
+            <select id="moat_regulatory" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;">
+              <option value="0">0 — None</option><option value="1">1 — Weak</option><option value="2">2 — Strong</option>
+            </select>
+          </label>
+          <label style="font-size:12px;color:#4b5563;display:flex;flex-direction:column;gap:4px;">
+            📐 Efficient Scale
+            <select id="moat_scale" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;">
+              <option value="0">0 — None</option><option value="1">1 — Weak</option><option value="2">2 — Strong</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <button onclick="calculateMoat()"
+        style="background:#4f46e5;" 
+        class="hover:opacity-90 text-white px-6 py-2 rounded transition mb-4">
+        🏰 Calculate Moat Score
+      </button>
+
+      <div id="moatResults" style="display:none;">
+
+        <!-- Overall score banner -->
+        <div id="moatOverallBanner" style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;background:#f5f3ff;border:2px solid #a5b4fc;border-radius:12px;padding:20px 24px;margin-bottom:20px;">
+          <div style="text-align:center;min-width:110px;">
+            <div style="font-size:11px;color:#6b7280;margin-bottom:2px;">MOAT SCORE</div>
+            <div id="moatOverallScore" style="font-size:3rem;font-weight:900;color:#4f46e5;line-height:1;">—</div>
+            <div style="font-size:11px;color:#6b7280;">/ 10</div>
+          </div>
+          <div>
+            <div id="moatOverallGrade" style="font-size:1.25rem;font-weight:800;color:#4f46e5;margin-bottom:6px;">—</div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#6b7280;">
+              <span>Auto signals: <strong id="moatAutoTotal">—</strong>/18</span>
+              <span>User ratings: <strong id="moatUserTotal">—</strong>/12</span>
+            </div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:4px;">7–10 = Wide Moat &nbsp;|&nbsp; 4–6.9 = Narrow Moat &nbsp;|&nbsp; 0–3.9 = No/Weak Moat</div>
+          </div>
+          <!-- Key stats row -->
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-left:auto;">
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;text-align:center;min-width:90px;">
+              <div style="font-size:10px;color:#6b7280;">Rev CAGR</div>
+              <div id="moatRevCagr" style="font-size:1.1rem;font-weight:700;color:#0369a1;">—</div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;text-align:center;min-width:90px;">
+              <div style="font-size:10px;color:#6b7280;">Avg Gross Margin</div>
+              <div id="moatGrossMargin" style="font-size:1.1rem;font-weight:700;color:#065f46;">—</div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;text-align:center;min-width:90px;">
+              <div style="font-size:10px;color:#6b7280;">Avg Net Margin</div>
+              <div id="moatNetMargin" style="font-size:1.1rem;font-weight:700;color:#15803d;">—</div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;text-align:center;min-width:90px;">
+              <div style="font-size:10px;color:#6b7280;">Avg ROIC</div>
+              <div id="moatAvgRoic" style="font-size:1.1rem;font-weight:700;color:#7c3aed;">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Six moat cards -->
+        <div id="moatCardsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:20px;"></div>
+
+        <!-- Summary table -->
+        <h3 class="text-base font-bold text-gray-700 mb-2">Moat Score Summary</h3>
+        <div class="overflow-x-auto">
+          <div class="table-responsive">
+            <table id="moatSummaryTable"></table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
     <!-- DUPONT DECOMPOSITION SECTION                                        -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <div class="section-card" id="dupontSection">
@@ -2556,6 +2670,116 @@ function calculatePiotroski() {
             document.getElementById('piotroskiHistoryTable').innerHTML = ht;
         })
         .catch(e => { console.error(e); alert('Piotroski calculation failed.'); });
+}
+
+// ═══════════════════════════════════════════════════════════
+// MOAT SCORE
+// ═══════════════════════════════════════════════════════════
+function calculateMoat() {
+    const fileInput = document.getElementById('excelFile');
+    if (!fileInput || !fileInput.files[0]) { alert('Please upload an Excel file first.'); return; }
+
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    fd.append('brand',      document.getElementById('moat_brand').value);
+    fd.append('cost',       document.getElementById('moat_cost').value);
+    fd.append('switching',  document.getElementById('moat_switching').value);
+    fd.append('network',    document.getElementById('moat_network').value);
+    fd.append('regulatory', document.getElementById('moat_regulatory').value);
+    fd.append('scale',      document.getElementById('moat_scale').value);
+
+    fetch('/financial-modelling/moat-score/upload', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { alert('Moat Score Error: ' + data.error); return; }
+            document.getElementById('moatResults').style.display = 'block';
+
+            const s = data.summary || {};
+            document.getElementById('moatOverallScore').textContent  = s.overall_10 ?? '—';
+            document.getElementById('moatOverallGrade').textContent  = s.overall_grade ?? '—';
+            document.getElementById('moatAutoTotal').textContent     = s.total_auto ?? '—';
+            document.getElementById('moatUserTotal').textContent     = s.total_user ?? '—';
+            document.getElementById('moatRevCagr').textContent       = (s.revenue_cagr != null ? s.revenue_cagr + '%' : '—');
+            document.getElementById('moatGrossMargin').textContent   = (s.avg_gross_margin != null ? s.avg_gross_margin + '%' : '—');
+            document.getElementById('moatNetMargin').textContent     = (s.avg_net_margin != null ? s.avg_net_margin + '%' : '—');
+            document.getElementById('moatAvgRoic').textContent       = (s.avg_roic != null ? s.avg_roic + '%' : 'N/A');
+
+            // Score-based banner color
+            const score = parseFloat(s.overall_10 || 0);
+            const bannerEl = document.getElementById('moatOverallBanner');
+            if (score >= 7) {
+                bannerEl.style.background = '#f0fdf4'; bannerEl.style.borderColor = '#86efac';
+                document.getElementById('moatOverallScore').style.color = '#15803d';
+                document.getElementById('moatOverallGrade').style.color = '#15803d';
+            } else if (score >= 4) {
+                bannerEl.style.background = '#fefce8'; bannerEl.style.borderColor = '#fde047';
+                document.getElementById('moatOverallScore').style.color = '#854d0e';
+                document.getElementById('moatOverallGrade').style.color = '#854d0e';
+            } else {
+                bannerEl.style.background = '#fff1f2'; bannerEl.style.borderColor = '#fca5a5';
+                document.getElementById('moatOverallScore').style.color = '#991b1b';
+                document.getElementById('moatOverallGrade').style.color = '#991b1b';
+            }
+
+            // Build 6 moat cards
+            const moats = data.moat_results || [];
+            let cards = '';
+            moats.forEach(m => {
+                const barW = m.pct + '%';
+                const barColor = m.combined >= 4 ? '#16a34a' : m.combined >= 2 ? '#d97706' : '#dc2626';
+                let sigs = '';
+                (m.auto_signals || []).forEach(sig => {
+                    const icon = sig.pass ? '✅' : '❌';
+                    const col  = sig.pass ? '#15803d' : '#9ca3af';
+                    sigs += `<div style="font-size:11px;color:${col};margin-bottom:3px;">${icon} ${sig.label}</div>`;
+                });
+                cards += `
+                <div style="background:${m.bg};border:1px solid ${m.border};border-radius:10px;padding:14px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                    <div style="font-size:13px;font-weight:700;color:${m.color};">${m.emoji} ${m.label}</div>
+                    <div style="font-size:12px;font-weight:700;color:${barColor};">${m.combined}/5</div>
+                  </div>
+                  <div style="font-size:11px;color:#6b7280;margin-bottom:8px;">${m.description}</div>
+                  <!-- Progress bar -->
+                  <div style="height:6px;background:#e5e7eb;border-radius:3px;margin-bottom:10px;">
+                    <div style="height:6px;width:${barW};background:${barColor};border-radius:3px;transition:width 0.5s;"></div>
+                  </div>
+                  <div style="font-size:11px;font-weight:700;color:${barColor};margin-bottom:6px;">${m.strength}</div>
+                  <div style="border-top:1px solid rgba(0,0,0,0.06);padding-top:8px;">
+                    <div style="font-size:10px;font-weight:600;color:#9ca3af;margin-bottom:4px;">AUTO SIGNALS</div>
+                    ${sigs}
+                  </div>
+                  <div style="margin-top:6px;font-size:11px;color:#6b7280;">
+                    Auto: <strong>${m.auto_score}/3</strong> &nbsp;|&nbsp; Your rating: <strong>${m.user_score}/2</strong>
+                  </div>
+                </div>`;
+            });
+            document.getElementById('moatCardsGrid').innerHTML = cards;
+
+            // Summary table
+            let t = '<thead><tr><th>Moat Type</th><th>Auto Score</th><th>Your Rating</th><th>Combined /5</th><th>Strength</th></tr></thead><tbody>';
+            moats.forEach(m => {
+                const bg = m.combined >= 4 ? 'background:#f0fdf4' : m.combined >= 2 ? 'background:#fefce8' : 'background:#fff1f2';
+                t += `<tr style="${bg}">
+                  <td>${m.emoji} ${m.label}</td>
+                  <td style="text-align:center;">${m.auto_score}/3</td>
+                  <td style="text-align:center;">${m.user_score}/2</td>
+                  <td style="text-align:center;font-weight:700;">${m.combined}/5</td>
+                  <td>${m.strength}</td>
+                </tr>`;
+            });
+            const totBg = score >= 7 ? 'background:#dcfce7' : score >= 4 ? 'background:#fef9c3' : 'background:#fee2e2';
+            t += `<tr style="${totBg};font-weight:700;">
+              <td>OVERALL MOAT SCORE</td>
+              <td style="text-align:center;">${s.total_auto}/18</td>
+              <td style="text-align:center;">${s.total_user}/12</td>
+              <td style="text-align:center;">${s.overall_10}/10</td>
+              <td>${s.overall_grade}</td>
+            </tr>`;
+            t += '</tbody>';
+            document.getElementById('moatSummaryTable').innerHTML = t;
+        })
+        .catch(e => { console.error(e); alert('Moat Score calculation failed.'); });
 }
 
 // ═══════════════════════════════════════════════════════════
