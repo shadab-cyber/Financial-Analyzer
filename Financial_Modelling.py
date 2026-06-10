@@ -2680,6 +2680,294 @@ def run_piotroski(file):
 # ===============================
 # DUPONT ANALYSIS (3-FACTOR ROE)
 # ===============================
+# ===============================
+# MOAT SCORE ANALYSIS
+# ===============================
+
+def run_moat_score(file, user_scores=None):
+    """
+    Moat Score = hybrid of auto-computed financial signals + user qualitative ratings.
+
+    Six moat types (from Shadab Talks Part 2 framework):
+      1. Brand Moat
+      2. Cost Moat
+      3. Switching Cost Moat
+      4. Network Effect Moat
+      5. Regulatory Moat
+      6. Efficient Scale Moat
+
+    Each moat type has:
+      - Auto signals derived from historical financials (0/1 each)
+      - User qualitative rating (0 = None, 1 = Weak, 2 = Strong)  [optional]
+
+    Auto signals used:
+      - Gross Margin > 40% consistently   → Brand / Pricing Power proxy
+      - Net Margin > 15% consistently     → Brand / Cost advantage proxy
+      - ROIC > 15% consistently           → Genuine competitive advantage
+      - ROIC improving trend              → Moat strengthening
+      - Revenue CAGR > 10% (5yr)         → Demand-side moat (network/brand)
+      - Low D/E (< 0.3)                  → Financial strength / no distress
+      - Operating Leverage (EBIT growing faster than revenue) → Cost advantage
+      - Low capex intensity (Capex/CFO < 25%) → Asset-light / switching cost
+
+    user_scores: dict with keys brand, cost, switching, network, regulatory, scale
+                 each value 0 (none), 1 (weak), 2 (strong). Optional.
+    """
+    historical = run_historical_fs(file)
+    years = historical["years"]
+    n = len(years)
+
+    def gv(label):
+        for lbl, vals in historical["income_statement"] + historical["balance_sheet"]:
+            if lbl == label:
+                return vals
+        return [0] * n
+
+    sales        = gv("Sales")
+    gross_margin = gv("Gross Margin %")
+    net_margin   = gv("Net Margins")
+    ebit_vals    = [gv("EBITDA")[i] - gv("Depreciation")[i] for i in range(n)]
+    equity       = gv("Equity Share Capital")
+    reserves     = gv("Reserves")
+    borrowings   = gv("Borrowings")
+
+    # --- Get ROIC from run_roic ---
+    try:
+        roic_data = run_roic(file)
+        roic_vals = []
+        for lbl, vals in roic_data.get("roic_data", []):
+            if "ROIC" in lbl and "WACC" not in lbl and "%" in lbl:
+                roic_vals = [v for v in vals if isinstance(v, (int, float))]
+                break
+    except Exception:
+        roic_vals = []
+
+    # --- Get CFO and Capex for capex intensity ---
+    cf_cfo  = [0] * n
+    cf_capex = [0] * n
+    for lbl, vals in historical.get("cash_flow", []):
+        if "cash from operating" in lbl.lower():
+            cf_cfo = [v if isinstance(v, (int, float)) else 0 for v in vals]
+        if "capital expenditure" in lbl.lower() or "purchase of fixed" in lbl.lower():
+            cf_capex = [abs(v) if isinstance(v, (int, float)) else 0 for v in vals]
+
+    # ── AUTO SIGNAL HELPERS ──────────────────────────────────────
+    def _consistent_above(series, threshold, min_years_frac=0.7):
+        """True if value exceeds threshold in >= min_years_frac of non-zero years."""
+        valid = [v for v in series if isinstance(v, (int, float)) and v != 0]
+        if not valid:
+            return False
+        return sum(1 for v in valid if v > threshold) / len(valid) >= min_years_frac
+
+    def _improving_trend(series):
+        """True if last 3yr average > first 3yr average (need >=6 data points)."""
+        nums = [v for v in series if isinstance(v, (int, float)) and v != 0]
+        if len(nums) < 4:
+            return False
+        return (sum(nums[-3:]) / 3) > (sum(nums[:3]) / 3)
+
+    def _revenue_cagr(sales_list, periods=5):
+        nums = [v for v in sales_list if isinstance(v, (int, float)) and v > 0]
+        if len(nums) < 2:
+            return 0.0
+        use = nums[-min(periods+1, len(nums)):]
+        if use[0] == 0:
+            return 0.0
+        return round(((use[-1] / use[0]) ** (1 / (len(use) - 1)) - 1) * 100, 1)
+
+    def _avg_de():
+        vals = []
+        for i in range(n):
+            eq = equity[i] + reserves[i]
+            if eq > 0:
+                vals.append(borrowings[i] / eq)
+        return sum(vals) / len(vals) if vals else 1.0
+
+    def _operating_leverage():
+        """EBIT CAGR > Revenue CAGR over available history → cost advantage."""
+        rev_cagr  = _revenue_cagr(sales)
+        ebit_nums = [v for v in ebit_vals if isinstance(v, (int, float)) and v > 0]
+        if len(ebit_nums) < 2:
+            return False
+        ebit_cagr = round(((ebit_nums[-1] / ebit_nums[0]) ** (1 / (len(ebit_nums) - 1)) - 1) * 100, 1)
+        return ebit_cagr > rev_cagr
+
+    def _low_capex_intensity():
+        """Capex/CFO < 25% on average → asset-light / switching cost proxy."""
+        ratios = []
+        for i in range(n):
+            if cf_cfo[i] > 0:
+                ratios.append(cf_capex[i] / cf_cfo[i])
+        if not ratios:
+            return False
+        return (sum(ratios) / len(ratios)) < 0.25
+
+    # ── COMPUTE AUTO SIGNALS ──────────────────────────────────────
+    sig_high_gross_margin   = _consistent_above(gross_margin, 40)
+    sig_high_net_margin     = _consistent_above(net_margin, 15)
+    sig_roic_above_15       = _consistent_above(roic_vals, 15) if roic_vals else _consistent_above(net_margin, 12)
+    sig_roic_improving      = _improving_trend(roic_vals) if roic_vals else _improving_trend(net_margin)
+    sig_strong_revenue_cagr = _revenue_cagr(sales) >= 10
+    sig_low_de              = _avg_de() < 0.3
+    sig_operating_leverage  = _operating_leverage()
+    sig_low_capex           = _low_capex_intensity()
+
+    revenue_cagr = _revenue_cagr(sales)
+    avg_gross_margin = round(sum(v for v in gross_margin if isinstance(v,(int,float)) and v!=0)
+                             / max(1, sum(1 for v in gross_margin if isinstance(v,(int,float)) and v!=0)), 1)
+    avg_net_margin   = round(sum(v for v in net_margin if isinstance(v,(int,float)) and v!=0)
+                             / max(1, sum(1 for v in net_margin if isinstance(v,(int,float)) and v!=0)), 1)
+    avg_roic         = round(sum(roic_vals) / len(roic_vals), 1) if roic_vals else None
+
+    # ── MOAT DEFINITIONS ─────────────────────────────────────────
+    # Each moat: list of (signal_label, signal_bool, weight)
+    moat_definitions = {
+        "brand": {
+            "label": "Brand Moat",
+            "emoji": "🏷️",
+            "description": "Pricing power and consumer loyalty allow above-average margins.",
+            "color": "#4f46e5",
+            "bg": "#eef2ff",
+            "border": "#c7d2fe",
+            "auto_signals": [
+                ("Gross Margin consistently > 40%", sig_high_gross_margin),
+                ("Net Margin consistently > 15%",   sig_high_net_margin),
+                ("Revenue CAGR ≥ 10%",              sig_strong_revenue_cagr),
+            ]
+        },
+        "cost": {
+            "label": "Cost Moat",
+            "emoji": "⚙️",
+            "description": "Lower cost structure than competitors — through scale, process, or location.",
+            "color": "#0369a1",
+            "bg": "#e0f2fe",
+            "border": "#bae6fd",
+            "auto_signals": [
+                ("Operating Leverage (EBIT growing faster than revenue)", sig_operating_leverage),
+                ("Low Debt/Equity (< 0.3) — no financial cost drag",      sig_low_de),
+                ("ROIC consistently > 15%",                               sig_roic_above_15),
+            ]
+        },
+        "switching": {
+            "label": "Switching Cost Moat",
+            "emoji": "🔒",
+            "description": "High cost or risk of switching to competitors locks in customers.",
+            "color": "#b45309",
+            "bg": "#fefce8",
+            "border": "#fde68a",
+            "auto_signals": [
+                ("Low Capex Intensity (Capex/CFO < 25%) — asset-light lock-in", sig_low_capex),
+                ("ROIC improving trend — deepening moat",                        sig_roic_improving),
+                ("Net Margin consistently > 15% — pricing retention power",      sig_high_net_margin),
+            ]
+        },
+        "network": {
+            "label": "Network Effect Moat",
+            "emoji": "🌐",
+            "description": "Product becomes more valuable as more users join — winner-take-most dynamic.",
+            "color": "#065f46",
+            "bg": "#ecfdf5",
+            "border": "#a7f3d0",
+            "auto_signals": [
+                ("Revenue CAGR ≥ 10% — growing user base",                sig_strong_revenue_cagr),
+                ("Gross Margin consistently > 40% — platform economics",   sig_high_gross_margin),
+                ("ROIC consistently > 15% — returns on scale",             sig_roic_above_15),
+            ]
+        },
+        "regulatory": {
+            "label": "Regulatory Moat",
+            "emoji": "📜",
+            "description": "Licences, patents, government approvals, or compliance barriers block competitors.",
+            "color": "#7c3aed",
+            "bg": "#faf5ff",
+            "border": "#e9d5ff",
+            "auto_signals": [
+                ("Low Debt/Equity — clean balance sheet for regulated entity", sig_low_de),
+                ("ROIC consistently > 15% — protected returns",               sig_roic_above_15),
+                ("Net Margin consistently > 15% — protected pricing",         sig_high_net_margin),
+            ]
+        },
+        "scale": {
+            "label": "Efficient Scale Moat",
+            "emoji": "📐",
+            "description": "Company operates in a market just large enough for one or two players — new entrants cannot achieve break-even.",
+            "color": "#be185d",
+            "bg": "#fff1f2",
+            "border": "#fecdd3",
+            "auto_signals": [
+                ("Operating Leverage confirmed",                              sig_operating_leverage),
+                ("ROIC improving trend",                                      sig_roic_improving),
+                ("Low Capex Intensity — dominant scale with minimal spend",   sig_low_capex),
+            ]
+        },
+    }
+
+    # ── SCORE CALCULATION ────────────────────────────────────────
+    # Auto score: 0-3 per moat (1 per passing signal)
+    # User score: 0 (none) / 1 (weak) / 2 (strong) — added to auto
+    # Max per moat = 3 (auto) + 2 (user) = 5
+    # Moat rating = weighted sum across 6 moats
+
+    us = user_scores or {}
+    moat_results = []
+    total_auto   = 0
+    total_user   = 0
+
+    for key, moat in moat_definitions.items():
+        auto_pass = sum(1 for _, v in moat["auto_signals"] if v)
+        user_val  = int(us.get(key, 0))
+        user_val  = max(0, min(2, user_val))   # clamp 0-2
+        combined  = auto_pass + user_val        # 0-5
+        pct       = round(combined / 5 * 100)
+
+        if combined >= 4:   strength = "Strong ✅"
+        elif combined >= 2: strength = "Moderate ⚠️"
+        else:               strength = "Weak ❌"
+
+        moat_results.append({
+            "key":          key,
+            "label":        moat["label"],
+            "emoji":        moat["emoji"],
+            "description":  moat["description"],
+            "color":        moat["color"],
+            "bg":           moat["bg"],
+            "border":       moat["border"],
+            "auto_signals": [{"label": lbl, "pass": bool(v)} for lbl, v in moat["auto_signals"]],
+            "auto_score":   auto_pass,
+            "user_score":   user_val,
+            "combined":     combined,
+            "max":          5,
+            "pct":          pct,
+            "strength":     strength,
+        })
+        total_auto  += auto_pass
+        total_user  += user_val
+
+    # Overall moat score /30 → normalise to /10
+    total_combined = total_auto + total_user    # max = 30
+    overall_10     = round(total_combined / 30 * 10, 1)
+
+    if overall_10 >= 7:    overall_grade = "Wide Moat 🏰"
+    elif overall_10 >= 4:  overall_grade = "Narrow Moat 🧱"
+    else:                  overall_grade = "No Moat / Weak 🚧"
+
+    return {
+        "years":        years,
+        "moat_results": moat_results,
+        "summary": {
+            "total_auto":     total_auto,
+            "total_user":     total_user,
+            "total_combined": total_combined,
+            "overall_10":     overall_10,
+            "overall_grade":  overall_grade,
+            "revenue_cagr":   revenue_cagr,
+            "avg_gross_margin": avg_gross_margin,
+            "avg_net_margin":  avg_net_margin,
+            "avg_roic":        avg_roic,
+        }
+    }
+
+
 def run_dupont(file):
     """
     DuPont decomposes ROE into 3 drivers:
