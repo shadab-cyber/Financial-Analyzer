@@ -242,6 +242,7 @@ h2 { font-family: 'Playfair Display', serif !important; font-weight: 700 !import
 .nav-logo-wrap { display: flex !important; align-items: center !important; gap: 9px !important; text-decoration: none !important; transition: opacity 0.2s ease; }
 .nav-logo-wrap:hover { opacity: 0.88 !important; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 
 <body class="bg-gray-100 min-h-screen">
@@ -576,6 +577,10 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="section-card">
       <div class="section-title">
         📊 RATIO ANALYSIS
+      </div>
+      <h3 class="text-base font-bold text-gray-700 mb-2 mt-2">📈 Margin Trend (Gross / EBITDA / Net)</h3>
+      <div style="max-width:100%;margin-bottom:20px;">
+        <canvas id="marginTrendChart" height="280"></canvas>
       </div>
       <div class="overflow-x-auto">
         <div class="table-responsive">
@@ -995,6 +1000,12 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
         </div>
         
+        <!-- Z-Score Trend Chart -->
+        <h3 class="text-lg font-bold text-gray-700 mb-3 mt-4">📊 Z-Score Trend with Risk Zones</h3>
+        <div style="max-width:100%;margin-bottom:20px;">
+          <canvas id="altmanChart" height="280"></canvas>
+        </div>
+
         <!-- Z-Score Trend Table -->
         <!-- Sector warning — shown only for banks / financial companies -->
         <div id="zscoreSectorWarning" style="display:none; background:#fef3c7; border:1px solid #fcd34d; color:#92400e; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:13px; line-height:1.6;"></div>
@@ -1032,6 +1043,167 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 
 </div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CHART HELPERS — Margin Trend, ROIC vs WACC, Altman, Piotroski, DuPont
+// ═══════════════════════════════════════════════════════════
+const _faCharts = {};
+
+function _destroyChart(id) {
+    if (_faCharts[id]) { _faCharts[id].destroy(); delete _faCharts[id]; }
+}
+
+function _getRatioRow(rows, label) {
+    const r = (rows || []).find(([l]) => l === label);
+    return r ? r[1] : null;
+}
+
+// 1. Margin Trend Chart (Gross / EBITDA / Net)
+function renderMarginTrendChart(years, ratioRows) {
+    const canvas = document.getElementById('marginTrendChart');
+    if (!canvas) return;
+    _destroyChart('marginTrendChart');
+
+    const gross  = _getRatioRow(ratioRows, "Gross Margin") || [];
+    const ebitda = _getRatioRow(ratioRows, "EBITDA Margin") || [];
+    const net    = _getRatioRow(ratioRows, "Net Profit Margin") || [];
+
+    _faCharts['marginTrendChart'] = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: years,
+            datasets: [
+                { label: 'Gross Margin %',  data: gross,  borderColor: '#0369a1', backgroundColor: 'rgba(3,105,161,0.08)',  tension: 0.3, fill: false },
+                { label: 'EBITDA Margin %', data: ebitda, borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,0.08)',  tension: 0.3, fill: false },
+                { label: 'Net Profit Margin %', data: net, borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.08)', tension: 0.3, fill: false },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' }, title: { display: false } },
+            scales: { y: { ticks: { callback: v => v + '%' } } }
+        }
+    });
+}
+
+// 2. ROIC vs WACC Chart
+function renderRoicChart(years, roicRows, waccBenchmark) {
+    const canvas = document.getElementById('roicChart');
+    if (!canvas) return;
+    _destroyChart('roicChart');
+
+    let roicVals = null;
+    (roicRows || []).forEach(([lbl, vals]) => {
+        if (lbl && lbl.includes('ROIC') && !lbl.includes('WACC') && lbl.includes('%')) {
+            roicVals = vals;
+        }
+    });
+    if (!roicVals) roicVals = [];
+
+    const waccLine = years.map(() => waccBenchmark);
+
+    _faCharts['roicChart'] = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: years,
+            datasets: [
+                { label: 'ROIC %', data: roicVals, borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.10)', tension: 0.3, fill: true },
+                { label: 'WACC Benchmark %', data: waccLine, borderColor: '#dc2626', borderDash: [6,4], pointRadius: 0, tension: 0 },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { y: { ticks: { callback: v => v + '%' } } }
+        }
+    });
+}
+
+// 3. Altman Z-Score Chart with zone bands
+function renderAltmanChart(years, zScores) {
+    const canvas = document.getElementById('altmanChart');
+    if (!canvas) return;
+    _destroyChart('altmanChart');
+
+    const safeLine   = years.map(() => 2.99);
+    const greyLine   = years.map(() => 1.81);
+
+    _faCharts['altmanChart'] = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: years,
+            datasets: [
+                { label: 'Z-Score', data: zScores, borderColor: '#0369a1', backgroundColor: 'rgba(3,105,161,0.10)', tension: 0.3, fill: true, pointRadius: 4 },
+                { label: 'Safe Zone (2.99)', data: safeLine, borderColor: '#16a34a', borderDash: [5,5], pointRadius: 0, tension: 0 },
+                { label: 'Distress Zone (1.81)', data: greyLine, borderColor: '#dc2626', borderDash: [5,5], pointRadius: 0, tension: 0 },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+// 4. Piotroski F-Score Bar Chart
+function renderPiotroskiChart(years, totalScores) {
+    const canvas = document.getElementById('piotroskiChart');
+    if (!canvas) return;
+    _destroyChart('piotroskiChart');
+
+    const colors = totalScores.map(s => s >= 8 ? '#16a34a' : s >= 5 ? '#d97706' : '#dc2626');
+
+    _faCharts['piotroskiChart'] = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: years,
+            datasets: [
+                { label: 'F-Score (out of 9)', data: totalScores, backgroundColor: colors }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, max: 9, ticks: { stepSize: 1 } } }
+        }
+    });
+}
+
+// 5. DuPont Decomposition Chart (4-line)
+function renderDupontChart(years, dupontRows) {
+    const canvas = document.getElementById('dupontChart');
+    if (!canvas) return;
+    _destroyChart('dupontChart');
+
+    const npm = _getRatioRow(dupontRows, "Net Profit Margin %") || [];
+    const at  = _getRatioRow(dupontRows, "Asset Turnover (x)") || [];
+    const em  = _getRatioRow(dupontRows, "Equity Multiplier (x)") || [];
+    const roe = _getRatioRow(dupontRows, "ROE via DuPont %") || [];
+
+    _faCharts['dupontChart'] = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: years,
+            datasets: [
+                { label: 'Net Profit Margin %', data: npm, borderColor: '#16a34a', yAxisID: 'y',  tension: 0.3 },
+                { label: 'ROE (DuPont) %',       data: roe, borderColor: '#7c3aed', yAxisID: 'y',  tension: 0.3, borderWidth: 3 },
+                { label: 'Asset Turnover (x)',   data: at,  borderColor: '#0369a1', yAxisID: 'y1', tension: 0.3 },
+                { label: 'Equity Multiplier (x)',data: em,  borderColor: '#d97706', yAxisID: 'y1', tension: 0.3 },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            scales: {
+                y:  { type: 'linear', position: 'left',  title: { display: true, text: '%' } },
+                y1: { type: 'linear', position: 'right', title: { display: true, text: 'x (times)' }, grid: { drawOnChartArea: false } }
+            }
+        }
+    });
+}
+</script>
 
 <script>
 function uploadFile() {
@@ -1091,6 +1263,7 @@ function uploadFile() {
             return;
         }
         renderRatioTable("ratioTable", data.years, data.ratio_analysis);
+        renderMarginTrendChart(data.years, data.ratio_analysis);
     })
     .catch(err => {
         console.error(err);
@@ -2095,6 +2268,7 @@ function calculateAltmanZScore() {
         
         // Render Z-Score table
         renderZScoreTable(data.years, data.z_scores, data.z_score_change, data.risk_classifications);
+        renderAltmanChart(data.years, data.z_scores);
         
         // Show sector warning banner if model is not valid for this company type
         const warningBanner = document.getElementById("zscoreSectorWarning");
@@ -2322,6 +2496,12 @@ function downloadSampleExcel() {
           ⚠️ Financial sector detected — showing ROE on Book Equity instead of ROIC on Invested Capital.
         </div>
 
+        <!-- ROIC vs WACC Chart -->
+        <h3 class="text-base font-bold text-gray-700 mb-2 mt-2">📊 ROIC vs WACC — Value Creation Trend</h3>
+        <div style="max-width:100%;margin-bottom:20px;">
+          <canvas id="roicChart" height="280"></canvas>
+        </div>
+
         <!-- Data table -->
         <div class="overflow-x-auto">
           <div class="table-responsive">
@@ -2373,6 +2553,9 @@ function downloadSampleExcel() {
 
         <!-- Year-by-year scores -->
         <h3 class="text-base font-bold text-gray-700 mb-2 mt-4">Historical F-Scores</h3>
+        <div style="max-width:100%;margin-bottom:20px;">
+          <canvas id="piotroskiChart" height="260"></canvas>
+        </div>
         <div class="overflow-x-auto">
           <div class="table-responsive">
             <table id="piotroskiHistoryTable"></table>
@@ -2541,6 +2724,12 @@ function downloadSampleExcel() {
           </div>
         </div>
 
+        <!-- DuPont Decomposition Chart -->
+        <h3 class="text-base font-bold text-gray-700 mb-2 mt-2">📊 DuPont Decomposition Trend</h3>
+        <div style="max-width:100%;margin-bottom:20px;">
+          <canvas id="dupontChart" height="280"></canvas>
+        </div>
+
         <!-- Full table -->
         <div class="overflow-x-auto">
           <div class="table-responsive">
@@ -2600,6 +2789,7 @@ function calculateROIC() {
             });
             tbody += '</tbody>';
             document.getElementById('roicTable').innerHTML = thead + tbody;
+            renderRoicChart(years, rows, s.wacc_benchmark ?? 0);
         })
         .catch(e => { console.error(e); alert('ROIC calculation failed.'); });
 }
@@ -2668,6 +2858,7 @@ function calculatePiotroski() {
             });
             ht += '</tbody>';
             document.getElementById('piotroskiHistoryTable').innerHTML = ht;
+            renderPiotroskiChart(years, totalScores);
         })
         .catch(e => { console.error(e); alert('Piotroski calculation failed.'); });
 }
@@ -2826,6 +3017,7 @@ function calculateDuPont() {
             });
             tbody += '</tbody>';
             document.getElementById('dupontTable').innerHTML = thead + tbody;
+            renderDupontChart(years, rows);
         })
         .catch(e => { console.error(e); alert('DuPont calculation failed.'); });
 }
