@@ -2678,6 +2678,312 @@ def run_piotroski(file):
 
 
 # ===============================
+# EARNINGS QUALITY SCORE
+# ===============================
+def run_earnings_quality(file):
+    """
+    Standalone Earnings Quality analysis surfacing CFO/Net Profit,
+    accruals ratio, capex intensity, and a composite RAG score.
+    """
+    historical = run_historical_fs(file)
+    years = historical["years"]
+    n = len(years)
+
+    def gv(label, src="both"):
+        rows = (historical["income_statement"] + historical["balance_sheet"]) if src == "both" else \
+               historical["income_statement"] if src == "is" else historical["balance_sheet"]
+        for lbl, vals in rows:
+            if lbl == label:
+                return [v if isinstance(v, (int, float)) else 0 for v in vals]
+        return [0] * n
+
+    net_profit  = gv("Net Profit", "is")
+    sales       = gv("Sales", "is")
+    total_assets= gv("Total Assets", "bs") if "Total Assets" in [l for l,_ in historical["balance_sheet"]] \
+                  else [sum(gv("Total Current Assets","bs")[i] + gv("Total Non Current Assets","bs")[i] for i in [i])[0] for i in range(n)]
+    # simpler:
+    tca  = [v if isinstance(v,(int,float)) else 0 for v in gv("Total Current Assets","bs")]
+    tnca = [v if isinstance(v,(int,float)) else 0 for v in gv("Total Non Current Assets","bs")]
+    total_assets = [tca[i]+tnca[i] for i in range(n)]
+
+    # CFO from cash flow
+    cfo = [0]*n
+    capex = [0]*n
+    for lbl, vals in historical.get("cash_flow", []):
+        if "cash from operating" in lbl.lower():
+            cfo = [v if isinstance(v,(int,float)) else 0 for v in vals]
+        if "fixed assets purchased" in lbl.lower():
+            capex = [abs(v) if isinstance(v,(int,float)) else 0 for v in vals]
+
+    # Fallback CFO
+    if all(v == 0 for v in cfo):
+        dep = gv("Depreciation", "is")
+        rec = gv("Receivables", "bs")
+        inv_bs = gv("Inventory", "bs")
+        ol  = gv("Other Liabilities", "bs")
+        for i in range(n):
+            nwc_d = 0
+            if i > 0:
+                nwc_d = (rec[i]-rec[i-1]) + (inv_bs[i]-inv_bs[i-1]) - (ol[i]-ol[i-1])
+            cfo[i] = round(net_profit[i] + dep[i] - nwc_d, 2)
+
+    rows = []
+    for i in range(n):
+        np_  = net_profit[i]
+        cfo_ = cfo[i]
+        ta_  = total_assets[i] or 1
+        sal_ = sales[i] or 1
+
+        # 1. CFO / Net Profit ratio  (>1.0 excellent, 0.75-1.0 good, <0.75 weak)
+        cfo_np = round(cfo_ / np_, 2) if np_ != 0 else None
+
+        # 2. Accruals Ratio = (Net Profit - CFO) / Total Assets  (lower = better)
+        accruals = round((np_ - cfo_) / ta_ * 100, 2)
+
+        # 3. CFO / Sales %  (higher = better cash conversion)
+        cfo_sales = round(cfo_ / sal_ * 100, 2)
+
+        # 4. Capex / CFO %  (<25% = asset-light, 25-50% = moderate, >50% = heavy)
+        capex_cfo = round(capex[i] / cfo_ * 100, 2) if cfo_ > 0 else None
+
+        # RAG per metric
+        def rag_cfo_np(v):
+            if v is None: return "⬛ N/A"
+            return "🟢 Excellent" if v >= 1.0 else "🟡 Moderate" if v >= 0.75 else "🔴 Weak"
+
+        def rag_accruals(v):
+            return "🟢 Low" if v <= 2 else "🟡 Moderate" if v <= 5 else "🔴 High"
+
+        def rag_cfo_sales(v):
+            return "🟢 Strong" if v >= 15 else "🟡 Moderate" if v >= 8 else "🔴 Weak"
+
+        def rag_capex(v):
+            if v is None: return "⬛ N/A"
+            return "🟢 Asset-Light" if v <= 25 else "🟡 Moderate" if v <= 50 else "🔴 Heavy"
+
+        # Composite score 0-4 (1 per green)
+        score = sum([
+            1 if (cfo_np is not None and cfo_np >= 1.0) else 0,
+            1 if accruals <= 2 else 0,
+            1 if cfo_sales >= 15 else 0,
+            1 if (capex_cfo is not None and capex_cfo <= 25) else 0,
+        ])
+
+        if score >= 3:   grade = "High Quality ✅"
+        elif score >= 2: grade = "Moderate ⚠️"
+        else:            grade = "Low Quality ❌"
+
+        rows.append({
+            "year":         years[i],
+            "cfo_np":       cfo_np,
+            "accruals":     accruals,
+            "cfo_sales":    cfo_sales,
+            "capex_cfo":    capex_cfo,
+            "rag_cfo_np":   rag_cfo_np(cfo_np),
+            "rag_accruals": rag_accruals(accruals),
+            "rag_cfo_sales":rag_cfo_sales(cfo_sales),
+            "rag_capex":    rag_capex(capex_cfo),
+            "score":        score,
+            "grade":        grade,
+        })
+
+    latest = rows[-1] if rows else {}
+    return {
+        "years":         years,
+        "rows":          rows,
+        "cfo_np_series":    [r["cfo_np"]    or 0 for r in rows],
+        "accruals_series":  [r["accruals"]       for r in rows],
+        "cfo_sales_series": [r["cfo_sales"]       for r in rows],
+        "latest_grade":  latest.get("grade","N/A"),
+        "latest_score":  latest.get("score", 0),
+        "definitions": {
+            "CFO/Net Profit":  "Cash conversion ratio. >1.0 means more cash earned than accounting profit.",
+            "Accruals Ratio":  "(Net Profit − CFO) / Total Assets %. Low = real earnings, high = accounting games.",
+            "CFO/Sales %":     "Cash margin. How much of every rupee of revenue turns into actual cash.",
+            "Capex/CFO %":     "Capital intensity. <25% = asset-light sustainable business.",
+        }
+    }
+
+
+# ===============================
+# RED FLAG DETECTOR
+# ===============================
+def run_red_flag_detector(file):
+    """
+    Scans historical financials for warning signals.
+    Returns a prioritised list of red flags with severity: HIGH / MEDIUM / LOW.
+    """
+    historical = run_historical_fs(file)
+    years = historical["years"]
+    n = len(years)
+
+    def gv(label):
+        for lbl, vals in historical["income_statement"] + historical["balance_sheet"]:
+            if lbl == label:
+                return [v if isinstance(v,(int,float)) else 0 for v in vals]
+        return [0]*n
+
+    def cf_row(label):
+        for lbl, vals in historical.get("cash_flow",[]):
+            if label.lower() in lbl.lower():
+                return [v if isinstance(v,(int,float)) else 0 for v in vals]
+        return [0]*n
+
+    sales        = gv("Sales")
+    net_profit   = gv("Net Profit")
+    net_margin   = gv("Net Margins")
+    gross_margin = gv("Gross Margin %")
+    ebitda_pct   = gv("EBITDA % Sales")
+    borrowings   = gv("Borrowings")
+    equity       = gv("Equity Share Capital")
+    reserves     = gv("Reserves")
+    receivables  = gv("Receivables")
+    inventory    = gv("Inventory")
+    interest     = gv("Interest")
+    depreciation = gv("Depreciation")
+    equity_sh    = gv("No. of Equity Shares")
+    cfo          = cf_row("cash from operating")
+    capex_raw    = cf_row("fixed assets purchased")
+    capex        = [abs(v) for v in capex_raw]
+
+    # Fallback CFO
+    if all(v==0 for v in cfo):
+        dep = gv("Depreciation")
+        rec = gv("Receivables")
+        inv_b = gv("Inventory")
+        ol    = gv("Other Liabilities")
+        for i in range(n):
+            nwc_d = (rec[i]-rec[i-1]+(inv_b[i]-inv_b[i-1])-(ol[i]-ol[i-1])) if i>0 else 0
+            cfo[i] = round(net_profit[i] + dep[i] - nwc_d, 2)
+
+    flags = []
+
+    def flag(severity, category, title, detail):
+        flags.append({"severity": severity, "category": category, "title": title, "detail": detail})
+
+    # ── Profitability flags ───────────────────────────────────
+    # Revenue growth stalling (last 2yr avg < 5%)
+    if n >= 3:
+        recent_growth = []
+        for i in range(max(1, n-2), n):
+            if sales[i-1] > 0:
+                recent_growth.append((sales[i]-sales[i-1])/sales[i-1]*100)
+        if recent_growth and (sum(recent_growth)/len(recent_growth)) < 5:
+            flag("HIGH","Profitability","Revenue Growth Stalling",
+                 f"Avg revenue growth last 2 years: {round(sum(recent_growth)/len(recent_growth),1)}%. Below 5% signals demand weakness.")
+
+    # Net margin declining 3+ consecutive years
+    if n >= 4:
+        margin_declining = all(net_margin[i] < net_margin[i-1] for i in range(n-3, n))
+        if margin_declining:
+            flag("HIGH","Profitability","Net Margin Declining 3+ Years",
+                 f"Net margin fell from {net_margin[n-3]}% to {net_margin[-1]}%. Persistent margin compression is a structural red flag.")
+
+    # Revenue growing but margins falling (scissors effect)
+    if n >= 3:
+        rev_up   = sales[-1] > sales[-3]
+        marg_dn  = net_margin[-1] < net_margin[-3]
+        if rev_up and marg_dn:
+            flag("MEDIUM","Profitability","Revenue Up But Margins Falling",
+                 f"Sales grew but net margin fell from {net_margin[-3]}% to {net_margin[-1]}%. Possible cost inflation or pricing pressure.")
+
+    # ── Cash flow flags ───────────────────────────────────────
+    # CFO < Net Profit for 3+ consecutive years
+    if n >= 3:
+        cfo_lag = all(cfo[i] < net_profit[i] for i in range(n-3, n))
+        if cfo_lag:
+            flag("HIGH","Cash Flow","CFO Below Net Profit 3+ Years",
+                 "Profits are not converting to cash. Could indicate aggressive revenue recognition or working capital deterioration.")
+
+    # Negative CFO in latest year
+    if cfo[-1] < 0:
+        flag("HIGH","Cash Flow","Negative Operating Cash Flow (Latest Year)",
+             f"CFO = {round(cfo[-1],1)} Cr. Company is consuming cash from operations — not generating it.")
+
+    # FCF negative (CFO < Capex) latest year
+    fcf_latest = cfo[-1] - capex[-1]
+    if fcf_latest < 0:
+        flag("MEDIUM","Cash Flow","Negative Free Cash Flow (Latest Year)",
+             f"CFO ({round(cfo[-1],1)} Cr) < Capex ({round(capex[-1],1)} Cr). Company spending more than it earns — watch if sustained.")
+
+    # ── Debt flags ────────────────────────────────────────────
+    # D/E > 1.5 latest year
+    eq_latest = equity[-1] + reserves[-1]
+    de_latest = round(borrowings[-1] / eq_latest, 2) if eq_latest > 0 else 0
+    if de_latest > 1.5:
+        flag("HIGH","Debt","High Debt/Equity Ratio",
+             f"D/E = {de_latest}x. High leverage amplifies downside risk and restricts financial flexibility.")
+
+    # Debt rising while profits flat/falling
+    if n >= 3:
+        debt_up  = borrowings[-1] > borrowings[-3] * 1.2
+        profit_dn = net_profit[-1] <= net_profit[-3]
+        if debt_up and profit_dn:
+            flag("HIGH","Debt","Debt Rising While Profits Flat/Falling",
+                 f"Borrowings up {round((borrowings[-1]/borrowings[-3]-1)*100,1)}% but profits have not grown. Debt sustainability concern.")
+
+    # Interest coverage < 3x latest year
+    ebit_latest = [ebitda_pct[i]*sales[i]/100 - depreciation[i] for i in range(n)]
+    ic = round(ebit_latest[-1]/interest[-1], 1) if interest[-1] > 0 else None
+    if ic is not None and ic < 3:
+        flag("HIGH","Debt","Low Interest Coverage",
+             f"Interest coverage = {ic}x. Below 3x is a warning sign of debt servicing stress.")
+
+    # ── Working capital flags ─────────────────────────────────
+    # Debtor days hitting multi-year high
+    debtor_days = [round(receivables[i]/sales[i]*365,1) if sales[i]>0 else 0 for i in range(n)]
+    if n >= 4 and debtor_days[-1] == max(debtor_days):
+        flag("MEDIUM","Working Capital","Debtor Days at Multi-Year High",
+             f"Debtor days = {debtor_days[-1]} days — highest in {n} years. Customers taking longer to pay; potential collection risk.")
+
+    # Inventory days rising significantly
+    inventory_days = [round(inventory[i]/sales[i]*365,1) if sales[i]>0 else 0 for i in range(n)]
+    if n >= 3 and inventory_days[-1] > inventory_days[-3] * 1.3:
+        flag("MEDIUM","Working Capital","Inventory Days Rising Sharply",
+             f"Inventory days rose from {inventory_days[-3]} to {inventory_days[-1]}. Could signal demand slowdown or supply chain issues.")
+
+    # ── Equity/dilution flags ─────────────────────────────────
+    # Share count rising (dilution)
+    if n >= 3 and equity_sh[-1] > equity_sh[-3] * 1.05:
+        dilution_pct = round((equity_sh[-1]/equity_sh[-3]-1)*100,1)
+        flag("MEDIUM","Equity","Share Dilution Detected",
+             f"Share count grew {dilution_pct}% over 3 years. EPS growth overstated if funded by equity dilution.")
+
+    # ── Positive signals (offset context) ────────────────────
+    positives = []
+    if de_latest < 0.3:
+        positives.append("✅ Debt-free / near debt-free balance sheet")
+    if all(cfo[i] > net_profit[i] for i in range(max(0,n-3), n)):
+        positives.append("✅ CFO consistently exceeds Net Profit — high earnings quality")
+    if n >= 3 and all(net_margin[i] >= net_margin[i-1] for i in range(n-2, n)):
+        positives.append("✅ Net margins improving last 2 years")
+    if n >= 3 and sales[-1] > sales[-3] * 1.15:
+        positives.append(f"✅ Revenue grew {round((sales[-1]/sales[-3]-1)*100,1)}% over 3 years")
+
+    # Sort: HIGH first, then MEDIUM, then LOW
+    order = {"HIGH":0,"MEDIUM":1,"LOW":2}
+    flags.sort(key=lambda f: order.get(f["severity"],3))
+
+    high_count   = sum(1 for f in flags if f["severity"]=="HIGH")
+    medium_count = sum(1 for f in flags if f["severity"]=="MEDIUM")
+
+    if high_count >= 3:       overall = "🔴 Multiple High Severity Flags — Investigate Carefully"
+    elif high_count >= 1:     overall = "🟡 Some Concerns — Review Flagged Areas"
+    elif medium_count >= 2:   overall = "🟡 Minor Concerns — Monitor Closely"
+    else:                     overall = "🟢 No Major Red Flags Detected"
+
+    return {
+        "years":        years,
+        "flags":        flags,
+        "positives":    positives,
+        "high_count":   high_count,
+        "medium_count": medium_count,
+        "total_flags":  len(flags),
+        "overall":      overall,
+    }
+
+
+# ===============================
 # DUPONT ANALYSIS (3-FACTOR ROE)
 # ===============================
 # ===============================
