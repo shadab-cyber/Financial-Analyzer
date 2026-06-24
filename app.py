@@ -33,7 +33,8 @@ PLANS = {
 from Financial_Modelling import (
     run_historical_fs, run_ratio_analysis, run_common_size_statement,
     run_forecasting, run_fcff, run_wacc, run_terminal_value_dcf, run_scenario_analysis,
-    run_altman_zscore, run_roic, run_piotroski, run_dupont, run_moat_score
+    run_altman_zscore, run_roic, run_piotroski, run_dupont, run_moat_score,
+    run_earnings_quality, run_red_flag_detector
 )
 from Technical_Analysis import run_technical_analysis
 from Portfolio_Management import run_portfolio_analysis, fetch_price_for_symbol
@@ -1269,6 +1270,14 @@ def financial_modelling_moat_score():
     # convert to int
     user_scores = {k: int(v) for k, v in user_scores.items()}
     return _excel_upload_route(run_moat_score, {'user_scores': user_scores})
+
+@app.route('/financial-modelling/earnings-quality/upload', methods=['POST'])
+def financial_modelling_earnings_quality():
+    return _excel_upload_route(run_earnings_quality)
+
+@app.route('/financial-modelling/red-flag/upload', methods=['POST'])
+def financial_modelling_red_flag():
+    return _excel_upload_route(run_red_flag_detector)
 
 
 # =============================================================================
