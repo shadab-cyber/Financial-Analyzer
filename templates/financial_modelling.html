@@ -536,7 +536,37 @@ document.addEventListener('DOMContentLoaded', function() {
 
   <!-- Results Container -->
   <div id="resultsContainer" class="hidden">
-    
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- RED FLAG DETECTOR — shown first, auto-runs on upload              -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <div class="section-card" id="redFlagSection">
+      <div class="section-title">🚨 Red Flag Detector</div>
+      <p class="text-gray-600 text-sm mb-3">Auto-scans the company's financial history for warning signals across profitability, cash flow, debt, working capital, and equity dilution.</p>
+
+      <div id="redFlagResults" style="display:none;">
+
+        <!-- Overall verdict banner -->
+        <div id="redFlagBanner" style="border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <div style="font-size:1.5rem;font-weight:900;" id="redFlagOverall">—</div>
+          <div style="display:flex;gap:14px;font-size:13px;">
+            <span>🔴 High: <strong id="rfHighCount">—</strong></span>
+            <span>🟡 Medium: <strong id="rfMedCount">—</strong></span>
+            <span>Total flags: <strong id="rfTotalCount">—</strong></span>
+          </div>
+        </div>
+
+        <!-- Flag cards -->
+        <div id="redFlagCards" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;"></div>
+
+        <!-- Positives -->
+        <div id="redFlagPositives" style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;display:none;">
+          <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:6px;">✅ STRENGTHS DETECTED</div>
+          <div id="redFlagPositivesList"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Income Statement Section -->
     <div class="section-card">
       <div class="section-title">
@@ -846,6 +876,47 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="table-responsive">
 <table id="sensitivityTable"></table>
 </div>
+      </div>
+    </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- MARGIN OF SAFETY CALCULATOR                                        -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <div class="section-card" id="mosSection">
+      <div class="section-title">🛡️ Margin of Safety Calculator</div>
+      <p class="text-gray-600 text-sm mb-3">Uses your DCF intrinsic value to show at what price you get 20%, 30%, and 40% margin of safety. Run DCF Valuation above first.</p>
+
+      <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+        <label style="font-size:12px;color:#4b5563;display:flex;flex-direction:column;gap:4px;">
+          Intrinsic Value per Share (₹)
+          <input id="mosIntrinsicInput" type="number" placeholder="Auto-filled from DCF"
+            style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;width:200px;">
+        </label>
+        <label style="font-size:12px;color:#4b5563;display:flex;flex-direction:column;gap:4px;">
+          Current Market Price (₹) <span style="font-size:10px;color:#9ca3af;">(optional override)</span>
+          <input id="mosMarketInput" type="number" placeholder="Auto-filled from DCF"
+            style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;width:200px;">
+        </label>
+        <button onclick="calculateMOS()" style="background:#0369a1;" class="hover:opacity-90 text-white px-5 py-2 rounded transition text-sm">
+          🛡️ Calculate MOS
+        </button>
+      </div>
+
+      <div id="mosResults" style="display:none;">
+        <!-- MOS price band cards -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px;" id="mosBands"></div>
+
+        <!-- Current price position -->
+        <div id="mosVerdict" style="border-radius:8px;padding:12px 16px;font-size:13px;margin-bottom:10px;"></div>
+
+        <!-- Summary table -->
+        <div class="overflow-x-auto">
+          <div class="table-responsive">
+            <table id="mosTable"></table>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1264,6 +1335,8 @@ function uploadFile() {
         }
         renderRatioTable("ratioTable", data.years, data.ratio_analysis);
         renderMarginTrendChart(data.years, data.ratio_analysis);
+        // Auto-run Red Flag Detector
+        runRedFlagDetector(document.getElementById('excelFile').files[0]);
     })
     .catch(err => {
         console.error(err);
@@ -1581,6 +1654,8 @@ function fetchTerminalValue(file, costOfEquity, growthRate, forecastYears) {
         renderFCFFForecastTable("fcffForecastTable", data.fcff_forecast_table);
         renderTerminalValueTable("terminalValueTable", data.terminal_value_breakdown);
         renderDCFValuationTable("dcfValuationTable", data.valuation_summary);
+        // Pre-fill MOS calculator inputs
+        prefillMOSInputs(vs.value_per_share, vs.current_market_price);
         renderSensitivityTable("sensitivityTable", data.sensitivity_analysis);
         
         loadingStatus.classList.add("hidden");
@@ -2566,6 +2641,56 @@ function downloadSampleExcel() {
 
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- EARNINGS QUALITY SCORE                                             -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <div class="section-card" id="earningsQualitySection">
+      <div class="section-title">💎 Earnings Quality Score</div>
+      <p class="text-gray-600 text-sm mb-3">Measures whether reported profits convert to real cash. Analyses CFO/Net Profit, Accruals Ratio, Cash Margin, and Capex Intensity.</p>
+
+      <button onclick="calculateEarningsQuality()" style="background:#065f46;" class="hover:opacity-90 text-white px-6 py-2 rounded transition mb-4">
+        💎 Calculate Earnings Quality
+      </button>
+
+      <div id="eqResults" style="display:none;">
+
+        <!-- Latest grade banner -->
+        <div id="eqBanner" style="border-radius:10px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:11px;color:#6b7280;margin-bottom:2px;">LATEST YEAR GRADE</div>
+            <div id="eqGrade" style="font-size:1.4rem;font-weight:900;">—</div>
+          </div>
+          <div style="font-size:12px;color:#6b7280;max-width:420px;">
+            Composite score based on 4 cash-conversion metrics. High Quality = 3–4 green signals. Moderate = 2. Low = 0–1.
+          </div>
+        </div>
+
+        <!-- Year-by-year table -->
+        <div class="overflow-x-auto mb-4">
+          <div class="table-responsive">
+            <table id="eqTable"></table>
+          </div>
+        </div>
+
+        <!-- Trend chart -->
+        <h3 class="text-base font-bold text-gray-700 mb-2">CFO/Net Profit & Cash Margin Trend</h3>
+        <div style="max-width:640px;margin-bottom:16px;">
+          <canvas id="eqChart" height="120"></canvas>
+        </div>
+
+        <!-- Definitions -->
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-top:4px;">
+          <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;">METRIC DEFINITIONS</div>
+          <div style="font-size:11px;color:#6b7280;display:grid;gap:4px;">
+            <div><strong>CFO/Net Profit:</strong> Cash conversion. >1.0 = profits backed by real cash. &lt;0.75 = accounting inflation risk.</div>
+            <div><strong>Accruals Ratio:</strong> (Net Profit − CFO) / Total Assets %. Low = genuine earnings. High = accrual-based accounting.</div>
+            <div><strong>CFO/Sales %:</strong> Cash margin. Percentage of revenue that converts to operating cash.</div>
+            <div><strong>Capex/CFO %:</strong> Capital intensity. &lt;25% = asset-light model. >50% = heavy capital drain.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- MOAT SCORE SECTION                                                   -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <div class="section-card" id="moatSection">
@@ -2792,6 +2917,213 @@ function calculateROIC() {
             renderRoicChart(years, rows, s.wacc_benchmark ?? 0);
         })
         .catch(e => { console.error(e); alert('ROIC calculation failed.'); });
+}
+
+// ═══════════════════════════════════════════════════════════
+// RED FLAG DETECTOR — auto-called from uploadFile()
+// ═══════════════════════════════════════════════════════════
+function runRedFlagDetector(file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    fetch('/financial-modelling/red-flag/upload', { method:'POST', body:fd })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) return;
+            document.getElementById('redFlagResults').style.display = 'block';
+
+            const banner = document.getElementById('redFlagBanner');
+            const overall = data.overall || '';
+            document.getElementById('redFlagOverall').textContent = overall;
+            document.getElementById('rfHighCount').textContent   = data.high_count   ?? 0;
+            document.getElementById('rfMedCount').textContent    = data.medium_count  ?? 0;
+            document.getElementById('rfTotalCount').textContent  = data.total_flags   ?? 0;
+
+            if (overall.startsWith('🔴')) {
+                banner.style.cssText = 'border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:#fff1f2;border:2px solid #fca5a5;';
+            } else if (overall.startsWith('🟡')) {
+                banner.style.cssText = 'border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:#fefce8;border:2px solid #fde047;';
+            } else {
+                banner.style.cssText = 'border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:#f0fdf4;border:2px solid #86efac;';
+            }
+
+            // Flag cards
+            let cards = '';
+            (data.flags || []).forEach(f => {
+                const bg     = f.severity==='HIGH' ? '#fff1f2' : '#fefce8';
+                const border = f.severity==='HIGH' ? '#fca5a5' : '#fde047';
+                const badge  = f.severity==='HIGH'
+                    ? '<span style="background:#dc2626;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;">HIGH</span>'
+                    : '<span style="background:#d97706;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;">MEDIUM</span>';
+                cards += `<div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:10px 14px;">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                    ${badge}
+                    <span style="font-size:11px;color:#6b7280;">${f.category}</span>
+                    <strong style="font-size:13px;color:#1f2937;">${f.title}</strong>
+                  </div>
+                  <div style="font-size:12px;color:#4b5563;">${f.detail}</div>
+                </div>`;
+            });
+            if (!cards) cards = '<div style="font-size:13px;color:#16a34a;padding:8px;">No red flags detected in the financial data.</div>';
+            document.getElementById('redFlagCards').innerHTML = cards;
+
+            // Positives
+            const positives = data.positives || [];
+            if (positives.length > 0) {
+                document.getElementById('redFlagPositives').style.display = 'block';
+                document.getElementById('redFlagPositivesList').innerHTML =
+                    positives.map(p => `<div style="font-size:12px;color:#15803d;margin-bottom:3px;">${p}</div>`).join('');
+            }
+        })
+        .catch(() => {});
+}
+
+// ═══════════════════════════════════════════════════════════
+// MARGIN OF SAFETY CALCULATOR — pure frontend
+// ═══════════════════════════════════════════════════════════
+// Called after DCF renders to auto-fill inputs
+function prefillMOSInputs(intrinsicValue, marketPrice) {
+    const iv = document.getElementById('mosIntrinsicInput');
+    const mp = document.getElementById('mosMarketInput');
+    if (iv && !iv.value) iv.value = intrinsicValue ? parseFloat(intrinsicValue).toFixed(2) : '';
+    if (mp && !mp.value) mp.value = marketPrice ? parseFloat(marketPrice).toFixed(2) : '';
+}
+
+function calculateMOS() {
+    const iv = parseFloat(document.getElementById('mosIntrinsicInput').value);
+    const mp = parseFloat(document.getElementById('mosMarketInput').value);
+    if (!iv || iv <= 0) { alert('Enter a valid Intrinsic Value per Share from DCF above.'); return; }
+
+    const bands = [
+        { pct: 20, label: '20% MOS', color:'#0369a1', bg:'#e0f2fe', border:'#bae6fd' },
+        { pct: 30, label: '30% MOS', color:'#065f46', bg:'#ecfdf5', border:'#a7f3d0' },
+        { pct: 40, label: '40% MOS', color:'#4f46e5', bg:'#eef2ff', border:'#c7d2fe' },
+    ];
+
+    let bandHtml = '';
+    let tableRows = '';
+    bands.forEach(b => {
+        const buyAt = (iv * (1 - b.pct / 100)).toFixed(2);
+        const isCheap = mp && parseFloat(buyAt) >= mp;
+        bandHtml += `<div style="background:${b.bg};border:2px solid ${b.border};border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:11px;font-weight:700;color:${b.color};margin-bottom:4px;">${b.label}</div>
+          <div style="font-size:1.6rem;font-weight:900;color:${b.color};">₹${buyAt}</div>
+          <div style="font-size:10px;color:#6b7280;margin-top:2px;">Buy at or below this price</div>
+          ${mp ? `<div style="font-size:11px;margin-top:6px;font-weight:700;color:${isCheap?'#16a34a':'#dc2626'}">${isCheap?'✅ Below current price':'❌ Above current price'}</div>` : ''}
+        </div>`;
+        tableRows += `<tr>
+          <td>${b.label}</td>
+          <td>₹${iv.toFixed(2)}</td>
+          <td>${b.pct}%</td>
+          <td style="font-weight:700;">₹${buyAt}</td>
+          ${mp ? `<td style="color:${isCheap?'#16a34a':'#dc2626'};font-weight:700;">${isCheap?'✅ Opportunity':'❌ Overpriced for this MOS'}</td>` : '<td>—</td>'}
+        </tr>`;
+    });
+
+    document.getElementById('mosBands').innerHTML = bandHtml;
+
+    // Verdict
+    if (mp) {
+        const updown = ((iv - mp) / mp * 100).toFixed(1);
+        const verdictEl = document.getElementById('mosVerdict');
+        if (iv > mp * 1.4) {
+            verdictEl.style.cssText = 'border-radius:8px;padding:12px 16px;font-size:13px;margin-bottom:10px;background:#f0fdf4;border:1px solid #86efac;color:#15803d;font-weight:700;';
+            verdictEl.textContent = `✅ Stock trading ${updown}% below intrinsic value. Even a 40% MOS buy price is achievable.`;
+        } else if (iv > mp * 1.2) {
+            verdictEl.style.cssText = 'border-radius:8px;padding:12px 16px;font-size:13px;margin-bottom:10px;background:#fefce8;border:1px solid #fde047;color:#854d0e;font-weight:700;';
+            verdictEl.textContent = `🟡 Stock trading ${updown}% below intrinsic value. 20% MOS is available but 30–40% not yet.`;
+        } else if (iv >= mp) {
+            verdictEl.style.cssText = 'border-radius:8px;padding:12px 16px;font-size:13px;margin-bottom:10px;background:#fefce8;border:1px solid #fde047;color:#854d0e;font-weight:700;';
+            verdictEl.textContent = `🟡 Stock near intrinsic value (${updown}% gap). No margin of safety at current price.`;
+        } else {
+            verdictEl.style.cssText = 'border-radius:8px;padding:12px 16px;font-size:13px;margin-bottom:10px;background:#fff1f2;border:1px solid #fca5a5;color:#991b1b;font-weight:700;';
+            verdictEl.textContent = `❌ Stock trading ${Math.abs(updown)}% ABOVE intrinsic value. Negative margin of safety — premium valuation.`;
+        }
+        verdictEl.style.display = 'block';
+    }
+
+    const thead = `<thead><tr><th>MOS Level</th><th>Intrinsic Value</th><th>Discount</th><th>Buy Price</th><th>vs Current</th></tr></thead>`;
+    document.getElementById('mosTable').innerHTML = thead + '<tbody>' + tableRows + '</tbody>';
+    document.getElementById('mosResults').style.display = 'block';
+}
+
+// ═══════════════════════════════════════════════════════════
+// EARNINGS QUALITY
+// ═══════════════════════════════════════════════════════════
+function calculateEarningsQuality() {
+    const fileInput = document.getElementById('excelFile');
+    if (!fileInput || !fileInput.files[0]) { alert('Please upload an Excel file first.'); return; }
+
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+
+    fetch('/financial-modelling/earnings-quality/upload', { method:'POST', body:fd })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { alert('Error: ' + data.error); return; }
+            document.getElementById('eqResults').style.display = 'block';
+
+            // Banner
+            const grade = data.latest_grade || '—';
+            document.getElementById('eqGrade').textContent = grade;
+            const banner = document.getElementById('eqBanner');
+            if (grade.includes('High')) {
+                banner.style.cssText = 'border-radius:10px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;background:#ecfdf5;border:2px solid #86efac;';
+                document.getElementById('eqGrade').style.color = '#15803d';
+            } else if (grade.includes('Moderate')) {
+                banner.style.cssText = 'border-radius:10px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;background:#fefce8;border:2px solid #fde047;';
+                document.getElementById('eqGrade').style.color = '#854d0e';
+            } else {
+                banner.style.cssText = 'border-radius:10px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;background:#fff1f2;border:2px solid #fca5a5;';
+                document.getElementById('eqGrade').style.color = '#991b1b';
+            }
+
+            // Table
+            const rows = data.rows || [];
+            let thead = `<thead><tr>
+              <th>Year</th><th>CFO/Net Profit</th><th>RAG</th>
+              <th>Accruals %</th><th>RAG</th>
+              <th>CFO/Sales %</th><th>RAG</th>
+              <th>Capex/CFO %</th><th>RAG</th>
+              <th>Score /4</th><th>Grade</th>
+            </tr></thead>`;
+            let tbody = '<tbody>';
+            rows.forEach(r => {
+                const scoreBg = r.score >= 3 ? 'background:#dcfce7' : r.score >= 2 ? 'background:#fef9c3' : 'background:#fee2e2';
+                tbody += `<tr style="${scoreBg}">
+                  <td>${r.year}</td>
+                  <td>${r.cfo_np != null ? r.cfo_np : '—'}</td><td>${r.rag_cfo_np}</td>
+                  <td>${r.accruals}%</td><td>${r.rag_accruals}</td>
+                  <td>${r.cfo_sales}%</td><td>${r.rag_cfo_sales}</td>
+                  <td>${r.capex_cfo != null ? r.capex_cfo+'%' : '—'}</td><td>${r.rag_capex}</td>
+                  <td style="font-weight:700;">${r.score}/4</td>
+                  <td style="font-weight:700;">${r.grade}</td>
+                </tr>`;
+            });
+            tbody += '</tbody>';
+            document.getElementById('eqTable').innerHTML = thead + tbody;
+
+            // Chart — CFO/Net Profit + CFO/Sales
+            _destroyChart('eqChart');
+            _faCharts['eqChart'] = new Chart(document.getElementById('eqChart'), {
+                type: 'line',
+                data: {
+                    labels: data.years,
+                    datasets: [
+                        { label: 'CFO / Net Profit (x)', data: data.cfo_np_series,    borderColor:'#065f46', tension:0.3, yAxisID:'y' },
+                        { label: 'CFO / Sales %',        data: data.cfo_sales_series, borderColor:'#0369a1', tension:0.3, yAxisID:'y1' },
+                    ]
+                },
+                options: {
+                    responsive:true,
+                    plugins:{ legend:{ position:'bottom' } },
+                    scales: {
+                        y:  { type:'linear', position:'left',  title:{ display:true, text:'CFO/NP (x)' } },
+                        y1: { type:'linear', position:'right', title:{ display:true, text:'CFO/Sales %' }, grid:{ drawOnChartArea:false } }
+                    }
+                }
+            });
+        })
+        .catch(e => { console.error(e); alert('Earnings Quality calculation failed.'); });
 }
 
 // ═══════════════════════════════════════════════════════════
